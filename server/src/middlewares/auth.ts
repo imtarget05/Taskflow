@@ -17,7 +17,8 @@ declare global {
 }
 
 /**
- * Extracts and verifies the JWT from the Authorization header.
+ * Extracts and verifies the JWT from the httpOnly access cookie.
+ * Bearer auth remains a non-browser fallback for API clients and tests.
  * Attaches the authenticated user to req.user.
  */
 export async function authenticate(
@@ -26,15 +27,17 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  const cookieToken = req.cookies?.access_token as string | undefined;
+  const bearerToken = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
+  const token = cookieToken ?? bearerToken;
+  if (!token) {
     res.status(StatusCodes.UNAUTHORIZED).json({
       success: false,
-      message: 'Missing or malformed Authorization header',
+      message: 'Missing authentication token',
     });
     return;
   }
 
-  const token = header.split(' ')[1];
   try {
     const payload = verifyAccessToken(token);
     if (payload.type !== 'access') {

@@ -43,7 +43,7 @@ model User {
 model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
-  token     String   @unique @db.Text
+  tokenHash String   @unique @db.VarChar(64)
   expiresAt DateTime
   createdAt DateTime @default(now())
 

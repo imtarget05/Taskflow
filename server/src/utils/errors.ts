@@ -1,16 +1,19 @@
 import { NextFunction, Request, Response } from 'express';
 import { ReasonPhrases, StatusCodes } from 'http-status-codes';
+import { ZodError } from 'zod';
 
 /**
  * Custom application error with an HTTP status code.
  */
 export class AppError extends Error {
   statusCode: number;
+  details?: unknown;
 
-  constructor(message: string, statusCode = StatusCodes.INTERNAL_SERVER_ERROR) {
+  constructor(message: string, statusCode = StatusCodes.INTERNAL_SERVER_ERROR, details?: unknown) {
     super(message);
     this.name = 'AppError';
     this.statusCode = statusCode;
+    this.details = details;
   }
 }
 
@@ -37,7 +40,11 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ success: false, message: err.message });
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      ...(err.details !== undefined ? { details: err.details } : {}),
+    });
     return;
   }
 
@@ -57,9 +64,22 @@ export function errorHandler(
     return;
   }
 
+  if (err instanceof ZodError) {
+    res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: 'Validation failed',
+      details: err.flatten(),
+    });
+    return;
+  }
+
   console.error('Unhandled error:', err);
   res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
     success: false,
     message: ReasonPhrases.INTERNAL_SERVER_ERROR,
   });
+}
+
+export function validationError(error: { flatten: () => unknown }, message = 'Validation failed'): AppError {
+  return new AppError(message, StatusCodes.BAD_REQUEST, error.flatten());
 }

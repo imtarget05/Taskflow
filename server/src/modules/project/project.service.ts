@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { AppError } from '../../utils/errors';
+import { hasRole } from '../../utils/roles';
 
 export async function createProject(
   ownerId: string,
@@ -124,14 +125,13 @@ export async function assertRole(
   userId: string,
   minRole: Role
 ): Promise<{ role: Role }> {
-  const ROLE_RANK: Record<Role, number> = { OWNER: 3, MEMBER: 2, VIEWER: 1 };
   const membership = await prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },
   });
   if (!membership) {
     throw new AppError('Not a member of this project', 403);
   }
-  if (ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
+  if (!hasRole(membership.role, minRole)) {
     throw new AppError(`Requires at least ${minRole} role`, 403);
   }
   return { role: membership.role };

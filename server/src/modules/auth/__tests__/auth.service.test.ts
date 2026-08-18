@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { register, login, refresh, logout } from '../auth.service';
+import { register, login, refresh, logout, cleanupExpiredRefreshTokens, tokenExpiryMs } from '../auth.service';
 import { AppError } from '../../../utils/errors';
+import { env } from '../../../config/env';
 
 // Mock the prisma client entirely.
 jest.mock('../../../lib/prisma', () => ({
@@ -13,6 +14,7 @@ jest.mock('../../../lib/prisma', () => ({
       create: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
   },
 }));
@@ -28,6 +30,7 @@ const mockedPrisma = prisma as unknown as {
     create: jest.Mock;
     findUnique: jest.Mock;
     delete: jest.Mock;
+    deleteMany: jest.Mock;
   };
 };
 
@@ -107,16 +110,15 @@ describe('auth.service', () => {
 
   describe('refresh', () => {
     it('rotates the refresh token', async () => {
-      const { register: registerFn } = require('../auth.service');
       jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
       mockedPrisma.user.findUnique.mockResolvedValue(null);
       mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'x@y.com', name: 'X' });
       mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
-      const auth = await registerFn({ email: 'x@y.com', password: 'password123', name: 'X' });
+      const auth = await register({ email: 'x@y.com', password: 'password123', name: 'X' });
 
       mockedPrisma.refreshToken.findUnique.mockResolvedValue({
         id: 'rt1',
-        token: auth.refreshToken,
+        tokenHash: 'hash',
         expiresAt: new Date(Date.now() + 100000),
       });
       mockedPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'x@y.com', name: 'X' });
@@ -131,6 +133,49 @@ describe('auth.service', () => {
       mockedPrisma.refreshToken.findUnique.mockResolvedValue(null);
       await expect(refresh('expired-token')).rejects.toMatchObject({ statusCode: 401 });
     });
+
+    it('throws 401 when the token is not a refresh token', async () => {
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 't@y.com', name: 'T' });
+      mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
+      const auth = await register({ email: 't@y.com', password: 'password123', name: 'T' });
+
+      await expect(refresh(auth.accessToken)).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('throws 401 when the stored token has expired', async () => {
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'e@y.com', name: 'E' });
+      mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
+      const auth = await register({ email: 'e@y.com', password: 'password123', name: 'E' });
+
+      mockedPrisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(refresh(auth.refreshToken)).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('throws 401 when the user no longer exists', async () => {
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'u@y.com', name: 'U' });
+      mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
+      const auth = await register({ email: 'u@y.com', password: 'password123', name: 'U' });
+
+      mockedPrisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 100000),
+      });
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(refresh(auth.refreshToken)).rejects.toMatchObject({ statusCode: 401 });
+    });
   });
 
   describe('logout', () => {
@@ -139,6 +184,46 @@ describe('auth.service', () => {
       mockedPrisma.refreshToken.delete.mockResolvedValue({});
       await expect(logout('token')).resolves.toBeUndefined();
       expect(mockedPrisma.refreshToken.delete).toHaveBeenCalledWith({ where: { id: 'rt1' } });
+    });
+
+    it('is a no-op without a token', async () => {
+      await expect(logout('')).resolves.toBeUndefined();
+      expect(mockedPrisma.refreshToken.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cleanupExpiredRefreshTokens', () => {
+    it('deletes tokens whose expiry is in the past', async () => {
+      mockedPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 2 });
+
+      await cleanupExpiredRefreshTokens();
+
+      expect(mockedPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { expiresAt: { lt: expect.any(Date) } },
+      });
+    });
+  });
+
+  describe('tokenExpiryMs', () => {
+    const original = env.JWT_REFRESH_EXPIRES_IN;
+
+    afterEach(() => {
+      env.JWT_REFRESH_EXPIRES_IN = original;
+    });
+
+    it.each([
+      ['30s', 30_000],
+      ['45m', 45 * 60_000],
+      ['12h', 12 * 60 * 60_000],
+      ['2d', 2 * 24 * 60 * 60_000],
+    ])('parses "%s"', (raw, expected) => {
+      env.JWT_REFRESH_EXPIRES_IN = raw;
+      expect(tokenExpiryMs()).toBe(expected);
+    });
+
+    it('falls back to 7 days for unparseable values', () => {
+      env.JWT_REFRESH_EXPIRES_IN = 'bogus';
+      expect(tokenExpiryMs()).toBe(7 * 24 * 60 * 60 * 1000);
     });
   });
 });

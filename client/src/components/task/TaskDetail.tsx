@@ -1,9 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react';
-import {
-  useAddComment,
-  useDeleteTask,
-  useUpdateTask,
-} from '@/hooks/useProjects';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useAddComment, useDeleteTask, useUpdateTask } from '@/hooks/useProjects';
 import type { ProjectMember, TaskPriority } from '@/types';
 
 interface TaskDetailProps {
@@ -11,6 +9,7 @@ interface TaskDetailProps {
   taskId: string;
   members: ProjectMember[];
   onClose: () => void;
+  userRole?: 'OWNER' | 'MEMBER' | 'VIEWER' | null;
 }
 
 const PRIORITIES: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
@@ -19,40 +18,54 @@ interface TaskState {
   id: string;
   title: string;
   description?: string | null;
+  dueDate?: string | null;
   priority: TaskPriority;
+  columnId: string;
   assignments: { id: string; user: { id: string; name: string } }[];
+  comments?: { id: string; body: string; createdAt: string; author: { id: string; name: string } }[];
 }
 
-export default function TaskDetail({ projectId, taskId, members, onClose }: TaskDetailProps) {
+export default function TaskDetail({ projectId, taskId, members, onClose, userRole }: TaskDetailProps) {
+  const [comment, setComment] = useState('');
+  const [task, setTask] = useState<TaskState | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { mutateAsync: addComment } = useAddComment(projectId, taskId);
   const { mutateAsync: updateTask } = useUpdateTask(projectId);
   const { mutateAsync: deleteTask } = useDeleteTask(projectId);
 
-  const [comment, setComment] = useState('');
-  const [task, setTask] = useState<TaskState | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      const { api } = await import('@/lib/api');
+  // Use React Query to fetch task data (Task 2.3: removes old useEffect hack)
+  const { data: taskData, refetch } = useQuery({
+    queryKey: ['task', projectId, taskId],
+    queryFn: async () => {
       const res = await api.get(`/projects/${projectId}/tasks/${taskId}`);
-      if (active) setTask(res.data.data);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [projectId, taskId]);
+      const t = res.data.data;
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        dueDate: t.dueDate ? t.dueDate.split('T')[0] : undefined,
+        priority: t.priority,
+        columnId: t.columnId,
+        assignments: t.assignments,
+        comments: t.comments,
+      } as TaskState;
+    },
+    enabled: !!projectId && !!taskId,
+  });
 
-  async function handleComment(e: FormEvent) {
+  // Sync local state when query data arrives
+  useEffect(() => {
+    if (taskData) setTask(taskData);
+  }, [taskData]);
+
+  async function handleComment(e: React.FormEvent) {
     e.preventDefault();
     if (!comment.trim()) return;
-    await addComment(comment);
-    setComment('');
+    try { await addComment(comment); setComment(''); await refetch(); } catch { setError('Unable to add comment.'); }
   }
 
   async function handlePriorityChange(priority: TaskPriority) {
-    await updateTask({ taskId, updates: { priority } });
-    setTask((t) => (t ? { ...t, priority } : t));
+    try { await updateTask({ taskId, updates: { priority } }); await refetch(); } catch { setError('Unable to update task.'); }
   }
 
   async function toggleAssignee(userId: string) {
@@ -61,17 +74,26 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
     const assigneeIds = has
       ? task.assignments.filter((a) => a.user.id !== userId).map((a) => a.user.id)
       : [...task.assignments.map((a) => a.user.id), userId];
-    await updateTask({ taskId, updates: { assigneeIds } });
-    setTask((t) => (t ? { ...t, assignments: assigneeIds.map((id) => ({ id: '', user: { id, name: '' } })) } : t));
+    try { await updateTask({ taskId, updates: { assigneeIds } }); await refetch(); } catch { setError('Unable to update assignees.'); }
   }
 
   async function handleDelete() {
     if (!window.confirm('Delete this task?')) return;
-    await deleteTask(taskId);
-    onClose();
+    try { await deleteTask(taskId); onClose(); } catch { setError('Unable to delete task.'); }
   }
 
-  return (
+  async function saveDetails() {
+    if (!task) return;
+    try {
+      await updateTask({ taskId, updates: { description: task.description ?? '', dueDate: task.dueDate || null } });
+      await refetch();
+    } catch { setError('Unable to save task details.'); }
+  }
+
+  // Role-based access (Task 2.3): only OWNER/MEMBER can delete
+  const canDelete = userRole === 'OWNER' || userRole === 'MEMBER';
+  const canEdit = canDelete;
+return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
@@ -84,26 +106,23 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
       >
         <div className="flex items-start justify-between">
           <h2 className="text-lg font-semibold text-slate-800">{task?.title ?? 'Task'}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            ✕
-          </button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
         </div>
 
         <div className="mt-4 space-y-4">
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Priority
-            </p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Priority</p>
             <div className="flex gap-2">
               {PRIORITIES.map((p) => (
                 <button
                   key={p}
+                  disabled={!canEdit}
                   onClick={() => void handlePriorityChange(p)}
-                  className={`rounded px-2 py-1 text-xs font-semibold ${
+                  className={
                     task?.priority === p
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                      ? 'rounded px-2 py-1 text-xs font-semibold bg-brand-600 text-white'
+                      : 'rounded px-2 py-1 text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }
                 >
                   {p}
                 </button>
@@ -111,12 +130,26 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
             </div>
           </div>
 
-          {task?.description && <p className="text-sm text-slate-600">{task.description}</p>}
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Description</p>
+            <textarea
+              value={task?.description || ''}
+              onChange={(e) => setTask((t) => (t ? { ...t, description: e.target.value } : t))}
+              disabled={!canEdit}
+              placeholder="Description"
+              className="textarea textarea-bordered w-full mb-2"
+            />
+            {canEdit && <button onClick={() => void saveDetails()} className="btn-secondary text-xs">Save details</button>}
+          </div>
 
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Assignees
-            </p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Due date</p>
+            <input type="date" value={task?.dueDate ?? ''} disabled={!canEdit}
+              onChange={(e) => setTask((t) => (t ? { ...t, dueDate: e.target.value || null } : t))} className="input" />
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Assignees</p>
             <p className="text-sm text-slate-600">
               {task && task.assignments.length > 0
                 ? task.assignments.map((a) => a.user.name).join(', ')
@@ -125,19 +158,18 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
           </div>
 
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Members
-            </p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Members</p>
             <div className="flex flex-wrap gap-1.5">
               {members.map((m) => (
                 <button
                   key={m.id}
+                  disabled={!canEdit}
                   onClick={() => void toggleAssignee(m.user.id)}
-                  className={`rounded-full px-2.5 py-1 text-xs ${
+                  className={
                     task?.assignments.some((a) => a.user.id === m.user.id)
-                      ? 'bg-brand-100 font-semibold text-brand-700'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                      ? 'rounded-full px-2.5 py-1 text-xs bg-brand-100 font-semibold text-brand-700'
+                      : 'rounded-full px-2.5 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }
                 >
                   {m.user.name}
                 </button>
@@ -145,11 +177,8 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
             </div>
           </div>
 
-          {/* Comments */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Comments
-            </p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Comments</p>
             <form onSubmit={handleComment} className="flex gap-2">
               <input
                 value={comment}
@@ -157,20 +186,19 @@ export default function TaskDetail({ projectId, taskId, members, onClose }: Task
                 placeholder="Write a comment…"
                 className="input"
               />
-              <button type="submit" className="btn-primary">
-                Send
-              </button>
+              <button type="submit" disabled={!canEdit} className="btn-primary">Send</button>
             </form>
           </div>
 
-          <div className="flex justify-end border-t border-slate-100 pt-4">
-            <button
-              onClick={() => void handleDelete()}
-              className="text-sm text-red-500 hover:underline"
-            >
-              Delete task
-            </button>
-          </div>
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
+          {canDelete && (
+            <div className="flex justify-end border-t border-slate-100 pt-4">
+              <button onClick={() => void handleDelete()} className="text-sm text-red-500 hover:underline">
+                Delete task
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

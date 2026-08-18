@@ -3,11 +3,16 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/token';
 import { env } from '../../config/env';
+import { createHash } from 'crypto';
 
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
   user: { id: string; email: string; name: string };
+}
+
+function hashRefreshToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 async function issueTokens(user: { id: string; email: string; name: string }): Promise<AuthResult> {
@@ -18,8 +23,8 @@ async function issueTokens(user: { id: string; email: string; name: string }): P
   await prisma.refreshToken.create({
     data: {
       userId: user.id,
-      token: refreshToken,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      tokenHash: hashRefreshToken(refreshToken),
+      expiresAt: new Date(Date.now() + tokenExpiryMs()),
     },
   });
 
@@ -73,7 +78,7 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
     throw new AppError('Invalid refresh token', 401);
   }
 
-  const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashRefreshToken(refreshToken) } });
   if (!stored || stored.expiresAt < new Date()) {
     throw new AppError('Refresh token expired or revoked', 401);
   }
@@ -94,13 +99,17 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
 export async function logout(refreshToken: string): Promise<void> {
   if (!refreshToken) return;
   try {
-    const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
+    const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashRefreshToken(refreshToken) } });
     if (stored) {
       await prisma.refreshToken.delete({ where: { id: stored.id } });
     }
   } catch {
     // Logout is best-effort; ignore failures.
   }
+}
+
+export async function cleanupExpiredRefreshTokens(): Promise<void> {
+  await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 }
 
 export function tokenExpiryMs(): number {

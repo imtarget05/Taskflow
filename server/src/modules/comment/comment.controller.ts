@@ -2,11 +2,12 @@ import { Role } from '@prisma/client';
 import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
-import { asyncHandler, AppError } from '../../utils/errors';
+import { asyncHandler, AppError, validationError } from '../../utils/errors';
 import { assertRole } from '../project/project.service';
-import { createActivity } from '../task/task.service';
+import { createActivity } from '../activity/activity.service';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { prisma } from '../../lib/prisma';
+import { createComment, deleteComment } from './comment.service';
 
 const createSchema = z.object({ body: z.string().min(1).max(4000) });
 const idParam = z.object({ projectId: z.string().min(1), taskId: z.string().min(1) });
@@ -14,15 +15,14 @@ const idParam = z.object({ projectId: z.string().min(1), taskId: z.string().min(
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const params = idParam.safeParse(req.params);
   const body = createSchema.safeParse(req.body);
-  if (!params.success) throw new AppError('Invalid ids', StatusCodes.BAD_REQUEST);
-  if (!body.success) throw new AppError('Comment cannot be empty', StatusCodes.BAD_REQUEST);
+  if (!params.success) throw validationError(params.error, 'Invalid ids');
+  if (!body.success) throw validationError(body.error, 'Comment cannot be empty');
 
   await assertRole(params.data.projectId, req.user!.id, Role.MEMBER);
+  const task = await prisma.task.findUnique({ where: { id: params.data.taskId }, select: { projectId: true } });
+  if (!task || task.projectId !== params.data.projectId) throw new AppError('Task not found', StatusCodes.NOT_FOUND);
 
-  const comment = await prisma.comment.create({
-    data: { taskId: params.data.taskId, authorId: req.user!.id, body: body.data.body.trim() },
-    include: { author: { select: { id: true, name: true, avatarUrl: true } } },
-  });
+  const comment = await createComment(params.data.taskId, req.user!.id, body.data.body);
 
   await createActivity(params.data.projectId, req.user!.id, params.data.taskId, 'COMMENT_ADDED', {
     body: body.data.body.slice(0, 60),
@@ -34,13 +34,15 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   const params = idParam.safeParse(req.params);
-  if (!params.success) throw new AppError('Invalid ids', StatusCodes.BAD_REQUEST);
+  if (!params.success) throw validationError(params.error, 'Invalid ids');
 
-    const commentId = Array.isArray(req.params.commentId)
-    ? req.params.commentId[0]
-    : req.params.commentId;
+  const commentId = req.params.commentId as string;
   const comment = await prisma.comment.findUnique({ where: { id: commentId } });
   if (!comment) throw new AppError('Comment not found', StatusCodes.NOT_FOUND);
+  const task = await prisma.task.findUnique({ where: { id: comment.taskId }, select: { projectId: true } });
+  if (!task || task.projectId !== params.data.projectId || comment.taskId !== params.data.taskId) {
+    throw new AppError('Comment not found', StatusCodes.NOT_FOUND);
+  }
 
   await assertRole(params.data.projectId, req.user!.id, Role.MEMBER);
 
@@ -49,6 +51,6 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
     await assertRole(params.data.projectId, req.user!.id, Role.OWNER);
   }
 
-  await prisma.comment.delete({ where: { id: comment.id } });
+  await deleteComment(comment.id);
   res.status(StatusCodes.OK).json({ success: true, message: 'Comment deleted' });
 });

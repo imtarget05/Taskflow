@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import api, { setAuth, clearAuth, getAccessToken } from '@/lib/api';
+import api, { clearAuth } from '@/lib/api';
 import type { AuthResponse, User } from '@/types';
 
 interface AuthContextValue {
@@ -18,14 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function bootstrap() {
-      if (getAccessToken()) {
-        try {
-          const res = await api.get('/auth/me');
-          setUser(res.data.user);
-        } catch {
-          // Token invalid/expired; interceptor will redirect.
-        }
-      }
+      try { const res = await api.get('/auth/me'); setUser(res.data.user); } catch { /* anonymous */ }
       setLoading(false);
     }
     void bootstrap();
@@ -33,20 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     const res = await api.post<AuthResponse>('/auth/login', { email, password });
-    setAuth(res.data.accessToken, res.data.refreshToken);
     setUser(res.data.user);
   }
 
   async function register(name: string, email: string, password: string) {
     const res = await api.post<AuthResponse>('/auth/register', { name, email, password });
-    setAuth(res.data.accessToken, res.data.refreshToken);
     setUser(res.data.user);
   }
 
   async function logout() {
-    const refreshToken = localStorage.getItem('refresh_token');
     try {
-      if (refreshToken) await api.post('/auth/logout', { refreshToken });
+      await api.post('/auth/logout');
     } catch {
       // Best effort.
     }

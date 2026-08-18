@@ -34,8 +34,7 @@ describe('Auth API integration', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.accessToken).toBeDefined();
-      expect(res.body.refreshToken).toBeDefined();
+      expect(res.headers['set-cookie']).toHaveLength(3);
       expect(res.body.user.email).toBe('user@taskflow.dev');
     });
 
@@ -73,7 +72,7 @@ describe('Auth API integration', () => {
         .send({ email: 'login@taskflow.dev', password: 'password123' });
 
       expect(res.status).toBe(200);
-      expect(res.body.accessToken).toBeDefined();
+      expect(res.headers['set-cookie']).toHaveLength(3);
     });
 
     it('rejects invalid credentials with 401', async () => {
@@ -87,22 +86,21 @@ describe('Auth API integration', () => {
 
   describe('POST /api/auth/refresh', () => {
     it('issues a new access token from a valid refresh token', async () => {
-      const reg = await request(app)
+      const agent = request.agent(app);
+      await agent
         .post('/api/auth/register')
         .send({ email: 'refresh@taskflow.dev', password: 'password123', name: 'Refresh User' });
 
-      const res = await request(app)
-        .post('/api/auth/refresh')
-        .send({ refreshToken: reg.body.refreshToken });
+      const res = await agent.post('/api/auth/refresh');
 
       expect(res.status).toBe(200);
-      expect(res.body.accessToken).toBeDefined();
+      expect(res.body.success).toBe(true);
     });
 
     it('rejects invalid refresh tokens', async () => {
       const res = await request(app)
         .post('/api/auth/refresh')
-        .send({ refreshToken: 'invalid-token' });
+        .set('Cookie', 'refresh_token=invalid-token');
 
       expect(res.status).toBe(401);
     });
@@ -116,7 +114,7 @@ describe('Auth API integration', () => {
 
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', `Bearer ${reg.body.accessToken}`);
+        .set('Cookie', reg.headers['set-cookie']);
 
       expect(res.status).toBe(200);
       expect(res.body.user.email).toBe('me@taskflow.dev');
@@ -125,6 +123,45 @@ describe('Auth API integration', () => {
     it('rejects missing token with 401', async () => {
       const res = await request(app).get('/api/auth/me');
       expect(res.status).toBe(401);
+    });
+
+    it('rejects a refresh token used as an access token', async () => {
+      const reg = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'type@taskflow.dev', password: 'password123', name: 'Type User' });
+
+      const cookies = reg.headers['set-cookie'] as unknown as string[];
+      const refreshCookie = cookies.find((c) => c.startsWith('refresh_token=')) as string;
+
+      const res = await request(app).get('/api/auth/me').set('Cookie', refreshCookie);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects an access token belonging to a deleted user', async () => {
+      const reg = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'deleted@taskflow.dev', password: 'password123', name: 'Gone' });
+
+      await prisma.user.deleteMany({ where: { email: 'deleted@taskflow.dev' } });
+
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', reg.headers['set-cookie']);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects a tampered token with 401', async () => {
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', 'access_token=eyJhbGciOiJIUzI1NiJ9.invalid.signature');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/auth/logout', () => {
+    it('logs out without a token', async () => {
+      const res = await request(app).post('/api/auth/logout').send({});
+      expect(res.status).toBe(200);
     });
   });
 });

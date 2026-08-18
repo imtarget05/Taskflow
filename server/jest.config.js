@@ -2,6 +2,9 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
+  // Integration suites share one PostgreSQL database (truncate in beforeEach),
+  // so suites must run serially to avoid cross-suite interference.
+  maxWorkers: 1,
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

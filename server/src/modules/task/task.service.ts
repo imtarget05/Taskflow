@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { assertRole } from '../project/project.service';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { AppError } from '../../utils/errors';
+import { createActivity } from '../activity/activity.service';
 
 export interface CreateTaskData {
   projectId: string;
@@ -25,6 +26,14 @@ export interface UpdateTaskData {
 
 export async function createTask(actorId: string, data: CreateTaskData) {
   await assertRole(data.projectId, actorId, 'MEMBER');
+
+  // Verify column belongs to project
+  const column = await prisma.column.findUnique({
+    where: { id: data.columnId },
+  });
+  if (!column || column.projectId !== data.projectId) {
+    throw new AppError('Column does not belong to project', 400);
+  }
 
   const before = await createActivity(data.projectId, actorId, null, 'TASK_CREATED', {
     title: data.title,
@@ -73,6 +82,7 @@ export async function updateTask(
 
   const existing = await prisma.task.findUnique({ where: { id: taskId } });
   if (!existing) throw new AppError('Task not found', 404);
+  if (existing.projectId !== projectId) throw new AppError('Task not found', 404);
 
   const updates: Prisma.TaskUpdateInput = {};
   if (data.title !== undefined) updates.title = data.title.trim();
@@ -85,6 +95,8 @@ export async function updateTask(
   }
 
   if (data.columnId && data.columnId !== existing.columnId) {
+    const column = await prisma.column.findUnique({ where: { id: data.columnId } });
+    if (!column || column.projectId !== projectId) throw new AppError('Column does not belong to project', 400);
     const maxPos = await prisma.task.aggregate({
       where: { columnId: data.columnId },
       _max: { position: true },
@@ -111,9 +123,11 @@ export async function deleteTask(actorId: string, projectId: string, taskId: str
   await assertRole(projectId, actorId, 'MEMBER');
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError('Task not found', 404);
+  if (task.projectId !== projectId) throw new AppError('Task not found', 404);
 
-  await prisma.task.delete({ where: { id: taskId } });
+  // Log the deletion while the task still exists (activity taskId is FK-linked).
   await createActivity(projectId, actorId, taskId, 'TASK_DELETED', { title: task.title });
+  await prisma.task.delete({ where: { id: taskId } });
 
   emitToProject(projectId, SOCKET_EVENTS.TASK_DELETED, { id: taskId });
   return { id: taskId };
@@ -142,17 +156,5 @@ export async function listTasks(projectId: string) {
       assignments: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
     },
     orderBy: { position: 'asc' },
-  });
-}
-
-export async function createActivity(
-  projectId: string,
-  userId: string,
-  taskId: string | null,
-  action: string,
-  metadata?: Record<string, unknown>
-) {
-  return prisma.activity.create({
-    data: { projectId, userId, taskId, action, metadata: (metadata as Prisma.InputJsonValue) ?? {} },
   });
 }

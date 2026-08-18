@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useBoard, useActivities } from '@/hooks/useProjects';
 import KanbanBoard from '@/components/board/KanbanBoard';
 import TaskDetail from '@/components/task/TaskDetail';
+import MemberModal from '@/components/board/MemberModal';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
 import type { Activity } from '@/types';
@@ -14,6 +15,7 @@ export default function BoardPage() {
   const { data: board, isLoading, error } = useBoard(projectId);
   const { data: activities } = useActivities(projectId ?? '');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [showMemberModal, setShowMemberModal] = useState(false);
 
   useRealtime(projectId);
 
@@ -55,18 +57,22 @@ export default function BoardPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex -space-x-2">
+            <button
+              onClick={() => setShowMemberModal(true)}
+              className="flex items-center gap-1 -space-x-2 rounded-full border border-transparent p-1 hover:border-slate-200 hover:bg-slate-50 transition"
+              title="Manage members"
+            >
               {project.members.map((m) => (
                 <span
                   key={m.id}
                   title={m.user.name}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-brand-200 text-xs font-semibold text-brand-800"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-brand-200 text-xs font-semibold text-brand-800 shadow-sm"
                 >
                   {m.user.name.charAt(0).toUpperCase()}
                 </span>
               ))}
-            </div>
-            <button onClick={() => navigate('/')} className="btn-secondary text-sm">
+            </button>
+            <button onClick={() => navigate('/')} className="btn-secondary text-sm ml-2">
               Dashboard
             </button>
           </div>
@@ -110,6 +116,17 @@ export default function BoardPage() {
           taskId={selectedTaskId}
           members={project.members}
           onClose={() => setSelectedTaskId(null)}
+          userRole={board.role}
+        />
+      )}
+
+      {showMemberModal && projectId && (
+        <MemberModal
+          projectId={projectId}
+          role={board.role}
+          members={project.members}
+          ownerId={project.ownerId}
+          onClose={() => setShowMemberModal(false)}
         />
       )}
     </div>
