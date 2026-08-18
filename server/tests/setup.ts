@@ -1,6 +1,11 @@
 import 'dotenv/config';
 
 process.env.NODE_ENV = 'test';
+// Keep in-memory rate limiters far above the integration test request volume.
+process.env.RATE_LIMIT_MAX = '5000';
+process.env.RATE_LIMIT_AUTH_LOGIN = '10000';
+process.env.RATE_LIMIT_AUTH_REGISTER = '10000';
+process.env.RATE_LIMIT_AUTH_REFRESH = '10000';
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
   'postgresql://taskflow:taskflow@localhost:5432/taskflow_test?schema=public';

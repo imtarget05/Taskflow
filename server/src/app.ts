@@ -3,7 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import pinoHttp from 'pino-http';
 import { env } from './config/env';
+import { csrfProtection } from './middlewares/csrf';
 import { errorHandler, notFoundHandler } from './utils/errors';
 import authRoutes from './modules/auth/auth.routes';
 import projectRoutes from './modules/project/project.routes';
@@ -18,12 +20,20 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CLIENT_URL,
+      origin: env.CORS_ORIGINS,
       credentials: true,
     })
   );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
+  app.use(csrfProtection);
+  app.use(pinoHttp({ redact: ['req.headers.authorization', 'req.headers.cookie'] }));
+
+  // Health check lives before rate limiting so load balancer / container
+  // health checks never consume the request budget.
+  app.get('/api/health', (_req, res) => {
+    res.json({ success: true, status: 'ok', uptime: process.uptime() });
+  });
 
   // Global rate limiting.
   app.use(
@@ -34,11 +44,6 @@ export function createApp(): Express {
       legacyHeaders: false,
     })
   );
-
-  // Health check.
-  app.get('/api/health', (_req, res) => {
-    res.json({ success: true, status: 'ok', uptime: process.uptime() });
-  });
 
   // API routes.
   app.use('/api/auth', authRoutes);

@@ -16,9 +16,27 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
+  RATE_LIMIT_AUTH_LOGIN: z.coerce.number().default(10),
+  RATE_LIMIT_AUTH_REGISTER: z.coerce.number().default(20),
+  RATE_LIMIT_AUTH_REFRESH: z.coerce.number().default(30),
+  ALLOWED_ORIGINS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
+
+const allowedOrigins = (() => {
+  const raw = parsed.success ? parsed.data.ALLOWED_ORIGINS : undefined;
+  if (!raw || !raw.trim()) return undefined;
+  return raw.split(',').map((o) => o.trim()).filter(Boolean);
+})();
+
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET ||
+      process.env.JWT_SECRET === 'dev_secret_access_token' ||
+      process.env.JWT_REFRESH_SECRET === 'dev_secret_refresh_token') {
+    throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be explicitly configured in production');
+  }
+}
 
 if (!parsed.success) {
   // In test mode, allow fallback defaults without failing loudly.
@@ -42,4 +60,10 @@ export const env = {
   JWT_REFRESH_EXPIRES_IN: parsed.success ? parsed.data.JWT_REFRESH_EXPIRES_IN : '7d',
   RATE_LIMIT_WINDOW_MS: parsed.success ? parsed.data.RATE_LIMIT_WINDOW_MS : 900000,
   RATE_LIMIT_MAX: parsed.success ? parsed.data.RATE_LIMIT_MAX : 100,
+  RATE_LIMIT_AUTH_LOGIN: parsed.success ? parsed.data.RATE_LIMIT_AUTH_LOGIN : 10,
+  RATE_LIMIT_AUTH_REGISTER: parsed.success ? parsed.data.RATE_LIMIT_AUTH_REGISTER : 20,
+  RATE_LIMIT_AUTH_REFRESH: parsed.success ? parsed.data.RATE_LIMIT_AUTH_REFRESH : 30,
+  CORS_ORIGINS:
+    allowedOrigins ??
+    [parsed.success ? parsed.data.CLIENT_URL : 'http://localhost:5173'],
 };

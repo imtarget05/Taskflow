@@ -8,31 +8,31 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Attach access token on every request.
+// Authentication is carried by httpOnly cookies; tokens never enter JS storage.
+
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// Double-submit CSRF: echo the csrf_token cookie on mutation requests so the
+// server can verify the request originates from our own client.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const method = config.method?.toLowerCase();
+  if (method && !['get', 'head', 'options'].includes(method)) {
+    const token = getCsrfToken();
+    if (token) {
+      config.headers.set('X-CSRF-Token', token);
+    }
   }
   return config;
 });
 
-export interface RefreshResponse {
-  success: boolean;
-  accessToken: string;
-  refreshToken: string;
-}
-
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
-  const refreshToken = localStorage.getItem('refresh_token');
-  if (!refreshToken) throw new Error('No refresh token');
-
-  const res = await axios.post<RefreshResponse>(`${API_URL}/auth/refresh`, { refreshToken });
-  localStorage.setItem('access_token', res.data.accessToken);
-  localStorage.setItem('refresh_token', res.data.refreshToken);
-  return res.data.accessToken;
+  await axios.post(`${API_URL}/auth/refresh`, undefined, { withCredentials: true });
+  return 'cookie';
 }
 
 // Retry once with a refreshed token on 401.
@@ -49,8 +49,6 @@ api.interceptors.response.use(
         refreshPromise = refreshPromise ?? refreshAccessToken();
         await refreshPromise;
         refreshPromise = null;
-        const token = localStorage.getItem('access_token');
-        original.headers.Authorization = `Bearer ${token}`;
         return api(original);
       } catch (refreshError) {
         refreshPromise = null;
@@ -63,18 +61,13 @@ api.interceptors.response.use(
   }
 );
 
-export function setAuth(accessToken: string, refreshToken: string): void {
-  localStorage.setItem('access_token', accessToken);
-  localStorage.setItem('refresh_token', refreshToken);
-}
+export function setAuth(): void {}
 
 export function clearAuth(): void {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
 }
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem('access_token');
+  return null;
 }
 
 export default api;
