@@ -58,8 +58,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Dependency audit
-        run: npm audit --audit-level=high
+      - name: Dependency audit (production dependencies)
+        # Strict gate on production dependencies only: dev tooling
+        # vulnerabilities never ship in the runtime image (--omit=dev).
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run backend tests
         working-directory: server
