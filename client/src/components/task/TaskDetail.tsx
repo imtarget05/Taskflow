@@ -188,6 +188,24 @@ return (
               />
               <button type="submit" disabled={!canEdit} className="btn-primary">Send</button>
             </form>
+            <div className="mt-4 space-y-3">
+              {task && task.comments && task.comments.length > 0 ? (
+                task.comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-200 text-xs font-semibold text-brand-800">
+                      {comment.author.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium text-slate-700">{comment.author.name}</div>
+                      <div className="text-sm text-slate-600">{comment.body}</div>
+                      <div className="text-[10px] text-slate-400 mt-1">{new Date(comment.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400">No comments yet.</p>
+              )}
+            </div>
           </div>
 
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
