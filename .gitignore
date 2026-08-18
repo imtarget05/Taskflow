@@ -39,3 +39,4 @@ server/prisma/*.db
 
 # Vercel / Render
 .vercel
+/TASKFLOW_NAB_READY_BLUEPRINT.md
