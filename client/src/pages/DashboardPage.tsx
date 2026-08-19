@@ -1,101 +1,155 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/store/auth';
+import { Link } from 'react-router-dom';
+import { FolderKanban, Plus } from 'lucide-react';
 import { useProjects, useCreateProject } from '@/hooks/useProjects';
+import { Avatar, Button, EmptyState, Input, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const { data: projects, isLoading } = useProjects();
+  const { data: projects, isLoading, error } = useProjects();
   const createProject = useCreateProject();
+  const { toast } = useToast();
 
-  const [showForm, setShowForm] = useState(false);
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
+    setSubmitError('');
     if (!name.trim()) return;
-    const created = await createProject.mutateAsync({ name, description });
-    setShowForm(false);
-    setName('');
-    setDescription('');
-    navigate(`/projects/${created.id}`);
+    try {
+      await createProject.mutateAsync({ name: name.trim(), description: description.trim() || undefined });
+      setOpen(false);
+      setName('');
+      setDescription('');
+      toast('success', 'Project created');
+    } catch {
+      setSubmitError('Unable to create project.');
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold text-brand-600">TaskFlow</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-600">{user?.name}</span>
-            <button onClick={() => void logout()} className="btn-secondary text-sm">
-              Logout
-            </button>
-          </div>
+    <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Your projects</h1>
+          <p className="mt-0.5 text-sm text-ink-secondary">
+            Boards you belong to, kept in sync for everyone.
+          </p>
         </div>
-      </header>
+        <Button onClick={() => setOpen(true)}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          New project
+        </Button>
+      </div>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Your projects</h2>
-          <button onClick={() => setShowForm((v) => !v)} className="btn-primary">
-            {showForm ? 'Cancel' : '+ New project'}
-          </button>
+      {isLoading ? (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="card space-y-3 p-5">
+              <Skeleton className="h-2 w-10" />
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-full" />
+            </div>
+          ))}
         </div>
-
-        {showForm && (
-          <form onSubmit={handleCreate} className="card mt-4 space-y-3 p-4">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Project name"
-              className="input"
-              required
-            />
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description (optional)"
-              className="input"
-              rows={2}
-            />
-            <button type="submit" className="btn-primary">
-              Create project
-            </button>
-          </form>
-        )}
-
-        {isLoading ? (
-          <p className="mt-8 text-slate-500">Loading projects…</p>
-        ) : projects && projects.length > 0 ? (
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+      ) : error ? (
+        <div className="card mt-6">
+          <EmptyState
+            icon={<FolderKanban className="h-8 w-8" aria-hidden="true" />}
+            title="Unable to load projects"
+            description="Check your connection and try again."
+          />
+        </div>
+      ) : projects && projects.length > 0 ? (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {projects.map((project) => {
+            const members = project.members;
+            const taskCount = project.columns.reduce((sum, c) => sum + c._count.tasks, 0);
+            return (
               <Link
                 key={project.id}
                 to={`/projects/${project.id}`}
-                className="card group p-5 transition hover:shadow-md"
+                className="card group p-5 transition-shadow hover:shadow-card-hover"
               >
-                <div
-                  className="mb-3 h-1.5 w-10 rounded-full"
-                  style={{ backgroundColor: project.color ?? '#6366f1' }}
-                />
-                <h3 className="font-semibold text-slate-800 group-hover:text-brand-600">
-                  {project.name}
-                </h3>
+                <div className="mb-3 flex items-center justify-between">
+                  <div
+                    className="h-1.5 w-10 rounded-full"
+                    style={{ backgroundColor: project.color ?? 'rgb(var(--accent))' }}
+                  />
+                  <div className="flex items-center -space-x-1.5">
+                    {members.slice(0, 4).map((m) => (
+                      <Avatar key={m.id} name={m.user.name} size="xs" className="border-2 border-surface" />
+                    ))}
+                    {members.length > 4 && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-surface-2 text-[10px] font-semibold text-ink-secondary">
+                        +{members.length - 4}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <h3 className="font-semibold text-ink group-hover:text-accent">{project.name}</h3>
                 {project.description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-slate-500">{project.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-ink-secondary">{project.description}</p>
                 )}
+                <p className="mt-3 text-xs text-ink-muted">
+                  {taskCount} task{taskCount === 1 ? '' : 's'}
+                </p>
               </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-8 text-slate-500">
-            No projects yet. Create your first project to get started.
-          </p>
-        )}
-      </main>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card mt-6">
+          <EmptyState
+            icon={<FolderKanban className="h-8 w-8" aria-hidden="true" />}
+            title="No projects yet"
+            description="Create your first project and start arranging tasks on the board."
+            action={
+              <Button onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Create a project
+              </Button>
+            }
+          />
+        </div>
+      )}
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="New project"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="new-project-form" disabled={!name.trim()} loading={createProject.isPending}>
+              Create project
+            </Button>
+          </>
+        }
+      >
+        <form id="new-project-form" onSubmit={handleCreate} className="space-y-4">
+          <Input
+            label="Project name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Interview prep"
+            autoFocus
+            required
+            error={submitError || undefined}
+          />
+          <Textarea
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What is this project about? (optional)"
+            rows={3}
+          />
+        </form>
+      </Modal>
     </div>
   );
 }

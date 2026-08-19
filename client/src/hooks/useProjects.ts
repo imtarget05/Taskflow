@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import type { Activity, BoardData, Comment, Project, Role, Task, TaskPriority } from '@/types';
+import type { Activity, BoardData, Comment, ProjectSummary, Role, Task, TaskPriority } from '@/types';
 
 const boardKey = (projectId: string) => ['board', projectId] as const;
 
@@ -15,7 +15,7 @@ export function useProjects() {
   return useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const res = await api.get<{ data: Project[] }>('/projects');
+      const res = await api.get<{ data: ProjectSummary[] }>('/projects');
       return res.data.data;
     },
   });

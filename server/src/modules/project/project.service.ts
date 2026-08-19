@@ -34,7 +34,14 @@ export async function createProject(
 export async function listProjects(userId: string) {
   const memberships = await prisma.projectMember.findMany({
     where: { userId },
-    include: { project: true },
+    include: {
+      project: {
+        include: {
+          columns: { select: { _count: { select: { tasks: true } } } },
+          members: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
   return memberships.map((m) => m.project);

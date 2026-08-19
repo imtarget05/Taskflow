@@ -16,6 +16,11 @@ export interface Project {
   ownerId: string;
 }
 
+export interface ProjectSummary extends Project {
+  members: ProjectMember[];
+  columns: { _count: { tasks: number } }[];
+}
+
 export interface ProjectMember {
   id: string;
   role: Role;
