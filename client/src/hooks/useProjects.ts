@@ -66,7 +66,7 @@ export function useCreateTask() {
         id: `optimistic-${uuid()}`,
         projectId: variables.projectId, columnId: variables.columnId, title: variables.title,
         description: variables.description, dueDate: variables.dueDate, priority: variables.priority ?? 'MEDIUM',
-        position: Number.MAX_SAFE_INTEGER, createdById: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), assignments: [],
+        position: Number.MAX_SAFE_INTEGER, completed: false, createdById: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), assignments: [],
       };
       qc.setQueryData<BoardData>(boardKey(variables.projectId), (board) => updateBoard(board, (current) => ({
         ...current,
@@ -93,6 +93,7 @@ export interface UpdateTaskPayload {
   priority?: TaskPriority;
   columnId?: string;
   assigneeIds?: string[];
+  completed?: boolean;
 }
 
 export function useUpdateTask(projectId: string) {

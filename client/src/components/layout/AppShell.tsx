@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor } from 'lucide-react';
+import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useProjects } from '@/hooks/useProjects';
 import { useTheme, type Theme } from '@/store/theme';
 import { Avatar, Button, Skeleton } from '@/components/ui';
+import CommandPalette from './CommandPalette';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export default function AppShell({ children }: AppShellProps) {
   const { theme, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('taskflow-sidebar') === 'collapsed');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const toggleCollapsed = () => {
     setCollapsed((v) => {
@@ -37,6 +39,17 @@ export default function AppShell({ children }: AppShellProps) {
       return !v;
     });
   };
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   const nextTheme: Theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
   const sidebar = sidebarClass(mobileOpen, collapsed);
@@ -164,7 +177,25 @@ export default function AppShell({ children }: AppShellProps) {
             >
               <FolderKanban className="h-5 w-5" aria-hidden="true" />
             </button>
-            <span className="text-sm font-medium text-ink-secondary">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink sm:flex"
+              aria-label="Search tasks and projects (Cmd+K)"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden md:inline">Search…</span>
+              <kbd className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink sm:hidden"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search tasks and projects"
+            >
+              <Search className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <span className="hidden text-sm font-medium text-ink-secondary lg:inline">
               {user?.email ?? ''}
             </span>
           </div>
@@ -184,6 +215,8 @@ export default function AppShell({ children }: AppShellProps) {
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

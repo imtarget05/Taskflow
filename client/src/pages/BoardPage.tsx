@@ -1,22 +1,26 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, History, Settings2, Users } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, FilterX, History, Settings2, Users } from 'lucide-react';
 import { useBoard, useActivities } from '@/hooks/useProjects';
-import KanbanBoard from '@/components/board/KanbanBoard';
+import KanbanBoard, { ALL_FILTERS, type BoardFilters } from '@/components/board/KanbanBoard';
 import TaskDetail from '@/components/task/TaskDetail';
 import MemberModal from '@/components/board/MemberModal';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
 import { Avatar, Badge, Button, EmptyState, ErrorState, Skeleton } from '@/components/ui';
-import type { Activity } from '@/types';
+import type { Activity, TaskPriority } from '@/types';
+
+type PriorityFilter = TaskPriority | 'ALL';
 
 export default function BoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { data: board, isLoading, error, refetch } = useBoard(projectId);
   const { data: activities } = useActivities(projectId ?? '');
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<BoardFilters>({ ...ALL_FILTERS });
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(searchParams.get('task'));
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -122,8 +126,66 @@ export default function BoardPage() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6 lg:flex-row">
-        <main className="min-w-0 flex-1 overflow-x-auto">
-          <KanbanBoard board={board} projectId={project.id} onTaskClick={setSelectedTaskId} />
+        <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-ink-secondary">
+              <span>Priority</span>
+              <select
+                aria-label="Filter by priority"
+                value={filters.priority}
+                onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value as PriorityFilter }))}
+                className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="ALL">All</option>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
+              </select>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm text-ink-secondary">
+              <span>Assignee</span>
+              <select
+                aria-label="Filter by assignee"
+                value={filters.assigneeId}
+                onChange={(e) => setFilters((f) => ({ ...f, assigneeId: e.target.value }))}
+                className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="ALL">Everyone</option>
+                {project.members.map((m) => (
+                  <option key={m.id} value={m.user.id}>
+                    {m.user.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-1.5 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                checked={filters.showCompleted}
+                onChange={(e) => setFilters((f) => ({ ...f, showCompleted: e.target.checked }))}
+                className="h-4 w-4 rounded border-line accent-accent"
+              />
+              Show completed
+            </label>
+
+            {JSON.stringify(filters) !== JSON.stringify(ALL_FILTERS) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFilters({ ...ALL_FILTERS })}
+                aria-label="Clear all filters"
+                className="text-ink-muted hover:text-ink"
+              >
+                <FilterX className="h-3.5 w-3.5" aria-hidden="true" />
+                Clear filters
+              </Button>
+            )}
+          </div>
+
+          <KanbanBoard board={board} projectId={project.id} filters={filters} onTaskClick={(id) => setSelectedTaskId(id)} />
         </main>
 
         <aside
@@ -164,7 +226,12 @@ export default function BoardPage() {
           projectId={projectId}
           taskId={selectedTaskId}
           members={project.members}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={() => {
+            setSelectedTaskId(null);
+            if (searchParams.get('task')) {
+              setSearchParams({}, { replace: true });
+            }
+          }}
           userRole={board.role}
           currentUserId={user?.id}
         />

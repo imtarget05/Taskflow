@@ -10,18 +10,38 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Plus, SquareKanban } from 'lucide-react';
 import { useState } from 'react';
-import type { BoardData } from '@/types';
+import type { BoardData, Column, Task, TaskPriority } from '@/types';
 import BoardColumn from '@/components/board/BoardColumn';
 import { useCreateColumn, useDeleteColumn, useMoveTask, useUpdateColumn } from '@/hooks/useProjects';
 import { Button, EmptyState, Input, useToast } from '@/components/ui';
 
+export interface BoardFilters {
+  priority: TaskPriority | 'ALL';
+  assigneeId: string | 'ALL';
+  showCompleted: boolean;
+}
+
+export const ALL_FILTERS: BoardFilters = { priority: 'ALL', assigneeId: 'ALL', showCompleted: true };
+
+export function matchesFilters(task: Task, filters: BoardFilters): boolean {
+  if (filters.priority !== 'ALL' && task.priority !== filters.priority) return false;
+  if (filters.assigneeId !== 'ALL' && !task.assignments.some((a) => a.user.id === filters.assigneeId)) return false;
+  if (!filters.showCompleted && task.completed) return false;
+  return true;
+}
+
+export function isFiltering(filters: BoardFilters): boolean {
+  return JSON.stringify(filters) !== JSON.stringify(ALL_FILTERS);
+}
+
 interface KanbanBoardProps {
   board: BoardData;
   projectId: string;
+  filters: BoardFilters;
   onTaskClick: (taskId: string) => void;
 }
 
-export default function KanbanBoard({ board, projectId, onTaskClick }: KanbanBoardProps) {
+export default function KanbanBoard({ board, projectId, filters, onTaskClick }: KanbanBoardProps) {
   const moveTask = useMoveTask(projectId);
   const createColumn = useCreateColumn(projectId);
   const updateColumn = useUpdateColumn(projectId);
@@ -29,19 +49,26 @@ export default function KanbanBoard({ board, projectId, onTaskClick }: KanbanBoa
   const { toast } = useToast();
   const [newColumnName, setNewColumnName] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
+  const filtering = isFiltering(filters);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
   );
   const canEdit = board.role === 'OWNER' || board.role === 'MEMBER';
 
-  const columns = board.project.columns;
+  const columns: Column[] = filtering
+    ? board.project.columns.map((column) => ({
+        ...column,
+        tasks: column.tasks.filter((t) => matchesFilters(t, filters)),
+      }))
+    : board.project.columns;
 
   function findColumn(taskId: string) {
     return columns.find((col) => col.tasks.some((t) => t.id === taskId));
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (filtering) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -125,15 +152,13 @@ export default function KanbanBoard({ board, projectId, onTaskClick }: KanbanBoa
       {columns.length === 0 ? (
         <EmptyState
           icon={<SquareKanban className="h-8 w-8" aria-hidden="true" />}
-          title="No columns yet"
-          description={canEdit ? 'Create your first column to start organizing tasks.' : 'An owner or member needs to add a column.'}
-          action={
-            canEdit ? (
-              <Button size="sm" onClick={() => setAddingColumn(true)}>
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add column
-              </Button>
-            ) : undefined
+          title={filtering ? 'No tasks match your filters' : 'No columns yet'}
+          description={
+            filtering
+              ? 'Try clearing the filters above to see more tasks.'
+              : canEdit
+                ? 'Create your first column to start organizing tasks.'
+                : 'An owner or member needs to add a column.'
           }
           className="h-full"
         />
@@ -148,6 +173,7 @@ export default function KanbanBoard({ board, projectId, onTaskClick }: KanbanBoa
               onTaskClick={onTaskClick}
               onRename={(name) => renameColumn(column.id, name)}
               onDelete={() => deleteColumn(column.id)}
+              dragDisabled={filtering}
             />
           ))}
           {canEdit &&

@@ -14,9 +14,10 @@ interface ColumnProps {
   onTaskClick: (taskId: string) => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
+  dragDisabled?: boolean;
 }
 
-export default function BoardColumn({ column, projectId, role, onTaskClick, onRename, onDelete }: ColumnProps) {
+export default function BoardColumn({ column, projectId, role, onTaskClick, onRename, onDelete, dragDisabled = false }: ColumnProps) {
   const createTask = useCreateTask();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
@@ -119,7 +120,7 @@ export default function BoardColumn({ column, projectId, role, onTaskClick, onRe
       >
         <div className={`min-h-[56px] ${column.tasks.length === 0 ? 'rounded-lg border border-dashed border-line' : ''}`}>
           {column.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task.id)} />
+            <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task.id)} disabled={dragDisabled} />
           ))}
         </div>
       </SortableContext>
