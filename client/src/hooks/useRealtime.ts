@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 import type { BoardData, Comment, Task } from '@/types';
 
 type TaskMove = {
@@ -9,6 +10,8 @@ type TaskMove = {
   targetColumnId: string;
   targetIndex: number;
 };
+
+export type RealtimeStatus = 'connecting' | 'online' | 'offline';
 
 const boardKey = (projectId: string) => ['board', projectId] as const;
 
@@ -19,16 +22,18 @@ function patchBoard(
   return current ? patch(current) : current;
 }
 
-export function useRealtime(projectId: string | undefined) {
+export function useRealtime(projectId: string | undefined): RealtimeStatus {
   const queryClient = useQueryClient();
   const socketRef = useRef<Socket | null>(null);
+  const lastRefresh = useRef(0);
+  const [status, setStatus] = useState<RealtimeStatus>('connecting');
 
   useEffect(() => {
     if (!projectId) return;
 
     const socket = io(import.meta.env.VITE_SOCKET_URL || window.location.origin, {
       withCredentials: true,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
     const joinBoard = () => socket.emit('board:join', { projectId });
@@ -120,7 +125,23 @@ export function useRealtime(projectId: string | undefined) {
       );
     };
 
-        socket.on('connect', joinBoard);
+    const handleConnectError = () => {
+      setStatus('offline');
+      socket.connect();
+      const now = Date.now();
+      if (now - lastRefresh.current > 10_000) {
+        lastRefresh.current = now;
+        // Middleware rejects stale access cookies on reconnect — refresh first.
+        void api.post('/auth/refresh').catch(() => {});
+      }
+    };
+
+    socket.on('connect', () => {
+      setStatus('online');
+      joinBoard();
+    });
+    socket.on('disconnect', () => setStatus('offline'));
+    socket.on('connect_error', handleConnectError);
     socket.on('task:created', handleTaskCreated);
     socket.on('task:updated', handleTaskUpdated);
     socket.on('task:deleted', handleTaskDeleted);
@@ -140,5 +161,5 @@ export function useRealtime(projectId: string | undefined) {
     };
   }, [projectId, queryClient]);
 
-  return socketRef.current;
+  return status;
 }

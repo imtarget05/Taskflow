@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { uuid } from '@/lib/uuid';
 import type { Activity, BoardData, Comment, ProjectSummary, Role, Task, TaskPriority } from '@/types';
 
 const boardKey = (projectId: string) => ['board', projectId] as const;
@@ -62,7 +63,7 @@ export function useCreateTask() {
       await qc.cancelQueries({ queryKey: boardKey(variables.projectId) });
       const previousBoard = qc.getQueryData<BoardData>(boardKey(variables.projectId));
       const optimistic: Task = {
-        id: `optimistic-${crypto.randomUUID()}`,
+        id: `optimistic-${uuid()}`,
         projectId: variables.projectId, columnId: variables.columnId, title: variables.title,
         description: variables.description, dueDate: variables.dueDate, priority: variables.priority ?? 'MEDIUM',
         position: Number.MAX_SAFE_INTEGER, createdById: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), assignments: [],

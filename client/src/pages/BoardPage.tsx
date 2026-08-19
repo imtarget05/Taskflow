@@ -18,7 +18,7 @@ export default function BoardPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
 
-  useRealtime(projectId);
+  const realtimeStatus = useRealtime(projectId);
 
   if (isLoading) {
     return (
@@ -70,6 +70,18 @@ export default function BoardPage() {
             <div className="flex items-center gap-2">
               <h1 className="truncate text-base font-semibold">{project.name}</h1>
               <Badge tone={board.role === 'OWNER' ? 'accent' : 'neutral'}>{board.role}</Badge>
+              <span
+                className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  realtimeStatus === 'online' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
+                }`}
+                aria-label={realtimeStatus === 'online' ? 'Live updates connected' : 'Reconnecting to live updates'}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${realtimeStatus === 'online' ? 'bg-success' : 'bg-warning'}`}
+                  aria-hidden="true"
+                />
+                {realtimeStatus === 'online' ? 'Live' : realtimeStatus === 'connecting' ? 'Connecting' : 'Reconnecting'}
+              </span>
             </div>
             {project.description && (
               <p className="truncate text-xs text-ink-secondary">{project.description}</p>
@@ -135,11 +147,13 @@ export default function BoardPage() {
 
       {selectedTaskId && projectId && (
         <TaskDetail
+          key={selectedTaskId}
           projectId={projectId}
           taskId={selectedTaskId}
           members={project.members}
           onClose={() => setSelectedTaskId(null)}
           userRole={board.role}
+          currentUserId={user?.id}
         />
       )}
 
