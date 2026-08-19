@@ -15,7 +15,7 @@ function hashRefreshToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-async function issueTokens(user: { id: string; email: string; name: string }): Promise<AuthResult> {
+export async function issueTokens(user: { id: string; email: string; name: string }): Promise<AuthResult> {
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user.id);
 
@@ -54,7 +54,7 @@ export async function register(data: {
 export async function login(data: { email: string; password: string }): Promise<AuthResult> {
   const email = data.email.toLowerCase().trim();
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
+  if (!user || !user.password) {
     throw new AppError('Invalid credentials', 401);
   }
 

@@ -20,6 +20,10 @@ const envSchema = z.object({
   RATE_LIMIT_AUTH_REGISTER: z.coerce.number().default(20),
   RATE_LIMIT_AUTH_REFRESH: z.coerce.number().default(30),
   ALLOWED_ORIGINS: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_ORIGIN: z.string().url().optional(),
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -63,6 +67,10 @@ export const env = {
   RATE_LIMIT_AUTH_LOGIN: parsed.success ? parsed.data.RATE_LIMIT_AUTH_LOGIN : 10,
   RATE_LIMIT_AUTH_REGISTER: parsed.success ? parsed.data.RATE_LIMIT_AUTH_REGISTER : 20,
   RATE_LIMIT_AUTH_REFRESH: parsed.success ? parsed.data.RATE_LIMIT_AUTH_REFRESH : 30,
+  GOOGLE_CLIENT_ID: parsed.success ? parsed.data.GOOGLE_CLIENT_ID : undefined,
+  GOOGLE_CLIENT_SECRET: parsed.success ? parsed.data.GOOGLE_CLIENT_SECRET : undefined,
+  GOOGLE_REDIRECT_ORIGIN: parsed.success ? parsed.data.GOOGLE_REDIRECT_ORIGIN : undefined,
+  FRONTEND_URL: parsed.success ? parsed.data.FRONTEND_URL : 'http://localhost:5173',
   CORS_ORIGINS:
     allowedOrigins ??
     [parsed.success ? parsed.data.CLIENT_URL : 'http://localhost:5173'],

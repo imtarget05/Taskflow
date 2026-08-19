@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth';
 import * as authController from './auth.controller';
+import * as googleController from './google.controller';
 import rateLimit from 'express-rate-limit';
 import { env } from '../../config/env';
 
@@ -30,5 +31,7 @@ router.post('/login', authLimiter, authController.login);
 router.post('/refresh', refreshLimiter, authController.refresh);
 router.post('/logout', authController.logout);
 router.get('/me', authenticate, authController.me);
+router.get('/google', googleController.redirectToGoogle);
+router.get('/google/callback', googleController.googleCallback);
 
 export default router;
