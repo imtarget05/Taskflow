@@ -1,26 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
-
-type ToastVariant = 'success' | 'error' | 'warning' | 'info';
+import { ToastContext, type ToastVariant } from '@/store/toast';
 
 interface ToastItem {
   id: number;
   variant: ToastVariant;
   title: string;
   description?: string;
-}
-
-interface ToastContextValue {
-  toast: (variant: ToastVariant, title: string, description?: string) => void;
-  dismiss: (id: number) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-export function useToast() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used within <ToastProvider>');
-  return ctx;
 }
 
 const ICONS: Record<ToastVariant, React.ReactNode> = {

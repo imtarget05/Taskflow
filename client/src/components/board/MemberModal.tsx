@@ -3,7 +3,9 @@ import axios from 'axios';
 import { Mail, Trash2, UserPlus } from 'lucide-react';
 import type { ProjectMember, Role } from '@/types';
 import { useAddMember, useRemoveMember } from '@/hooks/useProjects';
-import { Avatar, Button, ConfirmDialog, Input, Modal, useToast } from '@/components/ui';
+import { useToast } from '@/store/toast';
+import { Avatar, Button, ConfirmDialog, Input, Modal } from '@/components/ui';
+
 
 interface MemberModalProps {
   projectId: string;

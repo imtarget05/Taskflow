@@ -5,7 +5,9 @@ import api from '@/lib/api';
 import { useAddComment, useDeleteComment, useDeleteTask, useUpdateTask } from '@/hooks/useProjects';
 import { timeAgo } from '@/lib/time';
 import type { ProjectMember, TaskPriority } from '@/types';
-import { Avatar, Badge, Button, ConfirmDialog, Input, Skeleton, Textarea, useToast } from '@/components/ui';
+import { useToast } from '@/store/toast';
+import { Avatar, Badge, Button, ConfirmDialog, Input, Skeleton, Textarea } from '@/components/ui';
+
 
 interface TaskDetailProps {
   projectId: string;

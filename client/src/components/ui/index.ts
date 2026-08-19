@@ -9,4 +9,4 @@ export { default as Modal } from './Modal';
 export { default as Skeleton } from './Skeleton';
 export { default as Spinner } from './Spinner';
 export { default as Textarea } from './Textarea';
-export { ToastProvider, useToast } from './Toast';
+export { ToastProvider } from './Toast';

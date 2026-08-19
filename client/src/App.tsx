@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './store/auth';
 import AppShell from './components/layout/AppShell';
@@ -5,8 +6,9 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import BoardPage from './pages/BoardPage';
-import SettingsPage from './pages/SettingsPage';
 import { Skeleton } from './components/ui';
+
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -47,7 +49,11 @@ export default function App() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/projects/:projectId" element={<BoardPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={
+                <Suspense fallback={<Skeleton className="mx-auto mt-8 h-40 w-full max-w-2xl" />}>
+                  <SettingsPage />
+                </Suspense>
+              } />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,14 +1,17 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderKanban, Pencil, Plus } from 'lucide-react';
+import { CheckCircle2, FolderKanban, ListTodo, Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { useProjects, useCreateProject } from '@/hooks/useProjects';
+import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { useAuth } from '@/store/auth';
+import { useToast } from '@/store/toast';
 import type { ProjectSummary } from '@/types';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
-import { Avatar, Button, EmptyState, Input, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
+import { Avatar, Button, EmptyState, Input, Modal, Skeleton, Textarea } from '@/components/ui';
 
 export default function DashboardPage() {
   const { data: projects, isLoading, error } = useProjects();
+  const { data: stats } = useAnalyticsOverview();
   const createProject = useCreateProject();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -48,6 +51,76 @@ export default function DashboardPage() {
           New project
         </Button>
       </div>
+
+      {stats && stats.totalProjects > 0 && (
+        <section aria-label="Overview statistics" className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="card flex items-center gap-3 p-4">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
+              <FolderKanban className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold leading-none">{stats.totalProjects}</p>
+              <p className="mt-1 text-xs text-ink-muted">Projects</p>
+            </div>
+          </div>
+          <div className="card flex items-center gap-3 p-4">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-info-soft text-info">
+              <ListTodo className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold leading-none">{stats.totalTasks}</p>
+              <p className="mt-1 text-xs text-ink-muted">Tasks</p>
+            </div>
+          </div>
+          <div className="card flex items-center gap-3 p-4">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-success-soft text-success">
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold leading-none">{stats.completedTasks}</p>
+              <p className="mt-1 text-xs text-ink-muted">Completed</p>
+            </div>
+          </div>
+          <div className="card flex items-center gap-3 p-4">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning-soft text-warning">
+              <TriangleAlert className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold leading-none">{stats.overdueTasks}</p>
+              <p className="mt-1 text-xs text-ink-muted">Overdue</p>
+            </div>
+          </div>
+          <div className="card col-span-2 p-4 lg:col-span-4">
+            <h2 className="text-sm font-semibold">Completion by project</h2>
+            <ul className="mt-3 space-y-2.5">
+              {stats.byProject
+                .filter((p) => p.total > 0)
+                .map((p) => {
+                  const pct = Math.round((p.completed / p.total) * 100);
+                  return (
+                    <li key={p.projectId}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex min-w-0 items-center gap-2 font-medium text-ink">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.color ?? 'rgb(var(--accent))' }} aria-hidden="true" />
+                          <span className="truncate">{p.name}</span>
+                        </span>
+                        <span className="shrink-0 text-ink-muted">
+                          {p.completed}/{p.total} · {pct}%
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${p.name}: ${pct}% complete`}>
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {isLoading ? (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

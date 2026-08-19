@@ -288,6 +288,7 @@ export function useUpdateProject(projectId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['projects'] });
+      void qc.invalidateQueries({ queryKey: ['analytics'] });
     },
   });
 }

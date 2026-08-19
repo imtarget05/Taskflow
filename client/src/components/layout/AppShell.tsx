@@ -3,7 +3,7 @@ import { NavLink, Link } from 'react-router-dom';
 import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useProjects } from '@/hooks/useProjects';
-import { useTheme, type Theme } from '@/store/theme';
+import { useTheme, type Theme } from '@/store/theme-context';
 import { Avatar, Button, Skeleton } from '@/components/ui';
 import CommandPalette from './CommandPalette';
 

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Project } from '@/types';
 import { useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
-import { Button, ConfirmDialog, Input, Modal, Textarea, useToast } from '@/components/ui';
+import { useToast } from '@/store/toast';
+import { Button, ConfirmDialog, Input, Modal, Textarea } from '@/components/ui';
+
 
 const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
 
