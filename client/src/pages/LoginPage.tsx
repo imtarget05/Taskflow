@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
+import { Button, Input } from '@/components/ui';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -21,45 +22,43 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div className="card w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-brand-600">TaskFlow</h1>
-        <p className="mt-1 text-sm text-slate-500">Sign in to your workspace</p>
+        <h1 className="text-2xl font-bold text-ink">TaskFlow</h1>
+        <p className="mt-1 text-sm text-ink-secondary">Sign in to your workspace</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-                        <label htmlFor="email" className="mb-1 block text-sm font-medium">Email</label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-          <div>
-                        <label htmlFor="password" className="mb-1 block text-sm font-medium">Password</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button type="submit" className="btn-primary w-full">
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            required
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+            autoComplete="current-password"
+            required
+          />
+          {error && (
+            <p role="alert" className="text-xs text-danger">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full" size="md">
             Sign in
-          </button>
+          </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-500">
+        <p className="mt-4 text-center text-sm text-ink-secondary">
           No account?{' '}
-          <Link to="/register" className="font-medium text-brand-600 hover:underline">
+          <Link to="/register" className="font-medium text-accent hover:underline">
             Register
           </Link>
         </p>

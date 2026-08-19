@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useProjects } from '@/hooks/useProjects';
@@ -27,11 +28,17 @@ function sidebarClass(open: boolean, collapsed: boolean) {
 
 export default function AppShell({ children }: AppShellProps) {
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const { data: projects, isLoading } = useProjects();
   const { theme, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('taskflow-sidebar') === 'collapsed');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Prevent cross-user cache leaks: drop all cached queries once signed out.
+  useEffect(() => {
+    if (!user) queryClient.clear();
+  }, [user, queryClient]);
 
   const toggleCollapsed = () => {
     setCollapsed((v) => {

@@ -167,7 +167,7 @@ export default function KanbanBoard({ board, projectId, filters, onTaskClick }: 
                   e.preventDefault();
                   void handleAddColumn();
                 }}
-                className="w-60 shrink-0 rounded-xl bg-surface-2 p-3"
+                className="w-72 shrink-0 rounded-xl bg-surface-2 p-3"
               >
                 <Input
                   value={newColumnName}
@@ -193,7 +193,7 @@ export default function KanbanBoard({ board, projectId, filters, onTaskClick }: 
                 variant="ghost"
                 size="md"
                 onClick={() => setAddingColumn(true)}
-                className="h-10 w-60 shrink-0 rounded-xl border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent"
+                className="h-10 w-72 shrink-0 rounded-xl border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add column

@@ -123,6 +123,8 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
           },
         }))
       );
+      // Keep an open task drawer in sync with remote comments.
+      void queryClient.invalidateQueries({ queryKey: ['task', projectId] });
     };
 
     const handleConnectError = () => {
