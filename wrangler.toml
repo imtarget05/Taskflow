@@ -1,6 +1,0 @@
-# Cloudflare Pages deploy config: declares the Pages project explicitly so
-# wrangler's application detection at the repo root targets the Pages app
-# instead of failing on the client/server workspace structure.
-name = "taskflow"
-compatibility_date = "2026-08-01"
-pages_build_output_dir = "./client/dist"
