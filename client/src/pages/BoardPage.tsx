@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, History, Users } from 'lucide-react';
+import { ArrowLeft, History, Settings2, Users } from 'lucide-react';
 import { useBoard, useActivities } from '@/hooks/useProjects';
 import KanbanBoard from '@/components/board/KanbanBoard';
 import TaskDetail from '@/components/task/TaskDetail';
 import MemberModal from '@/components/board/MemberModal';
+import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
 import { Avatar, Badge, Button, EmptyState, ErrorState, Skeleton } from '@/components/ui';
@@ -17,6 +18,7 @@ export default function BoardPage() {
   const { data: activities } = useActivities(projectId ?? '');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const realtimeStatus = useRealtime(projectId);
 
@@ -99,10 +101,21 @@ export default function BoardPage() {
               )}
             </div>
             {canEdit && (
-              <Button variant="secondary" size="sm" onClick={() => setShowMemberModal(true)}>
-                <Users className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Members</span>
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowSettings(true)}
+                  aria-label="Project settings"
+                >
+                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Settings</span>
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowMemberModal(true)}>
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Members</span>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -164,6 +177,14 @@ export default function BoardPage() {
           members={project.members}
           ownerId={project.ownerId}
           onClose={() => setShowMemberModal(false)}
+        />
+      )}
+
+      {showSettings && (
+        <ProjectSettingsModal
+          project={project}
+          canDelete={project.ownerId === user?.id}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

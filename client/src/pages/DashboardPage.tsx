@@ -1,13 +1,18 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderKanban, Plus } from 'lucide-react';
+import { FolderKanban, Pencil, Plus } from 'lucide-react';
 import { useProjects, useCreateProject } from '@/hooks/useProjects';
+import { useAuth } from '@/store/auth';
+import type { ProjectSummary } from '@/types';
+import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
 import { Avatar, Button, EmptyState, Input, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 
 export default function DashboardPage() {
   const { data: projects, isLoading, error } = useProjects();
   const createProject = useCreateProject();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const [settingsProject, setSettingsProject] = useState<ProjectSummary | null>(null);
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -93,8 +98,23 @@ export default function DashboardPage() {
                 {project.description && (
                   <p className="mt-1 line-clamp-2 text-sm text-ink-secondary">{project.description}</p>
                 )}
-                <p className="mt-3 text-xs text-ink-muted">
-                  {taskCount} task{taskCount === 1 ? '' : 's'}
+                <p className="mt-3 flex items-center justify-between text-xs text-ink-muted">
+                  <span>
+                    {taskCount} task{taskCount === 1 ? '' : 's'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSettingsProject(project);
+                    }}
+                    aria-label={`Edit project ${project.name}`}
+                    className="px-1.5 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-ink"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
                 </p>
               </Link>
             );
@@ -150,6 +170,14 @@ export default function DashboardPage() {
           />
         </form>
       </Modal>
+
+      {settingsProject && (
+        <ProjectSettingsModal
+          project={settingsProject}
+          canDelete={settingsProject.ownerId === user?.id}
+          onClose={() => setSettingsProject(null)}
+        />
+      )}
     </div>
   );
 }

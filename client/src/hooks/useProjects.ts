@@ -280,7 +280,7 @@ export function useRemoveMember(projectId: string) {
 export function useUpdateProject(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name?: string; description?: string; color?: string }) => {
+    mutationFn: async (data: { name?: string; description?: string | null; color?: string }) => {
       const res = await api.patch(`/projects/${projectId}`, data);
       return res.data.data;
     },
