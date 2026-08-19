@@ -22,6 +22,7 @@ const updateSchema = z.object({
   priority: z.nativeEnum(TaskPriority).optional(),
   columnId: z.string().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  completed: z.boolean().optional(),
 });
 
 const idParam = z.object({ projectId: z.string().min(1), taskId: z.string().min(1) });

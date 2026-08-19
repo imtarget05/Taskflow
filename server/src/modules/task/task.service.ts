@@ -22,6 +22,7 @@ export interface UpdateTaskData {
   priority?: TaskPriority;
   columnId?: string;
   assigneeIds?: string[];
+  completed?: boolean;
 }
 
 export async function createTask(actorId: string, data: CreateTaskData) {
@@ -88,6 +89,7 @@ export async function updateTask(
   if (data.title !== undefined) updates.title = data.title.trim();
   if (data.description !== undefined) updates.description = data.description;
   if (data.priority !== undefined) updates.priority = data.priority;
+  if (data.completed !== undefined) updates.completed = data.completed;
   if (data.dueDate !== undefined) updates.dueDate = data.dueDate ? new Date(data.dueDate) : null;
 
   if (data.assigneeIds !== undefined) {

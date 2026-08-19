@@ -13,6 +13,7 @@ import columnRoutes from './modules/column/column.routes';
 import taskRoutes from './modules/task/task.routes';
 import commentRoutes from './modules/comment/comment.routes';
 import activityRoutes from './modules/activity/activity.routes';
+import searchRoutes from './modules/search/search.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -53,6 +54,7 @@ export function createApp(): Express {
   app.use('/api/projects', taskRoutes);
   app.use('/api/projects', commentRoutes);
   app.use('/api/projects', activityRoutes);
+  app.use('/api/search', searchRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

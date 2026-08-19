@@ -130,6 +130,7 @@ describe('task.service', () => {
         title: '  Renamed  ',
         columnId: 'c2',
         assigneeIds: ['u2'],
+        completed: true,
       });
 
       expect(mockedPrisma.task.update).toHaveBeenCalledWith(
@@ -137,6 +138,7 @@ describe('task.service', () => {
           data: expect.objectContaining({
             title: 'Renamed',
             position: 1,
+            completed: true,
             column: { connect: { id: 'c2' } },
             assignments: { deleteMany: {}, create: [{ userId: 'u2' }] },
           }),
