@@ -4,6 +4,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
 import { Button, Input } from '@/components/ui';
 
+const RATE_LIMIT_HINT =
+  'Too many attempts — please wait about 15 minutes and try again.';
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -23,13 +26,20 @@ export default function RegisterPage() {
       await register(name, email, password);
       navigate('/');
     } catch (err) {
-      const serverMsg = axios.isAxiosError(err)
-        ? (err.response?.data as { message?: string } | undefined)?.message
-        : undefined;
-      setError(
-        serverMsg ??
-          'Registration failed. Please check your details and try again.'
-      );
+      let message = 'Registration failed. Please check your details and try again.';
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as { message?: string } | undefined;
+        if (err.response?.status === 429) {
+          message = RATE_LIMIT_HINT;
+        } else if (data?.message) {
+          message = data.message;
+        } else if (err.response) {
+          message = `Registration failed (HTTP ${err.response.status}). Please try again.`;
+        } else {
+          message = `Cannot reach the server (${err.message}). Please try again.`;
+        }
+      }
+      setError(message);
     }
   }
 

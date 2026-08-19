@@ -1,5 +1,5 @@
 import express, { Express } from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
@@ -16,16 +16,31 @@ import activityRoutes from './modules/activity/activity.routes';
 import searchRoutes from './modules/search/search.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 
+function isAllowedOrigin(origin: string): boolean {
+  if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    return host.endsWith('.pages.dev');
+  } catch {
+    return false;
+  }
+}
+
+const corsOptions: CorsOptions = {
+  origin: (origin, callback) => {
+    // Requests without an Origin (curl, health checks) are allowed.
+    if (!origin) return callback(null, true);
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed by CORS'));
+  },
+  credentials: true,
+};
+
 export function createApp(): Express {
   const app = express();
 
   app.use(helmet());
-  app.use(
-    cors({
-      origin: env.CORS_ORIGINS,
-      credentials: true,
-    })
-  );
+  app.use(cors(corsOptions));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(csrfProtection);
