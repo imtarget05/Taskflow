@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
@@ -21,8 +22,14 @@ export default function RegisterPage() {
     try {
       await register(name, email, password);
       navigate('/');
-    } catch {
-      setError('Registration failed. Email may already be in use.');
+    } catch (err) {
+      const serverMsg = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message
+        : undefined;
+      setError(
+        serverMsg ??
+          'Registration failed. Please check your details and try again.'
+      );
     }
   }
 
