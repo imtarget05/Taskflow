@@ -30,6 +30,13 @@ export interface AgentStatus {
   enabled: boolean;
   provider: string;
   model: string | null;
+  models?: {
+    default: string | null;
+    premium: string | null;
+    reasoning: string | null;
+    embed: string | null;
+    rerank: string | null;
+  };
 }
 
 export function agentStatus(): AgentStatus {
@@ -37,6 +44,13 @@ export function agentStatus(): AgentStatus {
     enabled: isLLMConfigured(),
     provider: env.LLM_PROVIDER,
     model: env.LLM_MODEL ?? null,
+    models: {
+      default: env.LLM_MODEL ?? null,
+      premium: env.LLM_MODEL_PREMIUM ?? null,
+      reasoning: env.LLM_MODEL_REASONING ?? null,
+      embed: env.LLM_EMBED_MODEL ?? null,
+      rerank: env.LLM_RERANK_MODEL ?? null,
+    },
   };
 }
 

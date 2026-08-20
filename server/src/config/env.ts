@@ -29,12 +29,22 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().optional(),
-  // AI agent — OpenAI-compatible endpoint (Ollama, vLLM, ...). Server-side only.
+  // AI agent — OpenAI-compatible endpoint (Cloudflare Workers AI, Ollama, vLLM, ...).
+  // Server-side only; the browser never sees LLM credentials.
   LLM_PROVIDER: z.string().default('ollama'),
   LLM_BASE_URL: z.string().url().optional(),
+  // LLM_MODEL is the default tier model; the router escalates to the
+  // premium / reasoning tiers for complex questions (see modules/agent/llm.ts).
   LLM_MODEL: z.string().optional(),
+  LLM_MODEL_PREMIUM: z.string().optional(),
+  LLM_MODEL_REASONING: z.string().optional(),
+  LLM_EMBED_MODEL: z.string().optional(),
+  LLM_RERANK_MODEL: z.string().optional(),
   LLM_API_KEY: z.string().optional(),
   LLM_TIMEOUT_MS: z.coerce.number().default(120_000),
+  // Legal research (tra cứu pháp luật) — RAG over Vietnamese legislation.
+  LEGAL_ENABLED: z.enum(['true', 'false']).default('false'),
+  RATE_LIMIT_LEGAL: z.coerce.number().default(10),
   // Google Sheets export — service account credentials (optional).
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
@@ -102,8 +112,14 @@ export const env = {
   LLM_PROVIDER: parsed.success ? parsed.data.LLM_PROVIDER : 'ollama',
   LLM_BASE_URL: parsed.success ? parsed.data.LLM_BASE_URL : undefined,
   LLM_MODEL: parsed.success ? parsed.data.LLM_MODEL : undefined,
+  LLM_MODEL_PREMIUM: parsed.success ? parsed.data.LLM_MODEL_PREMIUM : undefined,
+  LLM_MODEL_REASONING: parsed.success ? parsed.data.LLM_MODEL_REASONING : undefined,
+  LLM_EMBED_MODEL: parsed.success ? parsed.data.LLM_EMBED_MODEL : undefined,
+  LLM_RERANK_MODEL: parsed.success ? parsed.data.LLM_RERANK_MODEL : undefined,
   LLM_API_KEY: parsed.success ? parsed.data.LLM_API_KEY : undefined,
   LLM_TIMEOUT_MS: parsed.success ? parsed.data.LLM_TIMEOUT_MS : 120_000,
+  LEGAL_ENABLED: parsed.success ? parsed.data.LEGAL_ENABLED === 'true' : false,
+  RATE_LIMIT_LEGAL: parsed.success ? parsed.data.RATE_LIMIT_LEGAL : 10,
   GOOGLE_SERVICE_ACCOUNT_EMAIL: parsed.success ? parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL : undefined,
   GOOGLE_PRIVATE_KEY: parsed.success ? parsed.data.GOOGLE_PRIVATE_KEY : undefined,
   GOOGLE_SHEETS_DELEGATED_USER: parsed.success ? parsed.data.GOOGLE_SHEETS_DELEGATED_USER : undefined,

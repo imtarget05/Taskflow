@@ -56,13 +56,43 @@ describe('agent.service', () => {
   });
 
   it('agentStatus reflects the configured provider/model', () => {
+    env.LLM_MODEL_PREMIUM = 'premium-model';
+    env.LLM_MODEL_REASONING = 'reasoning-model';
+    env.LLM_EMBED_MODEL = 'embed-model';
+    env.LLM_RERANK_MODEL = 'rerank-model';
     mockedIsConfigured.mockReturnValue(true);
-    expect(agentStatus()).toEqual({ enabled: true, provider: 'ollama', model: 'qwen' });
+    expect(agentStatus()).toEqual({
+      enabled: true,
+      provider: 'ollama',
+      model: 'qwen',
+      models: {
+        default: 'qwen',
+        premium: 'premium-model',
+        reasoning: 'reasoning-model',
+        embed: 'embed-model',
+        rerank: 'rerank-model',
+      },
+    });
 
     mockedIsConfigured.mockReturnValue(false);
     env.LLM_MODEL = undefined;
-    expect(agentStatus()).toEqual({ enabled: false, provider: 'ollama', model: null });
+    expect(agentStatus()).toEqual({
+      enabled: false,
+      provider: 'ollama',
+      model: null,
+      models: {
+        default: null,
+        premium: 'premium-model',
+        reasoning: 'reasoning-model',
+        embed: 'embed-model',
+        rerank: 'rerank-model',
+      },
+    });
     env.LLM_MODEL = 'qwen';
+    env.LLM_MODEL_PREMIUM = undefined;
+    env.LLM_MODEL_REASONING = undefined;
+    env.LLM_EMBED_MODEL = undefined;
+    env.LLM_RERANK_MODEL = undefined;
   });
 
   it('chat returns the LLM reply and creates a conversation', async () => {

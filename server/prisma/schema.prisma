@@ -135,6 +135,67 @@ model AgentPlan {
   @@map("agent_plans")
 }
 
+// Legal research (tra cứu pháp luật): Vietnamese legislation corpus.
+model LegalDocument {
+  id             String   @id @default(cuid())
+  sourceUrl      String   @unique
+  title          String
+  documentNumber String?
+  issueDate      DateTime?
+  effectiveDate  DateTime?
+  statusEffect   String? // "Còn hiệu lực" | "Hết hiệu lực" | "Hết hiệu lực một phần" | ...
+  rawText        String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chunks LegalChunk[]
+
+  @@index([title])
+  @@map("legal_documents")
+}
+
+// Chunked by article (điều/khoản) for retrieval; embedding is a pgvector
+// column managed through raw SQL (Prisma Unsupported type).
+model LegalChunk {
+  id         String  @id @default(cuid())
+  documentId String
+  articleRef String // e.g. "Điều 5", "Khoản 2 Điều 10"
+  content    String  @db.Text
+  embedding  Unsupported("vector(1024)")?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("legal_chunks")
+}
+
+// Deterministic cache for repeated questions — protects the daily neuron budget.
+model LegalCache {
+  id           String   @id @default(cuid())
+  questionHash String   @unique @db.VarChar(64)
+  question     String   @db.Text
+  answer       String   @db.Text
+  citations    Json?
+  modelUsed    String?
+  createdAt    DateTime @default(now())
+
+  @@map("legal_cache")
+}
+
+// Token usage ledger for the AI assistant (neuron-budget observability).
+model AIUsage {
+  id           String   @id @default(cuid())
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("ai_usage")
+}
+
 model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
