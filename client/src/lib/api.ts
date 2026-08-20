@@ -9,13 +9,22 @@ export const api = axios.create({
 });
 
 // Authentication is carried by httpOnly cookies; tokens never enter JS storage.
+// CSRF token is stored in memory after login/register/refresh (returned in response body).
+let csrfTokenMemory: string | null = null;
 
-function getCsrfToken(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
+export function setCsrfToken(token: string): void {
+  csrfTokenMemory = token;
 }
 
-// Double-submit CSRF: echo the csrf_token cookie on mutation requests so the
+export function getCsrfToken(): string | null {
+  return csrfTokenMemory;
+}
+
+export function clearCsrfToken(): void {
+  csrfTokenMemory = null;
+}
+
+// Double-submit CSRF: echo the stored csrf_token on mutation requests so the
 // server can verify the request originates from our own client.
 api.interceptors.request.use((config) => {
   const method = config.method?.toLowerCase();
@@ -53,7 +62,6 @@ api.interceptors.response.use(
       } catch (refreshError) {
         refreshPromise = null;
         clearAuth();
-        window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
@@ -64,6 +72,7 @@ api.interceptors.response.use(
 export function setAuth(): void {}
 
 export function clearAuth(): void {
+  clearCsrfToken();
 }
 
 export function getAccessToken(): string | null {

@@ -21,7 +21,7 @@ const loginSchema = z.object({
  * In production the frontend is served from a different origin
  * (Cloudflare Pages vs the API host), so sameSite must be 'none'.
  */
-function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string): string {
   const secure = process.env.NODE_ENV === 'production';
   const sameSite = secure ? 'none' : 'lax';
   res.cookie('access_token', accessToken, {
@@ -36,15 +36,15 @@ function setAuthCookies(res: Response, accessToken: string, refreshToken: string
     sameSite,
     maxAge: authService.tokenExpiryMs(),
   });
-  // Double-submit CSRF token: readable by the client so it can echo it
-  // back in the X-CSRF-Token header on mutation requests.
-  res.cookie(CSRF_COOKIE, generateCsrfToken(), {
+  const csrfToken = generateCsrfToken();
+  res.cookie(CSRF_COOKIE, csrfToken, {
     httpOnly: false,
     secure,
     sameSite,
     path: '/',
     maxAge: 24 * 60 * 60 * 1000,
   });
+  return csrfToken;
 }
 
 function clearAuthCookies(res: Response): void {
@@ -60,8 +60,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const result = await authService.register(body.data);
-  setAuthCookies(res, result.accessToken, result.refreshToken);
-  res.status(StatusCodes.CREATED).json({ success: true, user: result.user });
+  const csrfToken = setAuthCookies(res, result.accessToken, result.refreshToken);
+  res.status(StatusCodes.CREATED).json({ success: true, user: result.user, csrfToken });
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
@@ -71,16 +71,16 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const result = await authService.login(body.data);
-  setAuthCookies(res, result.accessToken, result.refreshToken);
-  res.status(StatusCodes.OK).json({ success: true, user: result.user });
+  const csrfToken = setAuthCookies(res, result.accessToken, result.refreshToken);
+  res.status(StatusCodes.OK).json({ success: true, user: result.user, csrfToken });
 });
 
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
   const refreshToken = req.cookies?.refresh_token;
   if (!refreshToken) throw new AppError('Missing refresh token cookie', StatusCodes.BAD_REQUEST);
   const result = await authService.refresh(refreshToken);
-  setAuthCookies(res, result.accessToken, result.refreshToken);
-  res.status(StatusCodes.OK).json({ success: true, user: result.user });
+  const csrfToken = setAuthCookies(res, result.accessToken, result.refreshToken);
+  res.status(StatusCodes.OK).json({ success: true, user: result.user, csrfToken });
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {

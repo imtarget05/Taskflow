@@ -79,4 +79,5 @@ export interface BoardData {
 
 export interface AuthResponse {
   user: User;
+  csrfToken?: string;
 }

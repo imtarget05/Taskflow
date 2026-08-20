@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import api, { clearAuth } from '@/lib/api';
+import api, { clearAuth, setCsrfToken } from '@/lib/api';
 import type { AuthResponse, User } from '@/types';
 
 interface AuthContextValue {
@@ -27,11 +27,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, password: string) {
     const res = await api.post<AuthResponse>('/auth/login', { email, password });
     setUser(res.data.user);
+    if (res.data.csrfToken) setCsrfToken(res.data.csrfToken);
   }
 
   async function register(name: string, email: string, password: string) {
     const res = await api.post<AuthResponse>('/auth/register', { name, email, password });
     setUser(res.data.user);
+    if (res.data.csrfToken) setCsrfToken(res.data.csrfToken);
   }
 
   async function logout() {
