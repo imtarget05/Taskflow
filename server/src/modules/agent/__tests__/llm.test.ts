@@ -70,6 +70,17 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('handles the Cloudflare Workers AI response envelope (result.choices)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: { choices: [{ message: { content: 'from cloudflare' } }] } }),
+    });
+
+    const reply = await chatCompletion([{ role: 'user', content: 'hi' }]);
+    expect(reply).toBe('from cloudflare');
+  });
+
   it('throws for a non-retryable status', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 400 });
     await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toBeInstanceOf(AppError);

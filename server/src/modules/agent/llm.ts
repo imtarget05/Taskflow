@@ -83,9 +83,13 @@ export async function chatCompletion(
   }
 
   const data = (await res.json()) as {
+    // OpenAI-native shape
     choices?: { message?: { content?: string } }[];
+    // Cloudflare Workers AI wraps the same shape in a `result` envelope.
+    result?: { choices?: { message?: { content?: string } }[] };
   };
-  const content = data?.choices?.[0]?.message?.content;
+  const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
+  const content = choice?.message?.content;
   if (typeof content !== 'string') {
     throw new AppError('LLM returned an invalid response', StatusCodes.BAD_GATEWAY);
   }
