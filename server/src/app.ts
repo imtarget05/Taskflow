@@ -17,6 +17,7 @@ import chatRoutes from './modules/chat/chat.routes';
 import searchRoutes from './modules/search/search.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import agentRoutes from './modules/agent/agent.routes';
+import exportRoutes from './modules/export/export.routes';
 
 function isAllowedOrigin(origin: string): boolean {
   if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
@@ -82,6 +83,7 @@ export function createApp(): Express {
   app.use('/api/search', searchRoutes);
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/agent', agentRoutes);
+  app.use('/api/projects', exportRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

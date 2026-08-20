@@ -3,7 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { AppError } from '../../utils/errors';
 import { hasRole } from '../../utils/roles';
-import { addChatGroupMember, ensureChatGroup, removeChatGroupMemberForProject } from '../chat/chat.service';
+import { addChatGroupMember, ensureChatGroupForProject, removeChatGroupMemberForProject } from '../chat/chat.service';
 import { createActivity } from '../activity/activity.service';
 
 export async function createProject(
@@ -30,9 +30,7 @@ export async function createProject(
     data: { projectId: project.id, userId: ownerId, role: Role.OWNER },
   });
 
-  // Auto-create the project chat group and join its creator.
-  const group = await ensureChatGroup(project.id);
-  await addChatGroupMember(group.id, ownerId);
+  // The chat group is created lazily once the project has >= 2 members.
 
   return { id: project.id };
 }
@@ -112,9 +110,13 @@ export async function addMember(
     update: { role: data.role },
   });
 
-  // Auto-join the project chat group when added as a member.
-  const group = await ensureChatGroup(projectId);
-  await addChatGroupMember(group.id, user.id);
+  // Auto-create the project chat group once the member count reaches 2,
+  // then join the newly added member.
+  const group = await ensureChatGroupForProject(projectId);
+  if (group) {
+    await addChatGroupMember(group.id, user.id);
+    emitToProject(projectId, SOCKET_EVENTS.CHAT_GROUP_CREATED, { projectId });
+  }
   createActivity(projectId, actorId, null, 'MEMBER_ADDED', { email: user.email, role: data.role });
 
   emitToProject(projectId, SOCKET_EVENTS.MEMBER_ADDED, { userId: user.id, role: data.role });

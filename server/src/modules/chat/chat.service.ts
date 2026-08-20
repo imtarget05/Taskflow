@@ -3,9 +3,9 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 
 /**
- * Chat groups: one auto-created group per project. Members are joined
- * automatically when they are added to the project (and on first read, to
- * heal any stale memberships).
+ * Chat groups: one auto-created group per project — but only once a project
+ * has at least 2 members. Members are joined automatically when the group is
+ * created (and on first read, to heal any stale memberships).
  */
 
 export async function ensureChatGroup(projectId: string): Promise<{ id: string }> {
@@ -25,6 +25,32 @@ export async function ensureChatGroup(projectId: string): Promise<{ id: string }
     if (raced) return raced;
     throw new AppError('Unable to create chat group', 500);
   }
+}
+
+/**
+ * Creates the project chat group only when the project has >= 2 members,
+ * joining every current member. Returns null when the group should not exist
+ * yet (single-member projects). Idempotent when a group already exists.
+ */
+export async function ensureChatGroupForProject(
+  projectId: string
+): Promise<{ id: string } | null> {
+  const existing = await prisma.chatGroup.findUnique({ where: { projectId } });
+  if (existing) return existing;
+
+  const memberCount = await prisma.projectMember.count({ where: { projectId } });
+  if (memberCount < 2) return null;
+
+  const group = await ensureChatGroup(projectId);
+  const members = await prisma.projectMember.findMany({
+    where: { projectId },
+    select: { userId: true },
+  });
+  await prisma.chatGroupMember.createMany({
+    data: members.map((m) => ({ groupId: group.id, userId: m.userId })),
+    skipDuplicates: true,
+  });
+  return group;
 }
 
 export async function addChatGroupMember(groupId: string, userId: string): Promise<void> {
@@ -55,7 +81,8 @@ async function assertMember(projectId: string, userId: string, minRole: Role): P
 export async function getGroup(projectId: string, userId: string) {
   await assertMember(projectId, userId, Role.VIEWER);
 
-  const group = await ensureChatGroup(projectId);
+  const group = await ensureChatGroupForProject(projectId);
+  if (!group) return null;
   await addChatGroupMember(group.id, userId);
 
   return prisma.chatGroup.findUnique({
@@ -78,7 +105,10 @@ export async function getGroup(projectId: string, userId: string) {
 export async function sendMessage(projectId: string, userId: string, body: string) {
   await assertMember(projectId, userId, Role.MEMBER);
 
-  const group = await ensureChatGroup(projectId);
+  const group = await ensureChatGroupForProject(projectId);
+  if (!group) {
+    throw new AppError('Chat is available once the project has at least 2 members', 409);
+  }
   return prisma.chatMessage.create({
     data: { groupId: group.id, senderId: userId, body: body.trim() },
     include: { sender: { select: { id: true, name: true, avatarUrl: true } } },

@@ -35,6 +35,10 @@ const envSchema = z.object({
   LLM_MODEL: z.string().optional(),
   LLM_API_KEY: z.string().optional(),
   LLM_TIMEOUT_MS: z.coerce.number().default(120_000),
+  // Google Sheets export — service account credentials (optional).
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
+  GOOGLE_PRIVATE_KEY: z.string().optional(),
+  GOOGLE_SHEETS_DELEGATED_USER: z.string().optional(),
   // n8n integration (user-hosted instance, reached server-side only).
   N8N_API_URL: z.string().url().optional(),
   N8N_API_KEY: z.string().optional(),
@@ -100,6 +104,9 @@ export const env = {
   LLM_MODEL: parsed.success ? parsed.data.LLM_MODEL : undefined,
   LLM_API_KEY: parsed.success ? parsed.data.LLM_API_KEY : undefined,
   LLM_TIMEOUT_MS: parsed.success ? parsed.data.LLM_TIMEOUT_MS : 120_000,
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: parsed.success ? parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL : undefined,
+  GOOGLE_PRIVATE_KEY: parsed.success ? parsed.data.GOOGLE_PRIVATE_KEY : undefined,
+  GOOGLE_SHEETS_DELEGATED_USER: parsed.success ? parsed.data.GOOGLE_SHEETS_DELEGATED_USER : undefined,
   N8N_API_URL: parsed.success ? parsed.data.N8N_API_URL : undefined,
   N8N_API_KEY: parsed.success ? parsed.data.N8N_API_KEY : undefined,
   N8N_SIGNING_SECRET: parsed.success ? parsed.data.N8N_SIGNING_SECRET : undefined,

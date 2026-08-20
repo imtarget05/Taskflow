@@ -22,6 +22,7 @@ export const SOCKET_EVENTS = {
   COLUMN_DELETED: 'column:deleted',
   MEMBER_ADDED: 'member:added',
   MEMBER_REMOVED: 'member:removed',
+  CHAT_GROUP_CREATED: 'chat:group-created',
   CHAT_MESSAGE: 'chat:message',
   CHAT_READ: 'chat:read',
 } as const;

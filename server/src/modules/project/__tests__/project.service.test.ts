@@ -48,14 +48,10 @@ describe('project.service', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('createProject', () => {
-    it('creates the project, default columns, owner membership and project chat', async () => {
+    it('creates the project, default columns and owner membership (no chat yet)', async () => {
       mockedPrisma.project.create.mockResolvedValue({ id: 'p1' });
       mockedPrisma.column.createMany.mockResolvedValue({ count: 3 });
       mockedPrisma.projectMember.create.mockResolvedValue({});
-      mockedPrisma.chatGroup.findUnique.mockResolvedValue(null);
-      mockedPrisma.project.findUnique.mockResolvedValue({ name: 'My Project' });
-      mockedPrisma.chatGroup.create.mockResolvedValue({ id: 'g1' });
-      mockedPrisma.chatGroupMember.upsert.mockResolvedValue({});
 
       const result = await createProject('u1', { name: 'My Project' });
 
@@ -70,14 +66,9 @@ describe('project.service', () => {
       expect(mockedPrisma.projectMember.create).toHaveBeenCalledWith({
         data: { projectId: 'p1', userId: 'u1', role: Role.OWNER },
       });
-      expect(mockedPrisma.chatGroup.create).toHaveBeenCalledWith({
-        data: { projectId: 'p1', name: '#My Project' },
-      });
-      expect(mockedPrisma.chatGroupMember.upsert).toHaveBeenCalledWith({
-        where: { groupId_userId: { groupId: 'g1', userId: 'u1' } },
-        create: { groupId: 'g1', userId: 'u1' },
-        update: {},
-      });
+      // The chat group is only created once the project has >= 2 members.
+      expect(mockedPrisma.chatGroup.create).not.toHaveBeenCalled();
+      expect(mockedPrisma.chatGroupMember.upsert).not.toHaveBeenCalled();
     });
   });
 
