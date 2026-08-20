@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { env } from '../../config/env';
 import { issueTokens } from './auth.service';
+import crypto from 'crypto';
 
 export interface GoogleProfile {
   sub: string;
@@ -31,7 +32,6 @@ export function buildAuthUrl(state: string, redirectUri: string = googleRedirect
 }
 
 export function googleRedirectUri(): string {
-  // Static fallback: the callback lives on the API host.
   const base =
     env.GOOGLE_REDIRECT_ORIGIN ??
     (env.NODE_ENV === 'production'
@@ -48,11 +48,17 @@ export function googleRedirectUri(): string {
  * API origin when the headers are absent (direct API hits).
  */
 export function clientRedirectUri(req: Request): string {
+  // Priority 1: explicit env override (GOOGLE_REDIRECT_ORIGIN)
+  if (env.GOOGLE_REDIRECT_ORIGIN) {
+    return `${env.GOOGLE_REDIRECT_ORIGIN}/api/auth/google/callback`;
+  }
+  // Priority 2: forwarded headers from proxy (Pages → Render)
   const proto = (req.headers['x-forwarded-proto'] as string | undefined) || 'https';
   const host = (req.headers['x-forwarded-host'] as string | undefined) || req.headers.host;
   if (typeof host === 'string' && host) {
     return `${proto}://${host}/api/auth/google/callback`;
   }
+  // Priority 3: static fallback
   return googleRedirectUri();
 }
 
@@ -71,59 +77,74 @@ async function exchangeCodeForProfile(code: string, redirectUri: string): Promis
       grant_type: 'authorization_code',
     }),
   });
+
   if (!tokenRes.ok) {
-    throw new AppError('Google token exchange failed', 502);
-  }
-  const { access_token } = (await tokenRes.json()) as { access_token: string };
-  if (!access_token) {
-    throw new AppError('Google token exchange failed', 502);
+    const err = await tokenRes.text();
+    throw new AppError(`Google token exchange failed: ${err}`, 502);
   }
 
+  const tokens = await tokenRes.json();
   const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${access_token}` },
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
+
   if (!infoRes.ok) {
     throw new AppError('Google profile fetch failed', 502);
   }
-  const profile = (await infoRes.json()) as {
-    sub: string;
-    email: string;
-    name?: string;
-    picture?: string;
-  };
+
+  const profile = await infoRes.json();
   if (!profile.sub || !profile.email) {
     throw new AppError('Google profile is incomplete', 502);
   }
-  return { sub: profile.sub, email: profile.email.toLowerCase(), name: profile.name || 'Google User', picture: profile.picture };
+
+  return {
+    sub: profile.sub,
+    email: profile.email.toLowerCase(),
+    name: profile.name || 'Google User',
+    picture: profile.picture,
+  };
 }
 
-export async function authenticateWithGoogle(code: string, redirectUri: string = googleRedirectUri()) {
-  const profile = await exchangeCodeForProfile(code, redirectUri);
-  const email = profile.email.toLowerCase().trim();
+export async function authenticateWithGoogle(code: string, redirectUri: string = googleRedirectUri()): Promise<AuthResult> {
+  if (!isGoogleConfigured()) {
+    throw new AppError('Google sign-in is not configured', 503);
+  }
 
+  const profile = await exchangeCodeForProfile(code, redirectUri);
+
+  // First try to find user by googleId
   const byGoogleId = await prisma.user.findUnique({ where: { googleId: profile.sub } });
   if (byGoogleId) {
     return issueTokens({ id: byGoogleId.id, email: byGoogleId.email, name: byGoogleId.name });
   }
 
-  const byEmail = await prisma.user.findUnique({ where: { email } });
+  // Then try to find by email (link Google identity to existing account)
+  const byEmail = await prisma.user.findUnique({ where: { email: profile.email } });
   if (byEmail) {
     if (byEmail.googleId) {
       return issueTokens({ id: byEmail.id, email: byEmail.email, name: byEmail.name });
     }
-    // Google verified this email belongs to the caller, so link the Google
-    // identity to the existing password account instead of blocking sign-in.
-    const linked = await prisma.user.update({
+    // Link Google identity to existing password account
+    await prisma.user.update({
       where: { id: byEmail.id },
       data: { googleId: profile.sub },
-      select: { id: true, email: true, name: true },
     });
-    return issueTokens(linked);
+    return issueTokens({ id: byEmail.id, email: byEmail.email, name: byEmail.name });
   }
 
+  // Create new user
   const user = await prisma.user.create({
-    data: { email, name: profile.name, googleId: profile.sub },
-    select: { id: true, email: true, name: true },
+    data: {
+      email: profile.email,
+      name: profile.name,
+      googleId: profile.sub,
+    },
   });
-  return issueTokens(user);
+  return issueTokens({ id: user.id, email: user.email, name: user.name });
+}
+
+export interface AuthResult {
+  accessToken: string;
+  refreshToken: string;
+  user: { id: string; email: string; name: string };
 }
