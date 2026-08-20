@@ -95,7 +95,14 @@ export async function authenticateWithGoogle(code: string) {
     if (byEmail.googleId) {
       return issueTokens({ id: byEmail.id, email: byEmail.email, name: byEmail.name });
     }
-    throw new AppError('EMAIL_EXISTS', 409);
+    // Google verified this email belongs to the caller, so link the Google
+    // identity to the existing password account instead of blocking sign-in.
+    const linked = await prisma.user.update({
+      where: { id: byEmail.id },
+      data: { googleId: profile.sub },
+      select: { id: true, email: true, name: true },
+    });
+    return issueTokens(linked);
   }
 
   const user = await prisma.user.create({

@@ -11,6 +11,7 @@ jest.mock('../../../lib/prisma', () => ({
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     refreshToken: {
       create: jest.fn(),
@@ -24,6 +25,7 @@ const mockedPrisma = prisma as unknown as {
   user: {
     findUnique: jest.Mock;
     create: jest.Mock;
+    update: jest.Mock;
   };
   refreshToken: { create: jest.Mock };
 };
@@ -132,17 +134,25 @@ describe('google.service', () => {
       expect(mockedPrisma.user.create).not.toHaveBeenCalled();
     });
 
-    it('rejects when the email is taken by a password account', async () => {
+    it('links the Google identity to an existing password account', async () => {
       mockedPrisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
         id: 'u2',
         email: profile.email,
         name: 'Other',
         googleId: null,
       });
+      mockedPrisma.user.update.mockResolvedValue({
+        id: 'u2',
+        email: profile.email,
+        name: 'Other',
+      });
 
-      await expect(authenticateWithGoogle('code-1')).rejects.toMatchObject({
-        statusCode: 409,
-        message: 'EMAIL_EXISTS',
+      const result = await authenticateWithGoogle('code-1');
+      expect(result.user.id).toBe('u2');
+      expect(mockedPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { googleId: 'g1' },
+        select: { id: true, email: true, name: true },
       });
     });
 
