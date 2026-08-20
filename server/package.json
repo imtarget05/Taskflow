@@ -13,7 +13,7 @@
     "lint:fix": "eslint --fix \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --testPathIgnorePatterns=\"integration\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
