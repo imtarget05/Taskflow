@@ -91,4 +91,28 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .typing-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full bg-ink-muted;
+    animation: typing-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }

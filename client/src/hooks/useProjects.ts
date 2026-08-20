@@ -360,15 +360,19 @@ export function useRemoveMember(projectId: string) {
   });
 }
 
-export function useUpdateProject(projectId: string) {
+export function useUpdateProject(projectId?: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name?: string; description?: string | null; color?: string }) => {
-      const res = await api.patch(`/projects/${projectId}`, data);
+    mutationFn: async (data: { projectId?: string; name?: string; description?: string | null; color?: string }) => {
+      const id = data.projectId ?? projectId;
+      if (!id) throw new Error('Project id is required');
+      const res = await api.patch(`/projects/${id}`, data);
       return res.data.data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['board', projectId] });
+    onSuccess: (_result, variables) => {
+      const id = variables.projectId ?? projectId;
+      if (!id) return;
+      qc.invalidateQueries({ queryKey: ['board', id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       void qc.invalidateQueries({ queryKey: ['analytics'] });
     },
@@ -394,5 +398,23 @@ export function useDeleteComment(projectId: string, taskId: string) {
       return res.data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['board', projectId] }),
+  });
+}
+
+export function useExportSheets(projectId: string) {
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const res = await api.get<{ data: { url: string } }>(`/projects/${projectId}/export/sheets`);
+      return res.data.data.url;
+    },
+  });
+}
+
+export function useExportCsv(projectId: string) {
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const res = await api.get<string>(`/projects/${projectId}/export/csv`, { responseType: 'text' });
+      return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    },
   });
 }

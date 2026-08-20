@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FilterX, History, MessageSquare, Settings2, Users } from 'lucide-react';
-import { useBoard, useActivities } from '@/hooks/useProjects';
-import KanbanBoard from '@/components/board/KanbanBoard';
+import { useBoard, useActivities, useUpdateProject } from '@/hooks/useProjects';
 import { ALL_FILTERS, type BoardFilters } from '@/lib/filters';
 import TaskDetail from '@/components/task/TaskDetail';
 import MemberModal from '@/components/board/MemberModal';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
-import ChatPanel from '@/components/board/ChatPanel';
+import ExportMenu from '@/components/board/ExportMenu';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
 import { useAgent } from '@/store/agent';
-import { Avatar, Badge, Button, EmptyState, ErrorState, Skeleton } from '@/components/ui';
+import { useToast } from '@/store/toast';
+import { Avatar, Badge, Button, ColorPopover, EmptyState, ErrorState, Skeleton } from '@/components/ui';
 import type { Activity, TaskPriority } from '@/types';
+
+const KanbanBoard = lazy(() => import('@/components/board/KanbanBoard'));
+const ChatPanel = lazy(() => import('@/components/board/ChatPanel'));
 
 type PriorityFilter = TaskPriority | 'ALL';
 
@@ -23,6 +26,8 @@ export default function BoardPage() {
   const { setProjectId: setAgentProjectId } = useAgent();
   const { data: board, isLoading, error, refetch } = useBoard(projectId);
   const { data: activities } = useActivities(projectId ?? '');
+  const updateProject = useUpdateProject(projectId);
+  const { toast } = useToast();
   const [filters, setFilters] = useState<BoardFilters>({ ...ALL_FILTERS });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(searchParams.get('task'));
   const [showMemberModal, setShowMemberModal] = useState(false);
@@ -84,6 +89,11 @@ export default function BoardPage() {
           </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
+              <span
+                className="h-6 w-1 shrink-0 rounded-full"
+                style={{ backgroundColor: project.color ?? 'rgb(var(--accent))' }}
+                aria-hidden="true"
+              />
               <h1 className="truncate text-base font-semibold">{project.name}</h1>
               <Badge tone={board.role === 'OWNER' ? 'accent' : 'neutral'}>{board.role}</Badge>
               <span
@@ -116,6 +126,19 @@ export default function BoardPage() {
             </div>
             {canEdit && (
               <>
+                <ColorPopover
+                  value={project.color}
+                  onChange={(color) => {
+                    updateProject.mutate(
+                      { color },
+                      {
+                        onSuccess: () => toast('success', 'Color updated'),
+                        onError: () => toast('error', 'Unable to update color'),
+                      }
+                    );
+                  }}
+                  ariaLabel="Change project color"
+                />
                 <Button
                   variant="secondary"
                   size="sm"
@@ -131,6 +154,7 @@ export default function BoardPage() {
                 </Button>
               </>
             )}
+            <ExportMenu projectId={project.id} projectName={project.name} />
             <Button
               variant={showChat ? 'primary' : 'secondary'}
               size="sm"
@@ -147,11 +171,11 @@ export default function BoardPage() {
 
       <div className="flex min-h-0 flex-1">
         <div
-          className={`min-h-0 flex-1 flex-col gap-4 p-4 md:p-6 lg:flex-row ${
+          className={`min-h-0 flex-1 flex-col gap-4 p-4 md:p-6 ${
             showChat ? 'hidden lg:flex' : 'flex'
           }`}
         >
-          <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+          <main className="flex min-w-0 flex-1 flex-col">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm text-ink-secondary">
               <span>Priority</span>
@@ -210,56 +234,65 @@ export default function BoardPage() {
             )}
           </div>
 
-          <KanbanBoard board={board} projectId={project.id} filters={filters} onTaskClick={(id) => setSelectedTaskId(id)} />
-        </main>
+          <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+            <KanbanBoard board={board} projectId={project.id} filters={filters} onTaskClick={(id) => setSelectedTaskId(id)} />
+          </Suspense>
 
-        <aside
-          aria-label="Recent activity"
-          className="card w-full shrink-0 overflow-y-auto p-4 lg:w-64"
-        >
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            <History className="h-4 w-4 text-ink-muted" aria-hidden="true" />
-            Activity
-          </h2>
-          {activities && activities.length > 0 ? (
-            <ul className="space-y-3">
-              {activities.map((activity: Activity) => (
-                <li key={activity.id} className="text-xs text-ink-secondary">
+          <section
+            aria-label="Recent activity"
+            className="card mt-4 w-full p-4"
+          >
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <History className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+              Activity
+              {activities && activities.length > 0 && (
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-ink-muted">
+                  {activities.length}
+                </span>
+              )}
+            </h2>
+            {activities && activities.length > 0 ? (
+              <ul className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+                {activities.map((activity: Activity) => (
+                  <li key={activity.id} className="flex min-w-0 items-baseline gap-1.5 text-xs text-ink-secondary">
                     <span className="font-medium text-ink">
                       {activity.user.name === user?.name ? 'You' : activity.user.name}
                     </span>{' '}
                     {activity.action.replace(/_/g, ' ').toLowerCase()}
                     {activity.metadata && 'title' in activity.metadata && typeof activity.metadata.title === 'string' && (
-                      <span className="font-medium text-ink"> · {activity.metadata.title}</span>
+                      <span className="truncate font-medium text-ink"> · {activity.metadata.title}</span>
                     )}
-                    <span className="block text-xs text-ink-muted">
+                    <span className="ml-auto shrink-0 text-[10px] text-ink-muted">
                       {new Date(activity.createdAt).toLocaleString()}
                     </span>
                   </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState
-              icon={<History className="h-6 w-6" aria-hidden="true" />}
-              title="No activity yet"
-              className="py-8"
-            />
-          )}
-        </aside>
-        </div>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                icon={<History className="h-6 w-6" aria-hidden="true" />}
+                title="No activity yet"
+                className="py-6"
+              />
+            )}
+          </section>
+        </main>
 
         {showChat && (
           <div className="hidden h-full shrink-0 lg:flex">
-            <ChatPanel
-              projectId={project.id}
-              name={project.name}
-              members={project.members}
-              currentUser={user}
-              role={board.role}
-              onClose={() => setShowChat(false)}
-            />
+            <Suspense fallback={<div className="w-80 bg-surface" />}>
+              <ChatPanel
+                projectId={project.id}
+                name={project.name}
+                members={project.members}
+                currentUser={user}
+                role={board.role}
+                onClose={() => setShowChat(false)}
+              />
+            </Suspense>
           </div>
         )}
+      </div>
       </div>
 
       {showChat && (
@@ -270,14 +303,16 @@ export default function BoardPage() {
           onClick={() => setShowChat(false)}
         >
           <div className="h-full w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <ChatPanel
-              projectId={project.id}
-              name={project.name}
-              members={project.members}
-              currentUser={user}
-              role={board.role}
-              onClose={() => setShowChat(false)}
-            />
+            <Suspense fallback={<div className="h-full w-full bg-surface" />}>
+              <ChatPanel
+                projectId={project.id}
+                name={project.name}
+                members={project.members}
+                currentUser={user}
+                role={board.role}
+                onClose={() => setShowChat(false)}
+              />
+            </Suspense>
           </div>
         </div>
       )}

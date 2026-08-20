@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search, Sparkles } from 'lucide-react';
@@ -7,8 +7,9 @@ import { useProjects } from '@/hooks/useProjects';
 import { useTheme, type Theme } from '@/store/theme-context';
 import { useAgent } from '@/store/agent';
 import { Avatar, Button, Skeleton } from '@/components/ui';
-import CommandPalette from './CommandPalette';
-import ChatBox from '../agent/ChatBox';
+
+const CommandPalette = lazy(() => import('./CommandPalette'));
+const ChatBox = lazy(() => import('../agent/ChatBox'));
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -233,8 +234,12 @@ export default function AppShell({ children }: AppShellProps) {
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
 
-      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <ChatBox />
+      <Suspense fallback={null}>
+        <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ChatBox />
+      </Suspense>
     </div>
   );
 }

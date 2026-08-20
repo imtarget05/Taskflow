@@ -19,7 +19,7 @@ export default function ChatPanel({ projectId, name, members, currentUser, role,
   const send = useSendChatMessage(projectId, currentUser);
   const [draft, setDraft] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
-  const canChat = role === 'OWNER' || role === 'MEMBER';
+  const canChat = (role === 'OWNER' || role === 'MEMBER') && !!group;
 
   useEffect(() => {
     const el = listRef.current;
@@ -72,7 +72,16 @@ export default function ChatPanel({ projectId, name, members, currentUser, role,
             <Skeleton className="h-12 w-2/3" />
           </div>
         ) : isError || !group ? (
-          <EmptyState icon={<MessageSquare className="h-6 w-6" aria-hidden="true" />} title="Chat unavailable" className="py-8" />
+          <EmptyState
+            icon={<MessageSquare className="h-6 w-6" aria-hidden="true" />}
+            title={members.length < 2 ? 'Chat opens with 2+ members' : 'Chat unavailable'}
+            description={
+              members.length < 2
+                ? 'Invite a teammate to this project and the group chat is created automatically.'
+                : 'The chat could not be loaded.'
+            }
+            className="py-8"
+          />
         ) : group.messages.length === 0 ? (
           <EmptyState
             icon={<MessageSquare className="h-6 w-6" aria-hidden="true" />}

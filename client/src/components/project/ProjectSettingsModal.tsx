@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Project } from '@/types';
 import { useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useToast } from '@/store/toast';
-import { Button, ConfirmDialog, Input, Modal, Textarea } from '@/components/ui';
-
-
-const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+import { Button, ColorPicker, PRESET_COLORS, ConfirmDialog, Input, Modal, Textarea } from '@/components/ui';
 
 interface ProjectSettingsModalProps {
   project: Project;
@@ -22,7 +19,7 @@ export default function ProjectSettingsModal({ project, canDelete, onClose }: Pr
 
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? '');
-  const [color, setColor] = useState(project.color ?? COLORS[0]);
+  const [color, setColor] = useState(project.color ?? PRESET_COLORS[0]);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -60,6 +57,23 @@ export default function ProjectSettingsModal({ project, canDelete, onClose }: Pr
     <>
       <Modal open onClose={onClose} title="Project settings" size="sm">
         <form onSubmit={handleSave} className="space-y-4">
+          <div className="rounded-xl border border-line bg-surface-2 p-4">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+                style={{ backgroundColor: color }}
+                aria-hidden="true"
+              >
+                {name.trim().charAt(0).toUpperCase() || 'P'}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold" style={{ color }}>
+                  {name.trim() || 'Project name'}
+                </p>
+                <p className="text-xs text-ink-muted">Live preview</p>
+              </div>
+            </div>
+          </div>
           <Input
             label="Name"
             value={name}
@@ -76,22 +90,7 @@ export default function ProjectSettingsModal({ project, canDelete, onClose }: Pr
           />
           <fieldset>
             <legend className="mb-1.5 text-sm font-medium text-ink">Color</legend>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Project color">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={color === c}
-                  aria-label={`Color ${c}`}
-                  onClick={() => setColor(c)}
-                  className={`h-8 w-8 rounded-full transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                    color === c ? 'scale-110 ring-2 ring-accent ring-offset-2 ring-offset-surface' : 'hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
+            <ColorPicker value={color} onChange={setColor} ariaLabel="Project color" />
           </fieldset>
 
           {error && (

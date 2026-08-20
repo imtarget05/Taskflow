@@ -164,6 +164,7 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
       void queryClient.invalidateQueries({ queryKey: boardKey(projectId) });
       void queryClient.invalidateQueries({ queryKey: ['chat', projectId] });
     });
+    socket.on('chat:group-created', () => void queryClient.invalidateQueries({ queryKey: ['chat', projectId] }));
     socket.on('chat:message', () => void queryClient.invalidateQueries({ queryKey: ['chat', projectId] }));
 
     return () => {

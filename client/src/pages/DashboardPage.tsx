@@ -2,18 +2,19 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { CheckCircle2, FolderKanban, ListTodo, Pencil, Plus, TriangleAlert } from 'lucide-react';
-import { useProjects, useCreateProject } from '@/hooks/useProjects';
+import { useProjects, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import type { ProjectSummary } from '@/types';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
-import { Avatar, Button, EmptyState, Input, Modal, Skeleton, Textarea } from '@/components/ui';
+import { Avatar, Button, ColorPopover, EmptyState, Input, Modal, Skeleton, Textarea } from '@/components/ui';
 
 export default function DashboardPage() {
   const { data: projects, isLoading, error } = useProjects();
   const { data: stats } = useAnalyticsOverview();
   const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
   const { user } = useAuth();
   const { toast } = useToast();
   const [settingsProject, setSettingsProject] = useState<ProjectSummary | null>(null);
@@ -154,20 +155,49 @@ export default function DashboardPage() {
                 className="card group p-5 transition-shadow hover:shadow-card-hover"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <div
+                  <span
                     className="h-1.5 w-10 rounded-full"
                     style={{ backgroundColor: project.color ?? 'rgb(var(--accent))' }}
+                    aria-hidden="true"
                   />
-                  <div className="flex items-center -space-x-1.5">
-                    {members.slice(0, 4).map((m) => (
-                      <Avatar key={m.id} name={m.user.name} size="xs" className="border-2 border-surface" />
-                    ))}
-                    {members.length > 4 && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-surface-2 text-[10px] font-semibold text-ink-secondary">
-                        +{members.length - 4}
-                      </span>
-                    )}
-                  </div>
+                  <span className="flex items-center gap-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                    <ColorPopover
+                      value={project.color}
+                      onChange={(color) => {
+                        updateProject.mutate(
+                          { projectId: project.id, color },
+                          {
+                            onSuccess: () => toast('success', 'Color updated'),
+                            onError: () => toast('error', 'Unable to update color'),
+                          }
+                        );
+                      }}
+                      ariaLabel={`Change color of ${project.name}`}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSettingsProject(project);
+                      }}
+                      aria-label={`Edit project ${project.name}`}
+                      className="px-1.5 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-ink"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </span>
+                </div>
+                <div className="mb-3 flex items-center -space-x-1.5">
+                  {members.slice(0, 4).map((m) => (
+                    <Avatar key={m.id} name={m.user.name} size="xs" className="border-2 border-surface" />
+                  ))}
+                  {members.length > 4 && (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-surface-2 text-[10px] font-semibold text-ink-secondary">
+                      +{members.length - 4}
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-semibold text-ink group-hover:text-accent">{project.name}</h3>
                 {project.description && (
@@ -177,19 +207,6 @@ export default function DashboardPage() {
                   <span>
                     {taskCount} task{taskCount === 1 ? '' : 's'}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSettingsProject(project);
-                    }}
-                    aria-label={`Edit project ${project.name}`}
-                    className="px-1.5 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-ink"
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Button>
                 </p>
               </Link>
             );

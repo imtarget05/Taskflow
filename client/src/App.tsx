@@ -2,15 +2,29 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './store/auth';
 import AppShell from './components/layout/AppShell';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import DashboardPage from './pages/DashboardPage';
-import BoardPage from './pages/BoardPage';
 import { Skeleton } from './components/ui';
 
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const BoardPage = lazy(() => import('./pages/BoardPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+
+function pageFallback() {
+  return (
+    <div className="flex h-full flex-col gap-3 p-6">
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-4 w-72" />
+      <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    </div>
+  );
+}
 
 function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -38,10 +52,38 @@ export default function App() {
   return (
     <Routes>
       <Route element={<GuestRoute />}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={null}>
+              <LoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <Suspense fallback={null}>
+              <RegisterPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={null}>
+              <ForgotPasswordPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Suspense fallback={null}>
+              <ResetPasswordPage />
+            </Suspense>
+          }
+        />
       </Route>
       <Route element={<ProtectedRoute />}>
         <Route
@@ -51,13 +93,30 @@ export default function App() {
             </AppShell>
           }
         >
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/projects/:projectId" element={<BoardPage />} />
-          <Route path="/settings" element={
-                <Suspense fallback={<Skeleton className="mx-auto mt-8 h-40 w-full max-w-2xl" />}>
-                  <SettingsPage />
-                </Suspense>
-              } />
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={pageFallback()}>
+                <DashboardPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/projects/:projectId"
+            element={
+              <Suspense fallback={pageFallback()}>
+                <BoardPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <Suspense fallback={<Skeleton className="mx-auto mt-8 h-40 w-full max-w-2xl" />}>
+                <SettingsPage />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

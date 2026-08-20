@@ -147,7 +147,7 @@ export default function KanbanBoard({ board, projectId, filters, onTaskClick }: 
           className="h-full"
         />
       ) : (
-        <div className="flex items-start gap-4 overflow-x-auto pb-4">
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {columns.map((column) => (
             <BoardColumn
               key={column.id}
@@ -167,7 +167,7 @@ export default function KanbanBoard({ board, projectId, filters, onTaskClick }: 
                   e.preventDefault();
                   void handleAddColumn();
                 }}
-                className="w-72 shrink-0 rounded-xl bg-surface-2 p-3"
+                className="flex min-h-[120px] w-full flex-col justify-center rounded-xl bg-surface-2 p-3"
               >
                 <Input
                   value={newColumnName}
@@ -193,7 +193,7 @@ export default function KanbanBoard({ board, projectId, filters, onTaskClick }: 
                 variant="ghost"
                 size="md"
                 onClick={() => setAddingColumn(true)}
-                className="h-10 w-72 shrink-0 rounded-xl border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent"
+                className="flex min-h-[120px] w-full rounded-xl border-2 border-dashed border-line text-ink-muted hover:border-accent hover:text-accent"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add column

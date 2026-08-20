@@ -49,7 +49,7 @@ export default function BoardColumn({ column, projectId, role, onTaskClick, onRe
   return (
     <div
       ref={setNodeRef}
-      className={`w-72 shrink-0 rounded-xl bg-surface-2 p-3 transition-shadow ${
+      className={`flex min-h-[120px] w-full flex-col rounded-xl bg-surface-2 p-3 transition-shadow ${
         isOver ? 'ring-2 ring-accent' : ''
       }`}
     >
