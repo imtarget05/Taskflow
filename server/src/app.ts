@@ -13,6 +13,7 @@ import columnRoutes from './modules/column/column.routes';
 import taskRoutes from './modules/task/task.routes';
 import commentRoutes from './modules/comment/comment.routes';
 import activityRoutes from './modules/activity/activity.routes';
+import chatRoutes from './modules/chat/chat.routes';
 import searchRoutes from './modules/search/search.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import agentRoutes from './modules/agent/agent.routes';
@@ -77,6 +78,7 @@ export function createApp(): Express {
   app.use('/api/projects', taskRoutes);
   app.use('/api/projects', commentRoutes);
   app.use('/api/projects', activityRoutes);
+  app.use('/api/projects', chatRoutes);
   app.use('/api/search', searchRoutes);
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/agent', agentRoutes);

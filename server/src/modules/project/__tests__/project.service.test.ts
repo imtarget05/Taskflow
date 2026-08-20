@@ -6,6 +6,7 @@ jest.mock('../../../lib/prisma', () => ({
   prisma: {
     project: {
       create: jest.fn(),
+      findUnique: jest.fn(),
     },
     column: {
       createMany: jest.fn(),
@@ -13,6 +14,16 @@ jest.mock('../../../lib/prisma', () => ({
     projectMember: {
       create: jest.fn(),
       findUnique: jest.fn(),
+    },
+    chatGroup: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    chatGroupMember: {
+      upsert: jest.fn(),
+    },
+    activity: {
+      create: jest.fn(),
     },
   },
 }));
@@ -25,19 +36,26 @@ jest.mock('../../../lib/socket', () => ({
 import { prisma } from '../../../lib/prisma';
 
 const mockedPrisma = prisma as unknown as {
-  project: { create: jest.Mock };
+  project: { create: jest.Mock; findUnique: jest.Mock };
   column: { createMany: jest.Mock };
   projectMember: { create: jest.Mock; findUnique: jest.Mock };
+  chatGroup: { findUnique: jest.Mock; create: jest.Mock };
+  chatGroupMember: { upsert: jest.Mock };
+  activity: { create: jest.Mock };
 };
 
 describe('project.service', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('createProject', () => {
-    it('creates the project, default columns and owner membership', async () => {
+    it('creates the project, default columns, owner membership and project chat', async () => {
       mockedPrisma.project.create.mockResolvedValue({ id: 'p1' });
       mockedPrisma.column.createMany.mockResolvedValue({ count: 3 });
       mockedPrisma.projectMember.create.mockResolvedValue({});
+      mockedPrisma.chatGroup.findUnique.mockResolvedValue(null);
+      mockedPrisma.project.findUnique.mockResolvedValue({ name: 'My Project' });
+      mockedPrisma.chatGroup.create.mockResolvedValue({ id: 'g1' });
+      mockedPrisma.chatGroupMember.upsert.mockResolvedValue({});
 
       const result = await createProject('u1', { name: 'My Project' });
 
@@ -51,6 +69,14 @@ describe('project.service', () => {
       });
       expect(mockedPrisma.projectMember.create).toHaveBeenCalledWith({
         data: { projectId: 'p1', userId: 'u1', role: Role.OWNER },
+      });
+      expect(mockedPrisma.chatGroup.create).toHaveBeenCalledWith({
+        data: { projectId: 'p1', name: '#My Project' },
+      });
+      expect(mockedPrisma.chatGroupMember.upsert).toHaveBeenCalledWith({
+        where: { groupId_userId: { groupId: 'g1', userId: 'u1' } },
+        create: { groupId: 'g1', userId: 'u1' },
+        update: {},
       });
     });
   });

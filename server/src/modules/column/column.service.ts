@@ -23,26 +23,25 @@ export async function deleteColumn(projectId: string, columnId: string) {
       orderBy: { position: 'asc' },
     });
     if (!fallback) throw new AppError('A project must keep at least one column', 400);
-    
-    // Get tasks to move, ordered by position
-    const tasksToMove = await tx.task.findMany({
-      where: { columnId },
-      orderBy: { position: 'asc' },
-    });
-    
-    // Get current max position in fallback column
-    const max = await tx.task.aggregate({ where: { columnId: fallback.id }, _max: { position: true } });
-    let nextPos = (max._max.position ?? -1) + 1;
-    
-    // Move each task with sequential positions
-    for (const task of tasksToMove) {
-      await tx.task.update({
-        where: { id: task.id },
-        data: { columnId: fallback.id, position: nextPos },
-      });
-      nextPos++;
-    }
-    
+
+    // Move every task to the fallback column in a single statement instead of
+    // one update per task, preserving relative order: each moved task receives
+    // start_pos + row_number, so positions stay contiguous. The raw write also
+    // avoids touching updatedAt for tasks that were merely relocated.
+    await tx.$executeRaw`
+      WITH fallback AS (
+        SELECT COALESCE(MAX("position"), -1) + 1 AS start_pos FROM "tasks" WHERE "columnId" = ${fallback.id}
+      ),
+      moved AS (
+        SELECT id, row_number() OVER (ORDER BY "position" ASC) - 1 AS rn FROM "tasks" WHERE "columnId" = ${columnId}
+      )
+      UPDATE "tasks" t
+      SET "columnId" = ${fallback.id},
+          "position" = (SELECT start_pos FROM fallback) + m.rn
+      FROM moved m
+      WHERE t.id = m.id
+    `;
+
     await tx.column.delete({ where: { id: columnId } });
     return { id: columnId };
   });

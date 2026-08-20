@@ -81,3 +81,25 @@ export interface AuthResponse {
   user: User;
   csrfToken?: string;
 }
+
+export interface ChatMember {
+  user: User;
+  joinedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  groupId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+  sender: User;
+}
+
+export interface ChatGroup {
+  id: string;
+  projectId: string;
+  name: string;
+  members: ChatMember[];
+  messages: ChatMessage[];
+}

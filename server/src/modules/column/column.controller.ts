@@ -6,6 +6,7 @@ import { asyncHandler, AppError, validationError } from '../../utils/errors';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { assertRole } from '../project/project.service';
 import { prisma } from '../../lib/prisma';
+import { createActivity } from '../activity/activity.service';
 import { createColumn, deleteColumn, renameColumn } from './column.service';
 
 const createSchema = z.object({
@@ -36,6 +37,10 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   const column = await createColumn(params.data.projectId, body.data.name);
 
   emitToProject(column.projectId, SOCKET_EVENTS.COLUMN_CREATED, column);
+  createActivity(params.data.projectId, req.user!.id, null, 'COLUMN_CREATED', {
+    columnId: column.id,
+    name: column.name,
+  });
   res.status(StatusCodes.CREATED).json({ success: true, data: column });
 });
 
@@ -48,6 +53,10 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   await assertRole(params.data.projectId, req.user!.id, Role.MEMBER);
   const updatedColumn = await renameColumn(params.data.projectId, params.data.columnId, body.data.name);
   emitToProject(params.data.projectId, SOCKET_EVENTS.COLUMN_UPDATED, updatedColumn);
+  createActivity(params.data.projectId, req.user!.id, null, 'COLUMN_RENAMED', {
+    columnId: updatedColumn.id,
+    name: updatedColumn.name,
+  });
   res.status(StatusCodes.OK).json({ success: true, data: updatedColumn });
 });
 
@@ -61,6 +70,9 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   await deleteColumn(params.data.projectId, params.data.columnId);
   emitToProject(params.data.projectId, SOCKET_EVENTS.COLUMN_DELETED, {
     id: params.data.columnId,
+  });
+  createActivity(params.data.projectId, req.user!.id, null, 'COLUMN_DELETED', {
+    columnId: params.data.columnId,
   });
   res.status(StatusCodes.OK).json({ success: true, message: 'Column deleted' });
 });
@@ -138,6 +150,10 @@ export const moveTask = asyncHandler(async (req: Request, res: Response) => {
     sourceColumnId: body.data.sourceColumnId,
     targetColumnId: body.data.targetColumnId,
     targetIndex: body.data.targetIndex,
+  });
+  createActivity(params.data.projectId, req.user!.id, task.id, 'TASK_MOVED', {
+    sourceColumnId: body.data.sourceColumnId,
+    targetColumnId: body.data.targetColumnId,
   });
   res.status(StatusCodes.OK).json({ success: true, data: movedTask });
 });

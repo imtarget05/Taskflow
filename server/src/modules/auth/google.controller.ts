@@ -55,6 +55,10 @@ export const redirectToGoogle = asyncHandler(async (req: Request, res: Response)
       // keep default
     }
   }
+  // The callback must share the browser-facing origin so the state cookie set
+  // below is sent when Google redirects the user back (same-origin via the
+  // Cloudflare Pages proxy). Derive it from the forwarded request headers.
+  const redirectUri = googleService.clientRedirectUri(req);
   res.cookie(STATE_COOKIE, JSON.stringify({ state, origin }), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -62,7 +66,7 @@ export const redirectToGoogle = asyncHandler(async (req: Request, res: Response)
     maxAge: 10 * 60 * 1000,
     path: '/api/auth/google',
   });
-  res.redirect(googleService.buildAuthUrl(state));
+  res.redirect(googleService.buildAuthUrl(state, redirectUri));
 });
 
 export const googleStatus = asyncHandler(async (_req: Request, res: Response) => {
@@ -77,7 +81,7 @@ export const googleCallback = asyncHandler(async (req: Request, res: Response) =
   const stateFromQuery = req.query.state as string | undefined;
   const code = req.query.code as string | undefined;
 
-  res.clearCookie(STATE_COOKIE);
+  res.clearCookie(STATE_COOKIE, { path: '/api/auth/google' });
 
   let origin = env.FRONTEND_URL;
   let stateCookie: string | undefined;
@@ -101,7 +105,8 @@ export const googleCallback = asyncHandler(async (req: Request, res: Response) =
   }
 
   try {
-    const result = await googleService.authenticateWithGoogle(code);
+    const redirectUri = googleService.clientRedirectUri(req);
+    const result = await googleService.authenticateWithGoogle(code, redirectUri);
     setAuthCookies(res, result.accessToken, result.refreshToken);
     res.redirect(`${origin}/?google=signed_in`);
   } catch (err) {

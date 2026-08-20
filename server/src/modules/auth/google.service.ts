@@ -1,3 +1,4 @@
+import type { Request } from 'express';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { env } from '../../config/env';
@@ -14,13 +15,13 @@ export function isGoogleConfigured(): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 }
 
-export function buildAuthUrl(state: string): string {
+export function buildAuthUrl(state: string, redirectUri: string = googleRedirectUri()): string {
   if (!isGoogleConfigured()) {
     throw new AppError('Google sign-in is not configured', 503);
   }
   const params = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID as string,
-    redirect_uri: googleRedirectUri(),
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     state,
@@ -30,8 +31,7 @@ export function buildAuthUrl(state: string): string {
 }
 
 export function googleRedirectUri(): string {
-  // The callback always lives on the API host; FRONTEND_URL only controls
-  // where the browser lands after the exchange completes.
+  // Static fallback: the callback lives on the API host.
   const base =
     env.GOOGLE_REDIRECT_ORIGIN ??
     (env.NODE_ENV === 'production'
@@ -40,7 +40,23 @@ export function googleRedirectUri(): string {
   return `${base}/api/auth/google/callback`;
 }
 
-async function exchangeCodeForProfile(code: string): Promise<GoogleProfile> {
+/**
+ * The browser-facing callback URL for the current request. Behind the
+ * Cloudflare Pages proxy the client host is the Pages origin (sent via
+ * x-forwarded-host/-proto), so the Google state cookie and the callback stay
+ * on the same origin. Falls back to the explicit env override or the static
+ * API origin when the headers are absent (direct API hits).
+ */
+export function clientRedirectUri(req: Request): string {
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) || 'https';
+  const host = (req.headers['x-forwarded-host'] as string | undefined) || req.headers.host;
+  if (typeof host === 'string' && host) {
+    return `${proto}://${host}/api/auth/google/callback`;
+  }
+  return googleRedirectUri();
+}
+
+async function exchangeCodeForProfile(code: string, redirectUri: string): Promise<GoogleProfile> {
   if (!isGoogleConfigured()) {
     throw new AppError('Google sign-in is not configured', 503);
   }
@@ -51,7 +67,7 @@ async function exchangeCodeForProfile(code: string): Promise<GoogleProfile> {
       code,
       client_id: env.GOOGLE_CLIENT_ID as string,
       client_secret: env.GOOGLE_CLIENT_SECRET as string,
-      redirect_uri: googleRedirectUri(),
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
   });
@@ -81,8 +97,8 @@ async function exchangeCodeForProfile(code: string): Promise<GoogleProfile> {
   return { sub: profile.sub, email: profile.email.toLowerCase(), name: profile.name || 'Google User', picture: profile.picture };
 }
 
-export async function authenticateWithGoogle(code: string) {
-  const profile = await exchangeCodeForProfile(code);
+export async function authenticateWithGoogle(code: string, redirectUri: string = googleRedirectUri()) {
+  const profile = await exchangeCodeForProfile(code, redirectUri);
   const email = profile.email.toLowerCase().trim();
 
   const byGoogleId = await prisma.user.findUnique({ where: { googleId: profile.sub } });

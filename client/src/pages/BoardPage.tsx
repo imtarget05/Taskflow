@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, FilterX, History, Settings2, Users } from 'lucide-react';
+import { ArrowLeft, FilterX, History, MessageSquare, Settings2, Users } from 'lucide-react';
 import { useBoard, useActivities } from '@/hooks/useProjects';
 import KanbanBoard from '@/components/board/KanbanBoard';
 import { ALL_FILTERS, type BoardFilters } from '@/lib/filters';
 import TaskDetail from '@/components/task/TaskDetail';
 import MemberModal from '@/components/board/MemberModal';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
+import ChatPanel from '@/components/board/ChatPanel';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
 import { useAgent } from '@/store/agent';
@@ -26,6 +27,7 @@ export default function BoardPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(searchParams.get('task'));
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     setAgentProjectId(projectId ?? null);
@@ -129,12 +131,27 @@ export default function BoardPage() {
                 </Button>
               </>
             )}
+            <Button
+              variant={showChat ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowChat((s) => !s)}
+              aria-label="Open chat"
+              aria-pressed={showChat}
+            >
+              <MessageSquare className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Chat</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6 lg:flex-row">
-        <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+      <div className="flex min-h-0 flex-1">
+        <div
+          className={`min-h-0 flex-1 flex-col gap-4 p-4 md:p-6 lg:flex-row ${
+            showChat ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
+          <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm text-ink-secondary">
               <span>Priority</span>
@@ -208,14 +225,17 @@ export default function BoardPage() {
             <ul className="space-y-3">
               {activities.map((activity: Activity) => (
                 <li key={activity.id} className="text-xs text-ink-secondary">
-                  <span className="font-medium text-ink">
-                    {activity.user.name === user?.name ? 'You' : activity.user.name}
-                  </span>{' '}
-                  {activity.action.replace(/_/g, ' ').toLowerCase()}
-                  <span className="block text-xs text-ink-muted">
-                    {new Date(activity.createdAt).toLocaleString()}
-                  </span>
-                </li>
+                    <span className="font-medium text-ink">
+                      {activity.user.name === user?.name ? 'You' : activity.user.name}
+                    </span>{' '}
+                    {activity.action.replace(/_/g, ' ').toLowerCase()}
+                    {activity.metadata && 'title' in activity.metadata && typeof activity.metadata.title === 'string' && (
+                      <span className="font-medium text-ink"> · {activity.metadata.title}</span>
+                    )}
+                    <span className="block text-xs text-ink-muted">
+                      {new Date(activity.createdAt).toLocaleString()}
+                    </span>
+                  </li>
               ))}
             </ul>
           ) : (
@@ -226,7 +246,41 @@ export default function BoardPage() {
             />
           )}
         </aside>
+        </div>
+
+        {showChat && (
+          <div className="hidden h-full shrink-0 lg:flex">
+            <ChatPanel
+              projectId={project.id}
+              name={project.name}
+              members={project.members}
+              currentUser={user}
+              role={board.role}
+              onClose={() => setShowChat(false)}
+            />
+          </div>
+        )}
       </div>
+
+      {showChat && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end bg-black/40 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowChat(false)}
+        >
+          <div className="h-full w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <ChatPanel
+              projectId={project.id}
+              name={project.name}
+              members={project.members}
+              currentUser={user}
+              role={board.role}
+              onClose={() => setShowChat(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {selectedTaskId && projectId && (
         <TaskDetail

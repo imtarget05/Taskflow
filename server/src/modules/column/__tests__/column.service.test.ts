@@ -107,28 +107,23 @@ describe('column.service', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      $executeRaw: jest.fn(),
     };
 
-    it('moves tasks to the fallback column and deletes the column', async () => {
+    it('moves all tasks to the fallback column with a single statement and deletes the column', async () => {
       mockedPrisma.$transaction.mockImplementationOnce((fn) => fn(tx));
       tx.column.findFirst
         .mockResolvedValueOnce({ id: 'c1', projectId: 'p1' })
         .mockResolvedValueOnce({ id: 'c2', projectId: 'p1', position: 0 });
-      tx.task.findMany.mockResolvedValueOnce([{ id: 't1', position: 0 }, { id: 't2', position: 1 }]);
-      tx.task.aggregate.mockResolvedValueOnce({ _max: { position: 4 } });
-      tx.task.update.mockResolvedValueOnce({ id: 't1' });
+      tx.$executeRaw.mockResolvedValueOnce(2);
       tx.column.delete.mockResolvedValueOnce({ id: 'c1' });
 
       const result = await deleteColumn('p1', 'c1');
 
-      expect(tx.task.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 't1' },
-        data: { columnId: 'c2', position: 5 },
-      });
-      expect(tx.task.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 't2' },
-        data: { columnId: 'c2', position: 6 },
-      });
+      // One bulk positional update (fallback.id, columnId, fallback.id).
+      expect(tx.$executeRaw).toHaveBeenCalledWith(expect.any(Array), 'c2', 'c1', 'c2');
+      expect(tx.task.update).not.toHaveBeenCalled();
+      expect(tx.task.findMany).not.toHaveBeenCalled();
       expect(tx.column.delete).toHaveBeenCalledWith({ where: { id: 'c1' } });
       expect(result).toEqual({ id: 'c1' });
     });

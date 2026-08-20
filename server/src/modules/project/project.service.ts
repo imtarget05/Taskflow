@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { AppError } from '../../utils/errors';
 import { hasRole } from '../../utils/roles';
+import { addChatGroupMember, ensureChatGroup, removeChatGroupMemberForProject } from '../chat/chat.service';
+import { createActivity } from '../activity/activity.service';
 
 export async function createProject(
   ownerId: string,
@@ -27,6 +29,10 @@ export async function createProject(
   await prisma.projectMember.create({
     data: { projectId: project.id, userId: ownerId, role: Role.OWNER },
   });
+
+  // Auto-create the project chat group and join its creator.
+  const group = await ensureChatGroup(project.id);
+  await addChatGroupMember(group.id, ownerId);
 
   return { id: project.id };
 }
@@ -98,6 +104,11 @@ export async function addMember(
     update: { role: data.role },
   });
 
+  // Auto-join the project chat group when added as a member.
+  const group = await ensureChatGroup(projectId);
+  await addChatGroupMember(group.id, user.id);
+  createActivity(projectId, actorId, null, 'MEMBER_ADDED', { email: user.email, role: data.role });
+
   emitToProject(projectId, SOCKET_EVENTS.MEMBER_ADDED, { userId: user.id, role: data.role });
 }
 
@@ -113,6 +124,8 @@ export async function removeMember(
   await prisma.projectMember.deleteMany({
     where: { projectId, userId: targetUserId },
   });
+  await removeChatGroupMemberForProject(projectId, targetUserId);
+  createActivity(projectId, actorId, null, 'MEMBER_REMOVED', { userId: targetUserId });
   emitToProject(projectId, SOCKET_EVENTS.MEMBER_REMOVED, { userId: targetUserId });
 }
 

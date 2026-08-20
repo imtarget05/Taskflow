@@ -156,8 +156,15 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
     socket.on('column:created', () => void queryClient.invalidateQueries({ queryKey: boardKey(projectId) }));
     socket.on('column:updated', () => void queryClient.invalidateQueries({ queryKey: boardKey(projectId) }));
     socket.on('column:deleted', () => void queryClient.invalidateQueries({ queryKey: boardKey(projectId) }));
-    socket.on('member:added', () => void queryClient.invalidateQueries({ queryKey: boardKey(projectId) }));
-    socket.on('member:removed', () => void queryClient.invalidateQueries({ queryKey: boardKey(projectId) }));
+    socket.on('member:added', () => {
+      void queryClient.invalidateQueries({ queryKey: boardKey(projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['chat', projectId] });
+    });
+    socket.on('member:removed', () => {
+      void queryClient.invalidateQueries({ queryKey: boardKey(projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['chat', projectId] });
+    });
+    socket.on('chat:message', () => void queryClient.invalidateQueries({ queryKey: ['chat', projectId] }));
 
     return () => {
       socket.emit('board:leave', { projectId });

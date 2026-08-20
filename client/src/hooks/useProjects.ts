@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { uuid } from '@/lib/uuid';
-import type { Activity, BoardData, Comment, ProjectSummary, Role, Task, TaskPriority } from '@/types';
+import type { Activity, BoardData, ChatGroup, ChatMessage, Comment, ProjectSummary, Role, Task, TaskPriority, User } from '@/types';
 
 const boardKey = (projectId: string) => ['board', projectId] as const;
 
@@ -221,6 +221,59 @@ export function useActivities(projectId: string) {
   });
 }
 
+const chatKey = (projectId: string) => ['chat', projectId] as const;
+
+export function useProjectChat(projectId: string) {
+  return useQuery({
+    queryKey: chatKey(projectId),
+    enabled: !!projectId,
+    queryFn: async (): Promise<ChatGroup | null> => {
+      const res = await api.get<{ data: ChatGroup | null }>(`/projects/${projectId}/chat`);
+      const group = res.data.data;
+      if (!group) return null;
+      // Server returns the newest 50 messages first; show them oldest-to-newest.
+      return { ...group, messages: [...group.messages].reverse() };
+    },
+  });
+}
+
+export function useSendChatMessage(projectId: string, currentUser: User | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: string) => {
+      const res = await api.post<{ data: ChatMessage }>(`/projects/${projectId}/chat/messages`, { body });
+      return res.data.data;
+    },
+    onMutate: async (body) => {
+      await qc.cancelQueries({ queryKey: chatKey(projectId) });
+      const previous = qc.getQueryData<ChatGroup | null>(chatKey(projectId));
+      if (previous && currentUser) {
+        const optimistic: ChatMessage = {
+          id: `tmp-${uuid()}`,
+          groupId: previous.id,
+          senderId: currentUser.id,
+          body,
+          createdAt: new Date().toISOString(),
+          sender: currentUser,
+        };
+        qc.setQueryData<ChatGroup | null>(chatKey(projectId), (old) =>
+          old ? { ...old, messages: [...old.messages, optimistic] } : old
+        );
+      }
+      return { previous };
+    },
+    onError: (_, _body, context) => {
+      if (context?.previous != null) {
+        qc.setQueryData<ChatGroup | null>(chatKey(projectId), context.previous);
+      }
+    },
+    onSettled: () => {
+      // The socket event refetches too; this covers the acting client.
+      void qc.invalidateQueries({ queryKey: chatKey(projectId) });
+    },
+  });
+}
+
 /* ===== Task 2.4: New hooks for columns, members, projects, comments ===== */
 
 export function useCreateColumn(projectId: string) {
@@ -252,7 +305,36 @@ export function useDeleteColumn(projectId: string) {
       const res = await api.delete(`/projects/${projectId}/columns/${columnId}`);
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['board', projectId] }),
+    onMutate: async (columnId) => {
+      await qc.cancelQueries({ queryKey: boardKey(projectId) });
+      const previousBoard = qc.getQueryData<BoardData>(boardKey(projectId));
+      // Mirror the server: the column disappears immediately and its tasks
+      // join the first remaining column (by position) at the end.
+      qc.setQueryData<BoardData>(boardKey(projectId), (board) => updateBoard(board, (current) => {
+        const removed = current.project.columns.filter((column) => column.id !== columnId);
+        const fallback = removed[0];
+        if (!fallback) return current;
+        const moved = current.project.columns.find((column) => column.id === columnId)?.tasks ?? [];
+        return {
+          ...current,
+          project: {
+            ...current.project,
+            columns: removed.map((column, index) =>
+              index === 0 ? { ...column, tasks: [...column.tasks, ...moved] } : column
+            ),
+          },
+        };
+      }));
+      return { previousBoard };
+    },
+    onError: (_, _columnId, context) => {
+      if (context?.previousBoard) {
+        qc.setQueryData<BoardData>(boardKey(projectId), context.previousBoard);
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: boardKey(projectId) });
+    },
   });
 }
 

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 
 export function createActivity(
   projectId: string,
@@ -8,9 +9,18 @@ export function createActivity(
   action: string,
   metadata?: Record<string, unknown>
 ) {
-  return prisma.activity.create({
+  const record = prisma.activity.create({
     data: { projectId, userId, taskId, action, metadata: (metadata as Prisma.InputJsonValue) ?? {} },
   });
+  // Every client in the project room (including the actor) refreshes its
+  // activity feed in realtime.
+  record.then(
+    () => emitToProject(projectId, SOCKET_EVENTS.ACTIVITY_CREATED, { projectId }),
+    () => {
+      /* best effort: realtime refresh is not critical if the write failed */
+    }
+  );
+  return record;
 }
 
 export function listActivities(projectId: string) {

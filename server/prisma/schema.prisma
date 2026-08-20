@@ -42,8 +42,50 @@ model User {
   integrations   Integration[]
   agentConversations AgentConversation[]
   agentPlans     AgentPlan[]
+  chatGroupMemberships ChatGroupMember[]
+  chatMessages   ChatMessage[]
 
   @@map("users")
+}
+
+model ChatGroup {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  members  ChatGroupMember[]
+  messages ChatMessage[]
+
+  @@map("chat_groups")
+}
+
+model ChatGroupMember {
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  group ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("chat_group_members")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  group  ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@map("chat_messages")
 }
 
 model Integration {
@@ -120,6 +162,7 @@ model Project {
   columns    Column[]
   tasks      Task[]
   activities Activity[]
+  chatGroup  ChatGroup?
 
   @@map("projects")
 }

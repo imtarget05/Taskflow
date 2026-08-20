@@ -23,6 +23,7 @@ export async function onRequest(context: { request: Request; env: PageEnv }): Pr
   const headers = new Headers(context.request.headers);
   headers.delete('host');
   headers.set('x-forwarded-host', url.host);
+  headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
   const clientIp = context.request.headers.get('cf-connecting-ip');
   if (clientIp) {
     headers.set('x-forwarded-for', clientIp);

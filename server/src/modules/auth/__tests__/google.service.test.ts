@@ -1,6 +1,7 @@
 import {
   buildAuthUrl,
   googleRedirectUri,
+  clientRedirectUri,
   isGoogleConfigured,
   authenticateWithGoogle,
 } from '../google.service';
@@ -77,6 +78,26 @@ describe('google.service', () => {
       expect(() => buildAuthUrl('s')).toThrow(
         expect.objectContaining({ statusCode: 503 })
       );
+    });
+  });
+
+  describe('clientRedirectUri', () => {
+    it('derives the callback URL from the forwarded Pages proxy headers', () => {
+      const req = {
+        headers: {
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'taskflow-8kv.pages.dev',
+        },
+      } as unknown as Parameters<typeof clientRedirectUri>[0];
+
+      expect(clientRedirectUri(req)).toBe(
+        'https://taskflow-8kv.pages.dev/api/auth/google/callback'
+      );
+    });
+
+    it('falls back to the static API origin without forwarded headers', () => {
+      const req = { headers: {} } as unknown as Parameters<typeof clientRedirectUri>[0];
+      expect(clientRedirectUri(req)).toBe(googleRedirectUri());
     });
   });
 
