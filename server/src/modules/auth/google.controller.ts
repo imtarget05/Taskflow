@@ -65,6 +65,13 @@ export const redirectToGoogle = asyncHandler(async (req: Request, res: Response)
   res.redirect(googleService.buildAuthUrl(state));
 });
 
+export const googleStatus = asyncHandler(async (_req: Request, res: Response) => {
+  res.status(StatusCodes.OK).json({
+    success: true,
+    configured: googleService.isGoogleConfigured(),
+  });
+});
+
 export const googleCallback = asyncHandler(async (req: Request, res: Response) => {
   const rawCookie = req.cookies?.[STATE_COOKIE];
   const stateFromQuery = req.query.state as string | undefined;

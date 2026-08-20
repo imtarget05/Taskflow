@@ -1,19 +1,48 @@
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui';
+import { API_URL } from '@/lib/api';
+import { useToast } from '@/store/toast';
 
 interface GoogleSignInProps {
-  onClick?: () => void;
   className?: string;
 }
 
-export function GoogleSignIn({ className, onClick }: GoogleSignInProps) {
-  const url = `${import.meta.env.VITE_API_URL ?? '/api'}/auth/google`;
+export function GoogleSignIn({ className }: GoogleSignInProps) {
+  const { toast } = useToast();
+  const [configured, setConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/auth/google/status`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setConfigured(Boolean(d.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleClick() {
+    if (configured === false) {
+      toast('error', 'Google sign-in unavailable', 'Google sign-in is not configured on the server yet.');
+      return;
+    }
+    window.location.href = `${API_URL}/auth/google`;
+  }
+
+  if (configured === null) return null;
 
   return (
     <Button
       type="button"
       variant="secondary"
       className={`w-full flex items-center justify-center gap-2 ${className}`}
-      onClick={onClick ?? (() => (window.location.href = url))}
+      onClick={handleClick}
+      title={configured ? undefined : 'Google sign-in is not configured on the server'}
     >
       <svg
         className="w-5 h-5"

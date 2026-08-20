@@ -40,6 +40,7 @@ router.post('/forgot-password', forgotLimiter, authController.forgotPassword);
 router.post('/reset-password', forgotLimiter, authController.resetPassword);
 router.get('/me', authenticate, authController.me);
 router.get('/google', googleController.redirectToGoogle);
+router.get('/google/status', googleController.googleStatus);
 router.get('/google/callback', googleController.googleCallback);
 
 export default router;
