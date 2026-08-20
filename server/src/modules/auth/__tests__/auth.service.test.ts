@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { register, login, refresh, logout, cleanupExpiredRefreshTokens, tokenExpiryMs } from '../auth.service';
+import { createHash } from 'crypto';
+import { register, login, refresh, logout, cleanupExpiredRefreshTokens, tokenExpiryMs, forgotPassword, resetPassword } from '../auth.service';
 import { AppError } from '../../../utils/errors';
 import { env } from '../../../config/env';
 
@@ -8,7 +9,9 @@ jest.mock('../../../lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     refreshToken: {
       create: jest.fn(),
@@ -24,7 +27,9 @@ import { prisma } from '../../../lib/prisma';
 const mockedPrisma = prisma as unknown as {
   user: {
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
     create: jest.Mock;
+    update: jest.Mock;
   };
   refreshToken: {
     create: jest.Mock;
@@ -224,6 +229,89 @@ describe('auth.service', () => {
     it('falls back to 7 days for unparseable values', () => {
       env.JWT_REFRESH_EXPIRES_IN = 'bogus';
       expect(tokenExpiryMs()).toBe(7 * 24 * 60 * 60 * 1000);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    const prevEnv = env.NODE_ENV;
+    afterEach(() => {
+      env.NODE_ENV = prevEnv;
+    });
+
+    it('returns a reset token in non-production and stores the hash', async () => {
+      env.NODE_ENV = 'development';
+      mockedPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'a@b.com', password: 'hashed' });
+      mockedPrisma.user.update.mockResolvedValue({});
+      const res = await forgotPassword('a@b.com');
+      expect(res.resetToken).toBeDefined();
+      expect(mockedPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { email: 'a@b.com' },
+          data: expect.objectContaining({
+            passwordResetToken: expect.any(String),
+            passwordResetExpires: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('does not leak whether an email exists', async () => {
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      const res = await forgotPassword('missing@b.com');
+      expect(res.resetToken).toBeUndefined();
+      expect(mockedPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('skips users without a password (Google-only accounts)', async () => {
+      mockedPrisma.user.findUnique.mockResolvedValue({ id: 'g1', googleId: 'x' });
+      const res = await forgotPassword('g@b.com');
+      expect(res.resetToken).toBeUndefined();
+      expect(mockedPrisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('updates the password for a valid token', async () => {
+      const token = 'abcdef123456';
+      const hashed = createHash('sha256').update(token).digest('hex');
+      mockedPrisma.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        passwordResetToken: hashed,
+        passwordResetExpires: new Date(Date.now() + 60000),
+      });
+      mockedPrisma.user.update.mockResolvedValue({});
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('newhashed' as never);
+      await resetPassword(token, 'newpassword123');
+      expect(mockedPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'u1' },
+          data: expect.objectContaining({
+            password: 'newhashed',
+            passwordResetToken: null,
+            passwordResetExpires: null,
+          }),
+        }),
+      );
+    });
+
+    it('throws for an expired token', async () => {
+      const token = 'expiredtoken';
+      const hashed = createHash('sha256').update(token).digest('hex');
+      mockedPrisma.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        passwordResetToken: hashed,
+        passwordResetExpires: new Date(Date.now() - 60000),
+      });
+      await expect(resetPassword(token, 'newpassword123')).rejects.toBeInstanceOf(AppError);
+    });
+
+    it('throws for an unknown token', async () => {
+      mockedPrisma.user.findFirst.mockResolvedValue(null);
+      await expect(resetPassword('nope', 'newpassword123')).rejects.toBeInstanceOf(AppError);
+    });
+
+    it('throws for a too-short password', async () => {
+      await expect(resetPassword('token', 'short')).rejects.toBeInstanceOf(AppError);
     });
   });
 });

@@ -3,7 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/token';
 import { env } from '../../config/env';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 export interface AuthResult {
   accessToken: string;
@@ -110,6 +110,59 @@ export async function logout(refreshToken: string): Promise<void> {
 
 export async function cleanupExpiredRefreshTokens(): Promise<void> {
   await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+}
+
+export interface ForgotPasswordResult {
+  // The raw token is only returned in non-production so the flow can be
+  // tested without a configured email provider. In production the caller
+  // would send it by email instead.
+  resetToken?: string;
+}
+
+export async function forgotPassword(email: string): Promise<ForgotPasswordResult> {
+  const normalized = email.toLowerCase().trim();
+  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  // Always return success to avoid leaking which emails are registered.
+  if (!user || !user.password) {
+    return {};
+  }
+
+  const token = randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 15 * 60 * 1000);
+  await prisma.user.update({
+    where: { email: normalized },
+    data: {
+      passwordResetToken: hashRefreshToken(token),
+      passwordResetExpires: expires,
+    },
+  });
+
+  if (env.NODE_ENV !== 'production') {
+    return { resetToken: token };
+  }
+  return {};
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  if (!token || newPassword.length < 8) {
+    throw new AppError('Invalid reset request', 400);
+  }
+  const hashed = hashRefreshToken(token);
+  const user = await prisma.user.findFirst({
+    where: { passwordResetToken: hashed },
+  });
+  if (!user || !user.passwordResetExpires || user.passwordResetExpires < new Date()) {
+    throw new AppError('Invalid or expired reset token', 400);
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: await bcrypt.hash(newPassword, 10),
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    },
+  });
 }
 
 export function tokenExpiryMs(): number {

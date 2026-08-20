@@ -23,6 +23,12 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+const forgotLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = Router();
 
@@ -30,6 +36,8 @@ router.post('/register', registerLimiter, authController.register);
 router.post('/login', authLimiter, authController.login);
 router.post('/refresh', refreshLimiter, authController.refresh);
 router.post('/logout', authController.logout);
+router.post('/forgot-password', forgotLimiter, authController.forgotPassword);
+router.post('/reset-password', forgotLimiter, authController.resetPassword);
 router.get('/me', authenticate, authController.me);
 router.get('/google', googleController.redirectToGoogle);
 router.get('/google/callback', googleController.googleCallback);

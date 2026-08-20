@@ -79,4 +79,19 @@ export function getAccessToken(): string | null {
   return null;
 }
 
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+  resetToken?: string;
+}
+
+export async function forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+  const { data } = await api.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
+  return data;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await api.post('/auth/reset-password', { token, newPassword });
+}
+
 export default api;

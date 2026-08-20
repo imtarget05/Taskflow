@@ -16,6 +16,15 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8).max(200),
+});
+
 /**
  * Attach tokens only as httpOnly cookies.
  * In production the frontend is served from a different origin
@@ -94,4 +103,27 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   }
   clearAuthCookies(res);
   res.status(StatusCodes.OK).json({ success: true, message: 'Logged out' });
+});
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+  const result = await authService.forgotPassword(parsed.data.email);
+  res.status(StatusCodes.OK).json({
+    success: true,
+    message: 'If an account exists for this email, a password reset link has been sent.',
+    // Present only outside production so the flow can be tested without email.
+    resetToken: result.resetToken,
+  });
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+  await authService.resetPassword(parsed.data.token, parsed.data.newPassword);
+  res.status(StatusCodes.OK).json({ success: true, message: 'Password has been reset. You can now sign in.' });
 });
