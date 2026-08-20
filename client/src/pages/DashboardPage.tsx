@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import { CheckCircle2, FolderKanban, ListTodo, Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { useProjects, useCreateProject } from '@/hooks/useProjects';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
@@ -32,8 +33,9 @@ export default function DashboardPage() {
       setName('');
       setDescription('');
       toast('success', 'Project created');
-    } catch {
-      setSubmitError('Unable to create project.');
+    } catch (err) {
+      const message = (err as AxiosError<{ message?: string }> | undefined)?.response?.data?.message;
+      setSubmitError(message || 'Unable to create project.');
     }
   }
 

@@ -40,6 +40,11 @@ const corsOptions: CorsOptions = {
 export function createApp(): Express {
   const app = express();
 
+  // The site is served behind the Cloudflare Pages proxy in production
+  // (and the Vite dev proxy locally): trust the immediate hop so req.ip /
+  // express-rate-limit resolve the real client IP from X-Forwarded-For.
+  app.set('trust proxy', 1);
+
   app.use(helmet());
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '1mb' }));

@@ -1,0 +1,41 @@
+/**
+ * Pages Function reverse proxy: forwards /api/* and /socket.io/* requests to
+ * the Node API origin so every request is same-origin from the browser's
+ * perspective. Cookies (auth + CSRF) are then first-party on the Pages host,
+ * immune to third-party cookie blocking, and the CSRF cookie (httpOnly: false)
+ * can be read directly via document.cookie.
+ *
+ * WebSocket upgrades are intentionally NOT relayed: socket.io falls back to
+ * HTTP polling through this proxy, which carries the same first-party cookies.
+ */
+
+export interface PageEnv {
+  API_ORIGIN?: string;
+}
+
+const DEFAULT_ORIGIN = 'https://taskflow-server-illy.onrender.com';
+
+export async function onRequest(context: { request: Request; env: PageEnv }): Promise<Response> {
+  const origin = (typeof context.env?.API_ORIGIN === 'string' && context.env.API_ORIGIN) || DEFAULT_ORIGIN;
+  const url = new URL(context.request.url);
+  const target = new URL(url.pathname + url.search, origin);
+
+  const headers = new Headers(context.request.headers);
+  headers.delete('host');
+  headers.set('x-forwarded-host', url.host);
+  const clientIp = context.request.headers.get('cf-connecting-ip');
+  if (clientIp) {
+    headers.set('x-forwarded-for', clientIp);
+    headers.set('x-real-ip', clientIp);
+  }
+
+  const init: RequestInit = { method: context.request.method, headers, redirect: 'manual' };
+  if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
+    init.body = context.request.body;
+  }
+
+  // Passing the fetch Response itself preserves every response header,
+  // including all Set-Cookie entries.
+  const resp = await fetch(target.toString(), init);
+  return new Response(resp.body, resp);
+}

@@ -9,15 +9,23 @@ export const api = axios.create({
 });
 
 // Authentication is carried by httpOnly cookies; tokens never enter JS storage.
-// CSRF token is stored in memory after login/register/refresh (returned in response body).
+// In production the Pages Function proxy makes the API same-origin, so the
+// csrf_token cookie (httpOnly: false) can be read straight from document.cookie.
+// In local dev (cross-origin) we fall back to the value echoed in response bodies.
 let csrfTokenMemory: string | null = null;
+
+function csrfFromCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export function setCsrfToken(token: string): void {
   csrfTokenMemory = token;
 }
 
 export function getCsrfToken(): string | null {
-  return csrfTokenMemory;
+  return csrfFromCookie() ?? csrfTokenMemory;
 }
 
 export function clearCsrfToken(): void {
@@ -46,15 +54,16 @@ async function refreshAccessToken(): Promise<string> {
   return 'cookie';
 }
 
-// Retry once with a refreshed token on 401.
+// Retry once with a refreshed token on 401; re-sync and retry once on CSRF 403.
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const original = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+    const original = error.config as (typeof error.config & { _retry?: boolean; _csrfRetry?: boolean }) | undefined;
+    if (!original) return Promise.reject(error);
     const isAuthEndpoint =
-      original?.url?.includes('/auth/') && !original.url.includes('/auth/me');
+      original.url?.includes('/auth/') && !original.url.includes('/auth/me');
 
-    if (error.response?.status === 401 && original && !original._retry && !isAuthEndpoint) {
+    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true;
       try {
         refreshPromise = refreshPromise ?? refreshAccessToken();
@@ -65,6 +74,17 @@ api.interceptors.response.use(
         refreshPromise = null;
         clearAuth();
         return Promise.reject(refreshError);
+      }
+    }
+
+    if (error.response?.status === 403 && !original._csrfRetry && !isAuthEndpoint) {
+      original._csrfRetry = true;
+      try {
+        const { data } = await axios.get<{ csrfToken?: string }>(`${API_URL}/auth/me`, { withCredentials: true });
+        if (data?.csrfToken) setCsrfToken(data.csrfToken);
+        return api(original);
+      } catch {
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);

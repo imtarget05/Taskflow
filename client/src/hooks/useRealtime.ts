@@ -33,7 +33,10 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
 
     const socket = io(import.meta.env.VITE_SOCKET_URL || window.location.origin, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      // Long-polling through the same-origin Pages proxy: WebSocket relays are
+      // not available on the proxy, but events flush immediately on the
+      // pending poll, so realtime latency is unchanged.
+      transports: ['polling'],
     });
     socketRef.current = socket;
     const joinBoard = () => socket.emit('board:join', { projectId });
