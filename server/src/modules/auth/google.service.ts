@@ -2,8 +2,7 @@ import type { Request } from 'express';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { env } from '../../config/env';
-import { issueTokens } from './auth.service';
-import crypto from 'crypto';
+import { issueTokens, type AuthResult } from './auth.service';
 
 export interface GoogleProfile {
   sub: string;
@@ -62,6 +61,19 @@ export function clientRedirectUri(req: Request): string {
   return googleRedirectUri();
 }
 
+interface GoogleTokens {
+  access_token: string;
+  [key: string]: unknown;
+}
+
+interface GoogleUserInfo {
+  sub: string;
+  email: string;
+  name: string;
+  picture?: string;
+  [key: string]: unknown;
+}
+
 async function exchangeCodeForProfile(code: string, redirectUri: string): Promise<GoogleProfile> {
   if (!isGoogleConfigured()) {
     throw new AppError('Google sign-in is not configured', 503);
@@ -83,7 +95,7 @@ async function exchangeCodeForProfile(code: string, redirectUri: string): Promis
     throw new AppError(`Google token exchange failed: ${err}`, 502);
   }
 
-  const tokens = await tokenRes.json();
+  const tokens = await tokenRes.json() as GoogleTokens;
   const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
@@ -92,7 +104,7 @@ async function exchangeCodeForProfile(code: string, redirectUri: string): Promis
     throw new AppError('Google profile fetch failed', 502);
   }
 
-  const profile = await infoRes.json();
+  const profile = await infoRes.json() as GoogleUserInfo;
   if (!profile.sub || !profile.email) {
     throw new AppError('Google profile is incomplete', 502);
   }
@@ -141,10 +153,4 @@ export async function authenticateWithGoogle(code: string, redirectUri: string =
     },
   });
   return issueTokens({ id: user.id, email: user.email, name: user.name });
-}
-
-export interface AuthResult {
-  accessToken: string;
-  refreshToken: string;
-  user: { id: string; email: string; name: string };
 }
