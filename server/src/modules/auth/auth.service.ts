@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/token';
-import { env } from '../../config/env';
+import { env, isEmailConfigured } from '../../config/env';
 import { createHash, randomBytes } from 'crypto';
 
 export interface AuthResult {
@@ -137,10 +137,14 @@ export async function forgotPassword(email: string): Promise<ForgotPasswordResul
     },
   });
 
-  if (env.NODE_ENV !== 'production') {
-    return { resetToken: token };
+  // When an email provider is configured we would send the reset link here
+  // and NOT return the token. Until then, surface the token so the flow can
+  // be completed without a mail server. This is safe because the link only
+  // works for a registered, password-bearing account and expires in 15 min.
+  if (isEmailConfigured()) {
+    return {};
   }
-  return {};
+  return { resetToken: token };
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {

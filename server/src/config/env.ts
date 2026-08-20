@@ -24,6 +24,11 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_ORIGIN: z.string().url().optional(),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -74,4 +79,13 @@ export const env = {
   CORS_ORIGINS:
     allowedOrigins ??
     [parsed.success ? parsed.data.CLIENT_URL : 'http://localhost:5173'],
+  SMTP_HOST: parsed.success ? parsed.data.SMTP_HOST : undefined,
+  SMTP_PORT: parsed.success ? parsed.data.SMTP_PORT : undefined,
+  SMTP_USER: parsed.success ? parsed.data.SMTP_USER : undefined,
+  SMTP_PASS: parsed.success ? parsed.data.SMTP_PASS : undefined,
+  MAIL_FROM: parsed.success ? parsed.data.MAIL_FROM : undefined,
 };
+
+export function isEmailConfigured(): boolean {
+  return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
+}
