@@ -18,7 +18,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function bootstrap() {
-      try { const res = await api.get('/auth/me'); setUser(res.data.user); } catch { /* anonymous */ }
+      try {
+        const res = await api.get<AuthResponse>('/auth/me');
+        setUser(res.data.user);
+        // Refresh the in-memory CSRF token (Google sign-in / reload have no
+        // auth response body to carry it).
+        if (res.data.csrfToken) setCsrfToken(res.data.csrfToken);
+      } catch {
+        /* anonymous */
+      }
       setLoading(false);
     }
     void bootstrap();

@@ -93,7 +93,22 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  res.status(StatusCodes.OK).json({ success: true, user: req.user });
+  // Return the current csrf_token (or create one) so the client can resume
+  // mutations after a page reload or a Google sign-in redirect, where no
+  // response body carrying the token is available.
+  const existing = req.cookies?.[CSRF_COOKIE];
+  const csrfToken = typeof existing === 'string' && existing ? existing : generateCsrfToken();
+  if (typeof existing !== 'string' || !existing) {
+    const secure = process.env.NODE_ENV === 'production';
+    res.cookie(CSRF_COOKIE, csrfToken, {
+      httpOnly: false,
+      secure,
+      sameSite: secure ? 'none' : 'lax',
+      path: '/',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+  }
+  res.status(StatusCodes.OK).json({ success: true, user: req.user, csrfToken });
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {

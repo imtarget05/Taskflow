@@ -40,7 +40,9 @@ api.interceptors.request.use((config) => {
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
-  await axios.post(`${API_URL}/auth/refresh`, undefined, { withCredentials: true });
+  const { data } = await axios.post<{ csrfToken?: string }>(`${API_URL}/auth/refresh`, undefined, { withCredentials: true });
+  // Refresh rotates the CSRF cookie; keep the in-memory token in sync.
+  if (data?.csrfToken) setCsrfToken(data.csrfToken);
   return 'cookie';
 }
 
