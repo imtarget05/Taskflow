@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search } from 'lucide-react';
+import { CheckSquare, ChevronsLeft, ChevronsRight, FolderKanban, Settings, Sun, Moon, X, LogOut, Monitor, Search, Sparkles } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useProjects } from '@/hooks/useProjects';
 import { useTheme, type Theme } from '@/store/theme-context';
+import { useAgent } from '@/store/agent';
 import { Avatar, Button, Skeleton } from '@/components/ui';
 import CommandPalette from './CommandPalette';
+import ChatBox from '../agent/ChatBox';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -31,6 +33,7 @@ export default function AppShell({ children }: AppShellProps) {
   const queryClient = useQueryClient();
   const { data: projects, isLoading } = useProjects();
   const { theme, setTheme } = useTheme();
+  const { open: agentOpen, setOpen: setAgentOpen } = useAgent();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('taskflow-sidebar') === 'collapsed');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -209,6 +212,13 @@ export default function AppShell({ children }: AppShellProps) {
           <div className="flex items-center gap-1">
             <button
               className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              onClick={() => setAgentOpen(!agentOpen)}
+              aria-label={agentOpen ? 'Close AI assistant' : 'Open AI assistant'}
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
               onClick={() => setTheme(nextTheme)}
               aria-label={`Switch theme (current: ${theme})`}
             >
@@ -224,6 +234,7 @@ export default function AppShell({ children }: AppShellProps) {
       </div>
 
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <ChatBox />
     </div>
   );
 }

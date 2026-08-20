@@ -29,6 +29,17 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  // AI agent — OpenAI-compatible endpoint (Ollama, vLLM, ...). Server-side only.
+  LLM_PROVIDER: z.string().default('ollama'),
+  LLM_BASE_URL: z.string().url().optional(),
+  LLM_MODEL: z.string().optional(),
+  LLM_API_KEY: z.string().optional(),
+  LLM_TIMEOUT_MS: z.coerce.number().default(120_000),
+  // n8n integration (user-hosted instance, reached server-side only).
+  N8N_API_URL: z.string().url().optional(),
+  N8N_API_KEY: z.string().optional(),
+  N8N_SIGNING_SECRET: z.string().optional(),
+  INTEGRATIONS_ENCRYPTION_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -84,6 +95,15 @@ export const env = {
   SMTP_USER: parsed.success ? parsed.data.SMTP_USER : undefined,
   SMTP_PASS: parsed.success ? parsed.data.SMTP_PASS : undefined,
   MAIL_FROM: parsed.success ? parsed.data.MAIL_FROM : undefined,
+  LLM_PROVIDER: parsed.success ? parsed.data.LLM_PROVIDER : 'ollama',
+  LLM_BASE_URL: parsed.success ? parsed.data.LLM_BASE_URL : undefined,
+  LLM_MODEL: parsed.success ? parsed.data.LLM_MODEL : undefined,
+  LLM_API_KEY: parsed.success ? parsed.data.LLM_API_KEY : undefined,
+  LLM_TIMEOUT_MS: parsed.success ? parsed.data.LLM_TIMEOUT_MS : 120_000,
+  N8N_API_URL: parsed.success ? parsed.data.N8N_API_URL : undefined,
+  N8N_API_KEY: parsed.success ? parsed.data.N8N_API_KEY : undefined,
+  N8N_SIGNING_SECRET: parsed.success ? parsed.data.N8N_SIGNING_SECRET : undefined,
+  INTEGRATIONS_ENCRYPTION_KEY: parsed.success ? parsed.data.INTEGRATIONS_ENCRYPTION_KEY : undefined,
 };
 
 export function isEmailConfigured(): boolean {

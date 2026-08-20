@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FilterX, History, Settings2, Users } from 'lucide-react';
 import { useBoard, useActivities } from '@/hooks/useProjects';
@@ -9,6 +9,7 @@ import MemberModal from '@/components/board/MemberModal';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useAuth } from '@/store/auth';
+import { useAgent } from '@/store/agent';
 import { Avatar, Badge, Button, EmptyState, ErrorState, Skeleton } from '@/components/ui';
 import type { Activity, TaskPriority } from '@/types';
 
@@ -18,12 +19,18 @@ export default function BoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const { setProjectId: setAgentProjectId } = useAgent();
   const { data: board, isLoading, error, refetch } = useBoard(projectId);
   const { data: activities } = useActivities(projectId ?? '');
   const [filters, setFilters] = useState<BoardFilters>({ ...ALL_FILTERS });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(searchParams.get('task'));
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    setAgentProjectId(projectId ?? null);
+    return () => setAgentProjectId(null);
+  }, [projectId, setAgentProjectId]);
 
   const realtimeStatus = useRealtime(projectId);
 
