@@ -64,7 +64,15 @@ export async function getProject(projectId: string, userId: string) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      columns: { orderBy: { position: 'asc' }, include: { tasks: { orderBy: { position: 'asc' } } } },
+      columns: {
+        orderBy: { position: 'asc' },
+        include: {
+          tasks: {
+            orderBy: { position: 'asc' },
+            include: { assignments: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } } },
+          },
+        },
+      },
       members: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } } },
     },
   });

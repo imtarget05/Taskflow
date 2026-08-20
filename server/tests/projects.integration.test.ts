@@ -386,6 +386,18 @@ describe('Projects API integration', () => {
       );
       expect(get.status).toBe(200);
       expect(get.body.data.title).toBe('Build API');
+
+      // The board payload must include each task's assignments so the
+      // client renderer never reads a missing property (regression guard).
+      const board = await ownerAgent.get(`/api/projects/${projectId}`);
+      const boardTasks = board.body.data.project.columns.flatMap(
+        (c: { tasks: { id: string; assignments: unknown[] }[] }) => c.tasks
+      );
+      const apiTask = boardTasks.find((t: { id: string }) => t.id === create.body.data.id);
+      expect(apiTask).toBeDefined();
+      expect(apiTask!.assignments).toEqual([
+        expect.objectContaining({ userId: memberId }),
+      ]);
     });
 
     it('rejects an empty task title with field-level details', async () => {

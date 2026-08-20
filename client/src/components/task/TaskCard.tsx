@@ -33,6 +33,7 @@ export default function TaskCard({ task, onClick, disabled = false }: TaskCardPr
 
   const overdue = isOverdue(task.dueDate);
   const commentCount = task.comments?.length ?? 0;
+  const assignments = task.assignments ?? [];
 
   function toggleComplete(e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
@@ -119,14 +120,14 @@ export default function TaskCard({ task, onClick, disabled = false }: TaskCardPr
             ) : (
               <span />
             )}
-            {task.assignments.length > 0 && (
+            {assignments.length > 0 && (
               <div className="flex items-center -space-x-1.5">
-                {task.assignments.slice(0, 3).map((a) => (
+                {assignments.slice(0, 3).map((a) => (
                   <Avatar key={a.id} name={a.user.name} size="xs" className="border-2 border-surface" />
                 ))}
-                {task.assignments.length > 3 && (
+                {assignments.length > 3 && (
                   <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-surface-2 text-[10px] font-semibold text-ink-secondary">
-                    +{task.assignments.length - 3}
+                    +{assignments.length - 3}
                   </span>
                 )}
               </div>
