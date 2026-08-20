@@ -59,7 +59,7 @@ export function createApp(): Express {
       max: env.RATE_LIMIT_MAX,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => req.path.startsWith('/api/auth/google'),
+      skip: (req, _res) => req.path.startsWith('/api/auth/google'),
     })
   );
 
