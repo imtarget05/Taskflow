@@ -34,7 +34,7 @@ export default function RegisterPage() {
     }
     try {
       await register(name, email, password);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       let message = 'Registration failed. Please check your details and try again.';
       if (axios.isAxiosError(err)) {

@@ -81,7 +81,7 @@ export default function BoardPage() {
       <header className="shrink-0 border-b border-line bg-surface px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            to="/"
+            to="/dashboard"
             className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             aria-label="Back to projects"
           >

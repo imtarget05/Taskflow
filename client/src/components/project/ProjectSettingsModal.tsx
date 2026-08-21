@@ -47,7 +47,7 @@ export default function ProjectSettingsModal({ project, canDelete, onClose }: Pr
     try {
       await deleteProject.mutateAsync(project.id);
       toast('success', 'Project deleted');
-      navigate('/');
+      navigate('/dashboard');
     } catch {
       toast('error', 'Unable to delete project');
     }

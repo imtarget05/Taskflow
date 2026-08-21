@@ -79,7 +79,7 @@ export default function AppShell({ children }: AppShellProps) {
 
       <nav className={sidebar} aria-label="Primary">
         <div className={`flex h-14 shrink-0 items-center border-b border-line ${collapsed ? 'justify-center' : 'justify-between px-4'}`}>
-          <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
+          <Link to="/dashboard" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-white">
               <CheckSquare className="h-4 w-4" aria-hidden="true" />
             </span>

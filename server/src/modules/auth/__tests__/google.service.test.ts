@@ -173,7 +173,6 @@ describe('google.service', () => {
       expect(mockedPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u2' },
         data: { googleId: 'g1' },
-        select: { id: true, email: true, name: true },
       });
     });
 
@@ -181,6 +180,7 @@ describe('google.service', () => {
       global.fetch = jest.fn().mockResolvedValueOnce({
         ok: false,
         status: 400,
+        text: async () => 'Google error',
       } as unknown as Response);
 
       await expect(authenticateWithGoogle('bad-code')).rejects.toMatchObject({

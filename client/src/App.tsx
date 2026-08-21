@@ -6,6 +6,7 @@ import { Skeleton } from './components/ui';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -45,12 +46,20 @@ function ProtectedRoute() {
 function GuestRoute() {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return user ? <Navigate to="/" replace /> : <Outlet />;
+  return user ? <Navigate to="/dashboard" replace /> : <Outlet />;
 }
 
 export default function App() {
   return (
     <Routes>
+      <Route
+        path="/"
+        element={
+          <Suspense fallback={<Skeleton className="mx-auto mt-8 h-40 w-full max-w-2xl" />}>
+            <LandingPage />
+          </Suspense>
+        }
+      />
       <Route element={<GuestRoute />}>
         <Route
           path="/login"
@@ -94,7 +103,7 @@ export default function App() {
           }
         >
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <Suspense fallback={pageFallback()}>
                 <DashboardPage />
