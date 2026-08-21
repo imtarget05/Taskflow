@@ -19,7 +19,11 @@ export default function LoginPage() {
     if (googleError) {
       toast('error', 'Google sign-in failed', googleError);
     }
-  }, [searchParams, toast]);
+    const googleSignedIn = searchParams.get('google=signed_in');
+    if (googleSignedIn) {
+      void navigate('/');
+    }
+  }, [searchParams, toast, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
