@@ -139,6 +139,45 @@ jobs:
     needs: docker-build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
+      # Pin the Render service to the immutable commit-SHA image tag instead of
+      # the mutable :latest tag. Render Blueprints cannot express a dynamic
+      # image tag, so this uses the Render API. Skipped silently when
+      # RENDER_API_KEY / RENDER_SERVICE_ID are not configured (the service then
+      # keeps pulling :latest as before). Set these two secrets in GitHub to
+      # enable deterministic deploys + one-command rollbacks.
+      # NOTE: a step's `if: env.X` cannot see the step's own `env:` block, so
+      # secret availability is resolved in a dedicated step whose output gates
+      # the actual pinning step.
+      - name: Resolve Render pinning config
+        id: renderpin
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ] && [ -n "$RENDER_OWNER_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Render image pinning skipped: RENDER_API_KEY / RENDER_SERVICE_ID / RENDER_OWNER_ID not configured; service keeps pulling :latest."
+          fi
+
+      - name: Pin Render image to commit SHA
+        if: steps.renderpin.outputs.enabled == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+        run: |
+          IMAGE_PATH="ghcr.io/${{ github.repository_owner }}/taskflow-server:${{ github.sha }}"
+          echo "Pinning Render service to $IMAGE_PATH"
+          curl -fsS -X PATCH \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"image\": {\"ownerId\": \"$RENDER_OWNER_ID\", \"imagePath\": \"$IMAGE_PATH\"}}" \
+            > /dev/null && echo "Image pinned."
+
       - name: Trigger Render deploy hook
         env:
           RENDER_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
