@@ -49,6 +49,14 @@ const REASONING_RE =
 const LEGAL_DEEP_RE =
   /(điều|khoản|tội|hình sự|dân sự|bồi thường|tranh chấp|hợp đồng|trách nhiệm|nghị định|thông tư|hiến pháp|luật|vi phạm|phạt)/i;
 
+/** Privacy-safe structured log line for LLM provider events (no prompts/keys/bodies). */
+function llmLog(level: 'info'|'warn'|'error', event: string, data: Record<string, unknown>): void {
+  const line = JSON.stringify({ ts: new Date().toISOString(), area: 'llm', event, ...data });
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+}
+
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
 const MAX_ATTEMPTS = 3;
 
@@ -69,7 +77,7 @@ async function requestWithRetry(
   } catch (err) {
     clearTimeout(timer);
     if (attempt < MAX_ATTEMPTS) {
-      console.warn(`[llm] network error, retry attempt=${attempt + 1}/${MAX_ATTEMPTS}`);
+      llmLog('warn', 'provider_network_retry', { attempt, maxAttempts: MAX_ATTEMPTS });
       await sleep(250 * 2 ** (attempt - 1));
       return requestWithRetry(url, init, attempt + 1);
     }
@@ -78,7 +86,7 @@ async function requestWithRetry(
   clearTimeout(timer);
 
   if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
-    console.warn(`[llm] provider status=${res.status}, retry attempt=${attempt + 1}/${MAX_ATTEMPTS}`);
+    llmLog('warn', 'provider_rate_limited', { status: res.status, attempt, maxAttempts: MAX_ATTEMPTS });
     await sleep(250 * 2 ** (attempt - 1));
     return requestWithRetry(url, init, attempt + 1);
   }
@@ -95,18 +103,25 @@ async function aiPost<T>(path: string, body: unknown): Promise<T> {
   if (!isLLMConfigured()) {
     throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
+  const startedAt = Date.now();
   const res = await requestWithRetry(`${env.LLM_BASE_URL}${path}`, {
     method: 'POST',
     headers: aiHeaders(),
     body: JSON.stringify(body),
   });
+  const durationMs = Date.now() - startedAt;
+
   if (!res.ok) {
     // Exhausted rate limit → surface as 503 with a safe, user-friendly
     // message; other provider failures stay a generic 502. Never leak the
     // provider response, quota details, or credentials.
-    console.warn(
-      `[llm] provider error status=${res.status} exhausted=${RETRYABLE_STATUS.has(res.status)}`
-    );
+    llmLog('error', 'provider_error', {
+      method: 'POST',
+      path,
+      status: res.status,
+      durationMs,
+      exhausted: RETRYABLE_STATUS.has(res.status),
+    });
     if (res.status === 429) {
       throw new AppError(
         'AI service is temporarily unavailable. Please try again shortly.',
@@ -115,6 +130,8 @@ async function aiPost<T>(path: string, body: unknown): Promise<T> {
     }
     throw new AppError(`LLM request failed (HTTP ${res.status})`, StatusCodes.BAD_GATEWAY);
   }
+
+  llmLog('info', 'provider_request', { method: 'POST', path, status: res.status, durationMs });
   return (await res.json()) as T;
 }
 
