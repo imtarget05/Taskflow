@@ -83,6 +83,39 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     expect(reply).toBe('ok');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+  it('retries 429 twice then succeeds on the third attempt', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: 'ok' } }] }),
+      });
+
+    const reply = await chatCompletion([{ role: 'user', content: 'x' }]);
+    expect(reply).toBe('ok');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('maps exhausted 429 to a 503 AppError with a safe message and no secret leakage', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 429 });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+      statusCode: 503,
+      message: 'AI service is temporarily unavailable. Please try again shortly.',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3); // bounded: initial + 2 retries
+
+    // No credentials / request bodies in logs.
+    for (const call of warnSpy.mock.calls) {
+      expect(String(call.join(' '))).not.toContain('secret');
+    }
+    warnSpy.mockRestore();
+  });
+
+
 
   it('handles the Cloudflare Workers AI response envelope (result.choices)', async () => {
     fetchMock.mockResolvedValue({

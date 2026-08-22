@@ -69,6 +69,7 @@ async function requestWithRetry(
   } catch (err) {
     clearTimeout(timer);
     if (attempt < MAX_ATTEMPTS) {
+      console.warn(`[llm] network error, retry attempt=${attempt + 1}/${MAX_ATTEMPTS}`);
       await sleep(250 * 2 ** (attempt - 1));
       return requestWithRetry(url, init, attempt + 1);
     }
@@ -77,6 +78,7 @@ async function requestWithRetry(
   clearTimeout(timer);
 
   if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
+    console.warn(`[llm] provider status=${res.status}, retry attempt=${attempt + 1}/${MAX_ATTEMPTS}`);
     await sleep(250 * 2 ** (attempt - 1));
     return requestWithRetry(url, init, attempt + 1);
   }
@@ -99,6 +101,18 @@ async function aiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    // Exhausted rate limit → surface as 503 with a safe, user-friendly
+    // message; other provider failures stay a generic 502. Never leak the
+    // provider response, quota details, or credentials.
+    console.warn(
+      `[llm] provider error status=${res.status} exhausted=${RETRYABLE_STATUS.has(res.status)}`
+    );
+    if (res.status === 429) {
+      throw new AppError(
+        'AI service is temporarily unavailable. Please try again shortly.',
+        StatusCodes.SERVICE_UNAVAILABLE
+      );
+    }
     throw new AppError(`LLM request failed (HTTP ${res.status})`, StatusCodes.BAD_GATEWAY);
   }
   return (await res.json()) as T;
