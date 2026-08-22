@@ -18,19 +18,43 @@ Your job:
 
 You will gain access to workspace tools (projects, boards, tasks, comments, and integrations such as n8n workflows) in an upcoming update. For now, reason, clarify, and plan with the user.`;
 
-// Strict, deterministic language rules. Vietnamese is the product's priority.
+/**
+ * Per-language reply directive appended to the system prompt as the ## Language
+ * section. The server resolves the assistant language up-front (see
+ * language.ts) and injects the chosen directive here, so the model never has to
+ * infer or "match" the language from the conversation itself — removing the
+ * ambiguity that caused mid-conversation language drift. Vietnamese is the
+ * priority language: when nothing else is detected, the model always replies in
+ * Vietnamese.
+ */
 const LANGUAGE_POLICY: Record<ResolvedLanguage, string> = {
-  vi: 'Reply in Vietnamese. Vietnamese is the primary language — never switch away from it.',
-  en: 'Reply in English.',
-  zh: 'Reply in Simplified Chinese (中文).',
+  vi: 'Vietnamese (Tiếng Việt)',
+  en: 'English',
+  zh: 'Simplified Chinese (中文)',
 };
 
 /**
- * Compose the system prompt with a deterministic language instruction.
+ * Compose the system prompt with the deterministic language directive for this
+ * turn. `language` comes from resolveTurnLanguage() — the prompt layer NEVER
+ * detects language itself. The directive is authoritative: the model MUST reply
+ * in `language` and must not let quoted text, technical terms, code, or earlier
+ * messages in another language override it. Only an explicit user request may
+ * change the response language.
  *
  * @param language The resolved assistant language for this turn ('vi' | 'en' | 'zh').
  */
 export function buildSystemPrompt(language: ResolvedLanguage): string {
-  const rule = LANGUAGE_POLICY[language];
-  return `${SYSTEM_PROMPT}\n\n## Language\n${rule}\nMatch the user's language, and never change language mid-conversation.`;
+  return `${SYSTEM_PROMPT}
+
+## RESPONSE LANGUAGE POLICY
+Resolved response language: ${LANGUAGE_POLICY[language]}
+You must respond primarily in ${LANGUAGE_POLICY[language]}.
+
+Do NOT switch the response language merely because:
+- quoted text uses another language
+- technical terms use another language
+- code uses another language
+- previous conversation messages use another language
+
+Only change the response language when the current user explicitly requests a different response language.`;
 }

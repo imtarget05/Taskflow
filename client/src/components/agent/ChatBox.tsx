@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileUp,
   History,
@@ -11,6 +11,11 @@ import {
   Languages,
 } from 'lucide-react';
 import { useAgent, AgentLanguage } from '@/store/agent';
+import {
+  resolveLanguage,
+  languageHint,
+  ResolvedLanguage,
+} from '@/lib/language';
 import { Button } from '@/components/ui';
 import { timeAgo } from '@/lib/time';
 
@@ -50,6 +55,7 @@ export default function ChatBox() {
     projectId,
     language,
     setLanguage,
+    resolvedLanguage: serverLanguage,
     conversations,
     historyOpen,
     setHistoryOpen,
@@ -59,6 +65,16 @@ export default function ChatBox() {
     deleteConversation,
   } = useAgent();
   const [draft, setDraft] = useState('');
+  // Preview ONLY: a client-side guess for the current draft, shown before any
+  // request leaves the browser. The server is the single source of truth — once
+  // it answers, its resolved language is authoritative and this preview is
+  // ignored (see `resolvedLanguage` below).
+  const previewLanguage = useMemo<ResolvedLanguage | null>(() => {
+    if (!draft.trim()) return null;
+    return resolveLanguage([draft]);
+  }, [draft]);
+  // Server's authoritative choice wins; the draft guess is only a placeholder.
+  const resolvedLanguage: ResolvedLanguage = serverLanguage ?? previewLanguage ?? 'vi';
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -272,7 +288,15 @@ export default function ChatBox() {
                             m.role === 'user' ? 'bg-white/15 text-white' : 'bg-surface-2 text-ink-secondary'
                           }`}
                         >
-                          <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          {m.attachment.image ? (
+                            <img
+                              src={m.attachment.image.dataUrl}
+                              alt={m.attachment.name}
+                              className="h-8 w-8 shrink-0 rounded object-cover"
+                            />
+                          ) : (
+                            <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          )}
                           <span className="truncate">{m.attachment.name}</span>
                           <span className="shrink-0 opacity-70">· {formatBytes(m.attachment.size)}</span>
                         </span>
@@ -327,7 +351,7 @@ export default function ChatBox() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.csv,.json,.xml,.log,.pdf,.docx"
+                accept=".txt,.md,.csv,.json,.xml,.log,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.bmp"
                 onChange={(e) => void handleFileChange(e)}
                 className="hidden"
                 aria-hidden="true"
@@ -353,6 +377,26 @@ export default function ChatBox() {
                 <Send className="h-4 w-4" aria-hidden="true" />
                 <span className="sr-only">Send</span>
               </Button>
+            </div>
+            {/* Resolved-language indicator: shows the user which language the LLM will reply in. */}
+            <div className="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1">
+              <Languages className="h-3.5 w-3.5 text-accent/70" aria-hidden="true" />
+              <span className="text-[10px] font-medium text-ink">
+                Trả lời:{' '}
+                <span className="text-accent">
+                  {resolvedLanguage === 'vi'
+                    ? 'Tiếng Việt'
+                    : resolvedLanguage === 'en'
+                      ? 'English'
+                      : '中文'}
+                </span>
+              </span>
+              {language === 'auto' && resolvedLanguage === 'vi' && (
+                <span className="text-[9px] text-ink-muted/80">(ưu tiên Việt)</span>
+              )}
+              <span className="shrink-0 text-[10px] text-ink-muted" title={languageHint(resolvedLanguage)}>
+                ?
+              </span>
             </div>
             <p className="mt-1.5 text-[10px] text-ink-muted">
               Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB
