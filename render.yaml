@@ -1,5 +1,11 @@
 # Render Blueprint — deploy the backend image pushed to GHCR by CI.
 # Frontend is served by Cloudflare Pages (see README "Deployment").
+#
+# NOTE: the image below is the bootstrap/default reference. On every push to
+# main, the CI workflow (job "deploy") pins this service to the immutable
+# commit-SHA tag via the Render API (requires RENDER_API_KEY,
+# RENDER_SERVICE_ID and RENDER_OWNER_ID GitHub secrets). Without those
+# secrets the service keeps pulling :latest.
 services:
   - type: web
     name: taskflow-server
