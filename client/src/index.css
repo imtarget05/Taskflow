@@ -4,19 +4,43 @@
 
 @layer base {
   :root {
-    /* Light theme tokens (RGB triplets so Tailwind alpha modifiers work) */
-    --bg: 248 250 252; /* #F8FAFC */
+    /*
+     * Taskflow design tokens — calm premium editorial direction.
+     * Warm off-white surfaces, deep navy ink, soft electric blue accent.
+     * RGB triplets so Tailwind alpha modifiers keep working.
+     *
+     * Spacing conventions (documented scale — Tailwind default steps):
+     *   page horizontal padding  px-6 / lg:px-8   (24–32)
+     *   card padding             p-4 / p-5         (16–20)
+     *   landing section spacing  py-12 / py-16     (48–64)
+     */
+
+    /* Surfaces */
+    --bg: 250 250 248; /* warm off-white #FAFAF8 */
     --surface: 255 255 255; /* #FFFFFF */
-    --surface-2: 241 245 249; /* #F1F5F9 */
-    --surface-3: 226 232 240; /* #E2E8F0 */
-    --ink: 15 23 42; /* #0F172A */
-    --ink-secondary: 100 116 139; /* #64748B */
-    --ink-muted: 148 163 184; /* #94A3B8 */
-    --line: 226 232 240; /* #E2E8F0 */
-    --accent: 79 70 229; /* brand-600 */
-    --accent-hover: 67 56 202; /* brand-700 */
-    --accent-soft: 238 242 255; /* brand-50 */
-    --accent-ink: 55 48 163; /* brand-800 */
+    --surface-muted: 244 245 242; /* #F4F5F2 */
+    --surface-elevated: 255 255 255;
+
+    /* Legacy surface aliases (migrate usages to the semantic names above) */
+    --surface-2: 244 245 242; /* = surface-muted */
+    --surface-3: 232 234 230;
+
+    /* Text — deep navy ladder */
+    --ink: 15 27 45; /* deep navy #0F1B2D */
+    --ink-secondary: 84 96 114;
+    --ink-muted: 139 150 165;
+
+    /* Borders */
+    --border-subtle: 236 237 234;
+    --line: 226 228 224; /* default border */
+    --border-strong: 208 211 206;
+
+    /* Accent — soft electric blue */
+    --accent: 59 110 246; /* #3B6EF6 */
+    --accent-hover: 42 91 224;
+    --accent-soft: 234 240 254;
+    --accent-ink: 29 70 184;
+
     --success: 22 163 74;
     --success-soft: 240 253 244;
     --warning: 217 119 6;
@@ -28,18 +52,33 @@
   }
 
   .dark {
-    --bg: 15 23 42; /* #0F172A */
-    --surface: 30 41 59; /* #1E293B */
-    --surface-2: 51 65 85; /* #334155 */
-    --surface-3: 71 85 105; /* #475569 */
-    --ink: 248 250 252; /* #F8FAFC */
-    --ink-secondary: 148 163 184; /* #94A3B8 */
-    --ink-muted: 100 116 139; /* #64748B */
-    --line: 51 65 85; /* #334155 */
-    --accent: 99 102 241; /* brand-500 */
-    --accent-hover: 129 140 248; /* brand-400 */
-    --accent-soft: 49 46 129; /* brand-800 */
-    --accent-ink: 199 210 254; /* brand-200 */
+    /*
+     * Deliberate dark surface ladder (not an inversion):
+     * bg → surface → muted → elevated → modal, all on a navy-charcoal base.
+     */
+    --bg: 12 18 32; /* deep navy-charcoal #0C1220 */
+    --surface: 20 27 44; /* #141B2C */
+    --surface-muted: 28 37 54; /* #1C2536 */
+    --surface-elevated: 26 35 53;
+
+    /* Legacy aliases */
+    --surface-2: 28 37 54;
+    --surface-3: 40 50 74;
+
+    --ink: 237 241 247; /* #EDF1F7 */
+    --ink-secondary: 148 160 178;
+    --ink-muted: 100 113 133;
+
+    --border-subtle: 30 39 58;
+    --line: 38 48 70;
+    --border-strong: 52 63 88;
+
+    /* Accent lifts in dark mode for contrast on dark surfaces */
+    --accent: 108 154 255; /* #6C9AFF */
+    --accent-hover: 143 179 255;
+    --accent-soft: 23 36 74;
+    --accent-ink: 192 210 255;
+
     --success: 34 197 94;
     --success-soft: 20 83 45;
     --warning: 245 158 11;
@@ -64,7 +103,33 @@
 }
 
 @layer components {
-  /* Legacy utility classes — being migrated to <ui/> components (Phase B) */
+  /*
+   * Typography roles — semantic scale for new/reworked components.
+   * Weights: 400 (body) / 500 (emphasis) / 700 (headings) only.
+   */
+  .type-display {
+    @apply text-[2.5rem] font-bold leading-[1.1] tracking-tight; /* 40/44 */
+  }
+  .type-page-title {
+    @apply text-2xl font-bold leading-8 tracking-tight; /* 24/32 */
+  }
+  .type-section-title {
+    @apply text-lg font-bold leading-7 tracking-tight; /* 18/28 */
+  }
+  .type-card-title {
+    @apply text-base font-medium leading-6; /* 16/24 */
+  }
+  .type-body {
+    @apply text-sm leading-[1.57]; /* 14/22 */
+  }
+  .type-caption {
+    @apply text-[13px] leading-5; /* 13/20 */
+  }
+  .type-meta {
+    @apply text-xs leading-4; /* 12/16 */
+  }
+
+  /* Legacy utility classes — being migrated to <ui/> components incrementally */
   .btn-primary {
     @apply inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
   }
@@ -114,5 +179,54 @@
   30% {
     transform: translateY(-3px);
     opacity: 1;
+  }
+}
+
+/* Micro-interactions: subtle entrance + attention animations */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-rise {
+    animation: rise-in 0.14s ease-out;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.18s ease-out;
+  }
+}
+
+/* Card hover lift: gentle rise + stronger shadow on interactive cards */
+.card-hover {
+  @apply transition-all duration-150;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -10px rgb(15 23 42 / 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-fade-in,
+  .typing-dot {
+    animation: none;
+  }
+  .card-hover:hover {
+    transform: none;
   }
 }
