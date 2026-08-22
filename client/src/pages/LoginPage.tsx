@@ -3,7 +3,19 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
 import { Button, Input } from '@/components/ui';
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
+import AuthLayout from '@/components/auth/AuthLayout';
+import PasswordField from '@/components/auth/PasswordField';
 import { useToast } from '@/store/toast';
+import { classifyApiError } from '@/lib/errors';
+
+// Wrong credentials come back as a plain message; everything else maps to a
+// semantic variant so users never see raw status codes or provider details.
+const ERROR_BY_VARIANT: Record<string, string> = {
+  network: "Can't reach Taskflow right now. Check your connection and try again.",
+  server: 'Taskflow is having trouble signing you in. Please try again shortly.',
+  rateLimited: 'Too many attempts — please wait a moment and try again.',
+  unavailable: 'Taskflow is temporarily unavailable. Try again shortly.',
+};
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -31,70 +43,54 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+    } catch (err) {
+      setError(ERROR_BY_VARIANT[classifyApiError(err)] ?? 'Invalid email or password');
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
-      <div className="card w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-ink">TaskFlow</h1>
-        <p className="mt-1 text-sm text-ink-secondary">Sign in to your workspace</p>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            required
-          />
-          <Input
-            label="Password"
-            type="password"
+    <AuthLayout title="Welcome back" subtitle="Sign in to continue where you left off.">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+        />
+        <div>
+          <PasswordField
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Your password"
             autoComplete="current-password"
             required
           />
-          {error && (
-            <p role="alert" className="text-xs text-danger">
-              {error}
-            </p>
-          )}
-          <Button type="submit" className="w-full" size="md">
-            Sign in
-          </Button>
-        </form>
-
-        <div className="mt-2 text-right">
-          <Link to="/forgot-password" className="text-xs font-medium text-ink-secondary hover:text-accent hover:underline">
-            Forgot password?
-          </Link>
-        </div>
-
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-card text-ink-secondary">Or continue with</span>
+          <div className="mt-1.5 text-right">
+            <Link to="/forgot-password" className="text-xs font-medium text-ink-secondary hover:text-accent hover:underline">
+              Forgot password?
+            </Link>
           </div>
         </div>
+        {error && <p role="alert" className="type-caption text-danger">{error}</p>}
+        <Button type="submit" className="w-full" size="md">Sign in</Button>
+      </form>
 
-        <GoogleSignIn />
-
-        <p className="mt-4 text-center text-sm text-ink-secondary">
-          No account?{' '}
-          <Link to="/register" className="font-medium text-accent hover:underline">
-            Register
-          </Link>
-        </p>
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-line" /></div>
+        <div className="relative flex justify-center">
+          <span className="px-2 text-xs uppercase tracking-wider text-ink-muted">or</span>
+        </div>
       </div>
-    </div>
+
+      <GoogleSignIn />
+
+      <p className="mt-5 text-center type-caption text-ink-secondary">
+        No account?{' '}
+        <Link to="/register" className="font-medium text-accent hover:underline">Create one</Link>
+      </p>
+    </AuthLayout>
   );
 }

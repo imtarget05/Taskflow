@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Input } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { resetPassword } from '@/lib/api';
+import AuthLayout from '@/components/auth/AuthLayout';
+import PasswordField from '@/components/auth/PasswordField';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -41,12 +43,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
-      <div className="card w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-ink">Set a new password</h1>
-        <p className="mt-1 text-sm text-ink-secondary">
-          Choose a new password for your account.
-        </p>
+    <AuthLayout title="Set a new password" subtitle="Choose a new password for your account.">
 
         {info ? (
           <p role="alert" className="mt-6 text-sm text-success">
@@ -54,18 +51,16 @@ export default function ResetPasswordPage() {
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <Input
+            <PasswordField
               label="New password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 8 characters"
               autoComplete="new-password"
               required
             />
-            <Input
+            <PasswordField
               label="Confirm password"
-              type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Re-enter password"
@@ -85,7 +80,6 @@ export default function ResetPasswordPage() {
             </Link>
           </form>
         )}
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

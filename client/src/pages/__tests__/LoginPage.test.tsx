@@ -31,9 +31,9 @@ function renderWithProviders(ui: React.ReactElement) {
 describe('LoginPage', () => {
   it('renders the sign-in form', () => {
     renderWithProviders(<LoginPage />);
-    expect(screen.getByRole('heading', { name: /taskflow/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
@@ -41,8 +41,8 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     renderWithProviders(<LoginPage />);
 
-    await user.type(screen.getByLabelText(/email/i), 'alice@taskflow.dev');
-    await user.type(screen.getByLabelText(/password/i), 'password123');
+    await user.type(screen.getByLabelText(/^email$/i), 'alice@taskflow.dev');
+    await user.type(screen.getByLabelText(/^password$/i), 'password123');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     // The mocked login resolves; no error is shown.

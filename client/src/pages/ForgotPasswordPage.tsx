@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Input } from '@/components/ui';
 import { forgotPassword } from '@/lib/api';
+import AuthLayout from '@/components/auth/AuthLayout';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -30,12 +31,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
-      <div className="card w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-ink">Reset password</h1>
-        <p className="mt-1 text-sm text-ink-secondary">
-          Enter your email and we'll send you a reset link.
-        </p>
+    <AuthLayout title="Reset password" subtitle="Enter your email and we’ll send you a reset link.">
 
         {info ? (
           <div className="mt-6 space-y-4">
@@ -81,7 +77,6 @@ export default function ForgotPasswordPage() {
             </Link>
           </form>
         )}
-      </div>
-    </div>
+    </AuthLayout>
   );
 }
