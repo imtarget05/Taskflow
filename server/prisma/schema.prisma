@@ -44,6 +44,7 @@ model User {
   agentPlans     AgentPlan[]
   chatGroupMemberships ChatGroupMember[]
   chatMessages   ChatMessage[]
+  ticketAnalyses TicketAnalysis[]
 
   @@map("users")
 }
@@ -110,6 +111,7 @@ model AgentConversation {
   projectId String?
   title     String?
   messages  Json?
+  language  String?  // Resolved language for this conversation ('vi', 'en', 'zh', or null)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -196,6 +198,36 @@ model AIUsage {
   @@map("ai_usage")
 }
 
+// NLP ticket classification results. One row per analysed piece of text
+// (task title/description, comment, or standalone ticket). Category, priority
+// and sentiment are produced by the LLM; duplicateOf is the id of a previous
+// analysis judged semantically equivalent (embedding cosine similarity).
+model TicketAnalysis {
+  id                 String   @id @default(cuid())
+  userId             String
+  projectId          String?
+  taskId             String?
+  sourceText         String   @db.Text
+  category           String
+  categoryConfidence Float
+  priority           String // LOW | MEDIUM | HIGH | URGENT
+  priorityConfidence Float
+  sentiment          String // positive | neutral | negative
+  urgency            Boolean
+  language           String // vi | en | zh
+  keywords           Json?
+  duplicateOf        String?
+  duplicateScore     Float?
+  createdAt          DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("ticket_analyses")
+}
+
 model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
@@ -224,6 +256,7 @@ model Project {
   tasks      Task[]
   activities Activity[]
   chatGroup  ChatGroup?
+  ticketAnalyses TicketAnalysis[]
 
   @@map("projects")
 }
@@ -278,6 +311,7 @@ model Task {
   assignments  TaskAssignment[]
   comments     Comment[]
   activities   Activity[]
+  analyses     TicketAnalysis[]
 
   @@index([columnId, position])
   @@index([projectId])

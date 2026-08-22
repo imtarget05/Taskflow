@@ -4,9 +4,27 @@ import { env } from '../../config/env';
 
 export type LLMRole = 'system' | 'user' | 'assistant';
 
+/** A single text part in a multimodal message. */
+export interface LLMTextPart {
+  type: 'text';
+  text: string;
+}
+
+/** An image part (OpenAI-compatible `image_url`). URL is a data: URI. */
+export interface LLMImagePart {
+  type: 'image_url';
+  image_url: { url: string };
+}
+
+export type LLMContentPart = LLMTextPart | LLMImagePart;
+
 export interface LLMMessage {
   role: LLMRole;
-  content: string;
+  /**
+   * Either a plain string (text-only) or a list of content parts for
+   * multimodal turns (e.g. text + attached images for vision models).
+   */
+  content: string | LLMContentPart[];
 }
 
 export interface ChatCompletionOptions {

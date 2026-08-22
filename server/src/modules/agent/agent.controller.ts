@@ -25,7 +25,7 @@ const upload = multer({
   limits: { fileSize: agentService.MAX_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
     const ext = file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase();
-    if (agentService.UPLOAD_EXTENSIONS.has(ext)) {
+    if (agentService.UPLOAD_EXTENSIONS.has(ext) || agentService.UPLOAD_IMAGE_EXTENSIONS.has(ext)) {
       cb(null, true);
     } else {
       cb(new AppError(`Unsupported file type "${ext || '(none)'}"`, StatusCodes.BAD_REQUEST));

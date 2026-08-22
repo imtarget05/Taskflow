@@ -4,15 +4,46 @@ import { extractText } from 'unpdf';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../lib/prisma';
-import { chatCompletion, isLLMConfigured, LLMMessage } from './llm';
+import {
+  chatCompletion,
+  isLLMConfigured,
+  LLMMessage,
+  LLMContentPart,
+} from './llm';
 import { buildSystemPrompt } from './prompt';
-import { AgentLanguage, resolveLanguage } from './language';
+import {
+  AgentLanguage,
+  ResolvedLanguage,
+  resolveTurnLanguage,
+  TurnLanguage,
+} from './language';
 import { env } from '../../config/env';
 
 export interface AgentChatMessage {
   role: string;
   content: string;
+  /** Optional image attachment for vision models (data: URI). */
+  image?: { mime: string; dataUrl: string } | null;
 }
+
+/** A decoded image attachment returned by parseUpload for vision models. */
+export interface AgentImageAttachment {
+  type: 'image';
+  mime: string;
+  dataUrl: string;
+  fileName: string;
+  size: number;
+}
+
+export interface AgentTextAttachment {
+  type: 'text';
+  text: string;
+  truncated: boolean;
+  fileName: string;
+  size: number;
+}
+
+export type AgentUploadResult = AgentImageAttachment | AgentTextAttachment;
 
 export interface ChatOptions {
   language?: AgentLanguage | null;
@@ -23,8 +54,31 @@ export interface ChatOptions {
 const MAX_HISTORY = 20;
 const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_UPLOAD_TEXT_CHARS = 20_000;
 export const UPLOAD_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.json', '.xml', '.log', '.pdf', '.docx']);
+export const UPLOAD_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+
+// Magic-byte signatures used to verify an uploaded "image" is genuine before
+// we hand bytes to the model/embedding pipeline (prevents disguised payloads).
+const IMAGE_MAGIC: Record<string, string[]> = {
+  '.png': ['89504e470d0a1a0a'],
+  '.jpg': ['ffd8ff'],
+  '.jpeg': ['ffd8ff'],
+  '.gif': ['47494638'],
+  '.bmp': ['424d'],
+  '.webp': ['52494646'], // RIFF....WEBP — validated more strictly below
+};
+
+const IMAGE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+};
+
 
 export interface AgentStatus {
   enabled: boolean;
@@ -58,34 +112,88 @@ export async function chat(
   userId: string,
   messages: AgentChatMessage[],
   options: ChatOptions = {}
-): Promise<{ reply: string; conversationId: string }> {
+): Promise<{ reply: string; conversationId: string; language: ResolvedLanguage }> {
   if (!isLLMConfigured()) {
     throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
 
   const history: LLMMessage[] = [];
   for (const m of messages.slice(-MAX_HISTORY)) {
-    const role = m.role === 'user' || m.role === 'assistant' ? m.role : 'user';
-    const content = String(m.content ?? '').slice(0, MAX_MESSAGE_LENGTH).trim();
-    if (content) history.push({ role, content });
+    const msg = toLLMMessage(m);
+    if (msg) history.push(msg);
   }
   if (history.length === 0) {
     throw new AppError('No message content provided', StatusCodes.BAD_REQUEST);
   }
 
-  // Resolve the assistant language: an explicit client preference wins;
-  // otherwise detect it from the conversation and prioritize Vietnamese.
-  const language = resolveLanguage(
-    history.map((m) => m.content),
-    options.language ?? undefined
-  );
+  // Load the persisted conversation preference (null on old/new conversations).
+  // The SERVER is the single source of truth for response language.
+  const existing = options.conversationId
+    ? await prisma.agentConversation.findFirst({
+        where: { id: options.conversationId, userId },
+        select: { id: true, language: true },
+      })
+    : null;
+
+  // Resolve the assistant language for THIS turn via the single deterministic
+  // resolver. Precedence: explicit request > conversation preference >
+  // current-turn detection > Vietnamese fallback. Detection only ever sees the
+  // latest user message, so a stray foreign-language sentence cannot flip a
+  // thread that already has a preference.
+  const turn = resolveTurnLanguage({
+    requested: options.language ?? null,
+    conversationPreference: existing?.language ?? null,
+    userTexts: lastUserTexts(messages),
+  });
+  const language = turn.language;
 
   const system: LLMMessage = { role: 'system', content: buildSystemPrompt(language) };
   const reply = await chatCompletion([system, ...history]);
 
-  const conversationId = await persistConversation(userId, history, options, reply);
+  const conversationId = await persistConversation(userId, history, options, reply, existing, turn);
 
-  return { reply, conversationId };
+  return { reply, conversationId, language };
+}
+
+/** Plain text of the LATEST user message — the detection scope for one turn. */
+function lastUserTexts(incoming: AgentChatMessage[]): string[] {
+  const lastUser = [...incoming].reverse().find((m) => m.role === 'user');
+  return lastUser ? [String(lastUser.content ?? '')] : [];
+}
+
+/**
+ * Convert an incoming chat message into an LLM message. User messages with an
+ * image attachment become multimodal content parts ([text, image]) so vision
+ * models can inspect the screenshot/photo; the image is a data: URI, so no
+ * server-side storage or external fetch is needed.
+ */
+function toLLMMessage(m: AgentChatMessage): LLMMessage | null {
+  const role = m.role === 'user' || m.role === 'assistant' ? m.role : 'user';
+  const text = String(m.content ?? '').slice(0, MAX_MESSAGE_LENGTH).trim();
+
+  const image = m.image && typeof m.image?.dataUrl === 'string' ? m.image : undefined;
+  const hasImage = Boolean(image && role === 'user');
+
+  if (!text && !hasImage) return null;
+  if (!hasImage) return { role, content: text };
+
+  const parts: LLMContentPart[] = [
+    ...(text ? [{ type: 'text' as const, text }] : []),
+    {
+      type: 'image_url',
+      image_url: { url: image!.dataUrl.slice(0, MAX_MESSAGE_LENGTH) },
+    },
+  ];
+  return { role, content: parts };
+}
+
+/** The plain-text contribution of an LLM message (for language detection). */
+function textOf(m: LLMMessage): string {
+  if (typeof m.content === 'string') return m.content;
+  return m.content
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join(' ');
 }
 
 /** Saves or appends the exchanged messages to an AgentConversation row. */
@@ -93,7 +201,9 @@ async function persistConversation(
   userId: string,
   history: LLMMessage[],
   options: ChatOptions,
-  reply: string
+  reply: string,
+  existing: { id: string; language: string | null } | null,
+  turn: TurnLanguage
 ): Promise<string> {
   const messages = [
     ...history.map((m) => ({ role: m.role, content: m.content })),
@@ -101,28 +211,31 @@ async function persistConversation(
   ] as Prisma.InputJsonValue;
   const projectId = options.projectId ?? null;
 
-  const existing = options.conversationId
-    ? await prisma.agentConversation.findFirst({
-        where: { id: options.conversationId, userId },
-        select: { id: true },
-      })
-    : null;
-
   if (existing) {
+    // Persist language only when it genuinely changed:
+    //  - an explicit per-request choice always updates the preference;
+    //  - a conversation without any preference yet gets pinned ONCE to the
+    //    resolved language (detected or fallback);
+    //  - an existing preference is NEVER overwritten by detection — one
+    //    foreign-language message must not flip the thread.
+    const nextLanguage =
+      turn.source === 'explicit' || existing.language == null ? turn.language : undefined;
+
     await prisma.agentConversation.update({
       where: { id: existing.id },
-      data: { messages, projectId },
+      data: { messages, projectId, ...(nextLanguage !== undefined ? { language: nextLanguage } : {}) },
     });
     return existing.id;
   }
 
-  const firstUser = history.find((m) => m.role === 'user')?.content ?? '';
+  const firstUserText = history.find((m) => m.role === 'user');
   const created = await prisma.agentConversation.create({
     data: {
       userId,
       projectId,
-      title: firstUser.slice(0, 80),
+      title: (firstUserText ? textOf(firstUserText) : '').slice(0, 80),
       messages,
+      language: turn.language,
     },
   });
   return created.id;
@@ -168,12 +281,48 @@ export async function deleteConversation(userId: string, conversationId: string)
   }
 }
 
-/** Extracts plain text from an uploaded document (no server-side storage). */
+/**
+ * Validate an uploaded file against its declared extension using magic bytes.
+ * Returns the hex prefix matched (or null when the input is not a valid image).
+ */
+export function sniffImage(ext: string, buffer: Buffer): boolean {
+  const signatures = IMAGE_MAGIC[ext];
+  if (!signatures) return false;
+  const hex = buffer.subarray(0, 16).toString('hex').toLowerCase();
+  if (ext === '.webp') return hex.startsWith('52494646') && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  return signatures.some((sig) => hex.startsWith(sig));
+}
+
+/**
+ * Extracts usable content from an uploaded file (no server-side storage).
+ *
+ * - Text documents (txt/md/csv/json/xml/log/pdf/docx) are decoded to text.
+ * - Images (png/jpg/jpeg/webp/gif/bmp) are validated by magic bytes and
+ *   returned as a base64 data: URI that vision models can inspect.
+ */
 export async function parseUpload(
   filename: string,
   buffer: Buffer
-): Promise<{ fileName: string; size: number; text: string; truncated: boolean }> {
+): Promise<AgentUploadResult> {
   const ext = extname(filename).toLowerCase();
+
+  if (UPLOAD_IMAGE_EXTENSIONS.has(ext)) {
+    if (!sniffImage(ext, buffer)) {
+      throw new AppError('The file is not a valid image', StatusCodes.UNPROCESSABLE_ENTITY);
+    }
+    if (buffer.length > MAX_IMAGE_BYTES) {
+      throw new AppError('Image too large, keep it under 2 MB', 413);
+    }
+    const mime = IMAGE_MIME[ext];
+    return {
+      type: 'image',
+      mime,
+      dataUrl: `data:${mime};base64,${buffer.toString('base64')}`,
+      fileName: filename,
+      size: buffer.length,
+    };
+  }
+
   if (!UPLOAD_EXTENSIONS.has(ext)) {
     throw new AppError(`Unsupported file type "${ext}"`, StatusCodes.BAD_REQUEST);
   }
@@ -197,6 +346,7 @@ export async function parseUpload(
 
   const truncated = trimmed.length > MAX_UPLOAD_TEXT_CHARS;
   return {
+    type: 'text',
     fileName: filename,
     size: buffer.length,
     text: truncated ? trimmed.slice(0, MAX_UPLOAD_TEXT_CHARS) : trimmed,
