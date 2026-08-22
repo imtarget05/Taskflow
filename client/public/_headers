@@ -1,2 +1,11 @@
+# NOTE: rules must match the URL the browser requests. Users hit "/" — a rule
+# for "/index.html" alone never applies to it, which previously allowed the
+# edge to cache stale HTML referencing purged JS chunks after each deploy.
+/
+  Cache-Control: no-cache
+
 /index.html
   Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

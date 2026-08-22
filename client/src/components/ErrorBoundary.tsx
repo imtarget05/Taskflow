@@ -9,6 +9,12 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren<unkno
   constructor(props: React.PropsWithChildren<unknown>) {
     super(props);
     this.state = { hasError: false };
+    // App booted successfully — re-arm the chunk-error auto-reload.
+    try {
+      sessionStorage.removeItem('taskflow-chunk-reload');
+    } catch {
+      /* storage unavailable */
+    }
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -17,7 +23,20 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren<unkno
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    // A deploy replaces hashed JS chunks; a browser holding cached HTML then
+    // fails to import the old chunk ("Failed to fetch dynamically imported
+    // module" / ChunkLoadError). Reload once to pick up the fresh HTML that
+    // references the new hashes instead of showing a dead-end error screen.
+    const isChunkError =
+      error.name === 'ChunkLoadError' ||
+      /Failed to fetch dynamically imported module|Loading CSS chunk/i.test(error.message);
+    const alreadyReloaded = sessionStorage.getItem('taskflow-chunk-reload');
+    if (isChunkError && !alreadyReloaded) {
+      sessionStorage.setItem('taskflow-chunk-reload', '1');
+      window.location.reload();
+    }
   }
+
 
   render(): React.ReactNode {
     if (this.state.hasError) {
