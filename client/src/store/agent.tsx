@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from 'react';
 import api from '@/lib/api';
 import { useToast } from '@/store/toast';
+import { ResolvedLanguage } from '@/lib/language';
 
 export type AgentLanguage = 'auto' | 'vi' | 'en' | 'zh';
 
 export interface AgentAttachment {
   name: string;
   size: number;
+  /** Present when the attached file is an image (data: URI) for vision models. */
+  image?: { mime: string; dataUrl: string };
 }
 
 export interface AgentChatItem {
@@ -35,6 +38,8 @@ interface AgentContextValue {
   model: string | null;
   language: AgentLanguage;
   setLanguage: (language: AgentLanguage) => void;
+  /** Authoritative language the LLM replied in (null until the first response). */
+  resolvedLanguage: ResolvedLanguage | null;
   messages: AgentChatItem[];
   isTyping: boolean;
   isUploading: boolean;
@@ -54,7 +59,9 @@ const AgentContext = createContext<AgentContextValue | undefined>(undefined);
 
 const LANG_STORAGE_KEY = 'taskflow.agent.language';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const UPLOAD_EXTENSIONS = new Set(['txt', 'md', 'csv', 'json', 'xml', 'log', 'pdf', 'docx']);
+export const UPLOAD_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']);
 
 function normalizeLanguage(value: string | null): AgentLanguage {
   return value === 'vi' || value === 'en' || value === 'zh' || value === 'auto' ? value : 'auto';
@@ -84,12 +91,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [language, setLanguageState] = useState<AgentLanguage>(readStoredLanguage);
+  const [resolvedLanguage, setResolvedLanguage] = useState<ResolvedLanguage | null>(null);
   const [messages, setMessages] = useState<AgentChatItem[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<AgentConversationSummary[]>([]);
-  const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const historyRef = useRef<{ role: 'user' | 'assistant'; content: string; image?: { mime: string; dataUrl: string } | null }[]>([]);
 
   const setLanguage = useCallback((next: AgentLanguage) => {
     setLanguageState(next);
@@ -129,7 +137,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   async function runTurn(text: string, attachment?: AgentAttachment) {
     const trimmed = text.trim();
-    if (!trimmed || isTyping) return;
+    // Images are valid even with empty text (pure "what's in this picture?").
+    const hasImage = Boolean(attachment?.image);
+    if ((!trimmed && !hasImage) || isTyping) return;
 
     if (canUseAgent === false) {
       toast('error', 'AI assistant unavailable', 'The AI assistant is not configured on the server yet.');
@@ -143,11 +153,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       attachment,
       createdAt: new Date().toISOString(),
     };
-    historyRef.current.push({ role: 'user', content: trimmed });
+    historyRef.current.push({ role: 'user', content: trimmed, image: attachment?.image ?? null });
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
     try {
-      const res = await api.post<{ reply: string; conversationId: string }>('/agent/chat', {
+      const res = await api.post<{ reply: string; conversationId: string; language: ResolvedLanguage }>('/agent/chat', {
         messages: historyRef.current.slice(-20),
         language,
         projectId,
@@ -162,6 +172,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       historyRef.current.push({ role: 'assistant', content: res.data.reply });
       setMessages((prev) => [...prev, reply]);
       setConversationId(res.data.conversationId ?? null);
+      setResolvedLanguage(res.data.language ?? null);
       void refreshConversations();
     } catch {
       toast('error', 'Agent request failed', 'Please try again in a moment.');
@@ -180,12 +191,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       return;
     }
     const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
-    if (!UPLOAD_EXTENSIONS.has(ext)) {
-      toast('error', 'Unsupported file', 'Upload a text document: txt, md, csv, json, xml, log, pdf or docx.');
+    const isImage = UPLOAD_IMAGE_EXTENSIONS.has(ext);
+    if (!isImage && !UPLOAD_EXTENSIONS.has(ext)) {
+      toast('error', 'Unsupported file', 'Upload a text document (txt, md, csv, json, xml, log, pdf, docx) or an image (png, jpg, webp, gif).');
       return;
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      toast('error', 'File too large', 'Keep files under 5 MB.');
+    const sizeLimit = isImage ? MAX_IMAGE_BYTES : MAX_UPLOAD_BYTES;
+    if (file.size > sizeLimit) {
+      toast('error', 'File too large', isImage ? 'Keep images under 2 MB.' : 'Keep files under 5 MB.');
       return;
     }
 
@@ -193,12 +206,21 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post<{ data: { text: string; fileName: string; size: number; truncated: boolean } }>(
-        '/agent/upload',
-        form
-      );
-      const { text, fileName, size } = res.data.data;
-      await runTurn(text, { name: fileName, size });
+      const res = await api.post<{
+        data:
+          | { type: 'text'; text: string; fileName: string; size: number; truncated: boolean }
+          | { type: 'image'; mime: string; dataUrl: string; fileName: string; size: number };
+      }>('/agent/upload', form);
+      const result = res.data.data;
+      if (result.type === 'image') {
+        await runTurn('', {
+          name: result.fileName,
+          size: result.size,
+          image: { mime: result.mime, dataUrl: result.dataUrl },
+        });
+      } else {
+        await runTurn(result.text, { name: result.fileName, size: result.size });
+      }
     } catch (err: unknown) {
       const message =
         typeof err === 'object' && err !== null && 'response' in err
@@ -214,6 +236,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     historyRef.current = [];
     setMessages([]);
     setConversationId(null);
+    setResolvedLanguage(null);
   }
 
   function newConversation() {
@@ -223,23 +246,39 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   async function loadConversation(id: string) {
     try {
-      const res = await api.get<{ data: { messages: { role: string; content: string }[]; projectId: string | null } }>(
-        `/agent/conversations/${id}`
-      );
+      const res = await api.get<{
+        data: { messages: { role: string; content: string | unknown[] }[]; projectId: string | null };
+      }>(`/agent/conversations/${id}`);
       const loaded = res.data.data;
+      // Stored multimodal messages may have array content (image parts); keep
+      // only the joined text so history replay stays text-safe.
+      const flatten = (content: string | unknown[]): string =>
+        typeof content === 'string'
+          ? content
+          : content
+              .filter(
+                (p): p is { type: 'text'; text: string } =>
+                  typeof p === 'object' && p !== null && (p as { type?: string }).type === 'text'
+              )
+              .map((p) => p.text)
+              .join(' ');
       historyRef.current = loaded.messages.map((m) => ({
         role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
+        content: flatten(m.content),
       }));
       setMessages(
         loaded.messages.map((m) => ({
           id: nextId(),
           role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: m.content,
+          content: flatten(m.content),
           createdAt: new Date().toISOString(),
         }))
       );
       setConversationId(id);
+      // Language preference lives on the server; it will be re-authoritative
+      // with the next turn's response. Reset any stale value from a previous
+      // conversation so the indicator doesn't lie.
+      setResolvedLanguage(null);
       setHistoryOpen(false);
     } catch {
       toast('error', 'Could not load conversation');
@@ -268,6 +307,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         model,
         language,
         setLanguage,
+        resolvedLanguage,
         messages,
         isTyping,
         isUploading,

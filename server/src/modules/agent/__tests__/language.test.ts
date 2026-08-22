@@ -1,4 +1,4 @@
-import { detectLanguage, resolveLanguage } from '../language';
+import { detectLanguage, resolveLanguage, resolveTurnLanguage } from '../language';
 
 describe('agent language detection', () => {
   it('detects Vietnamese from typical Vietnamese input', () => {
@@ -14,8 +14,14 @@ describe('agent language detection', () => {
     expect(detectLanguage(['次のタスクは？'])).toBe('zh'); // kana → CJK bucket
   });
 
-  it('falls back to Vietnamese when there is no strong signal', () => {
-    // Even plain-English text defaults to the product's priority language.
+  it('detects confident English sentences', () => {
+    expect(detectLanguage(['Hello, can you explain this architecture?'])).toBe('en');
+    expect(detectLanguage(['What is the deadline for this task?'])).toBe('en');
+    expect(resolveLanguage(['Please help me'], 'auto' as never)).toBe('en');
+  });
+
+  it('falls back to Vietnamese only for ambiguous/no-signal input', () => {
+    // No English/Vietnamese/CJK signal at all.
     expect(detectLanguage(['plan a sprint'])).toBe('vi');
   });
 
@@ -33,6 +39,59 @@ describe('agent language detection', () => {
   it('treats "auto" as auto-detection', () => {
     expect(resolveLanguage(['你好世界'], 'auto')).toBe('zh');
     expect(resolveLanguage(['đang xử lý'], 'auto')).toBe('vi');
-    expect(resolveLanguage(['hello'], 'auto')).toBe('vi');
+    expect(resolveLanguage(['hello there'], 'auto')).toBe('en');
+  });
+});
+
+describe('resolveTurnLanguage (server-authoritative precedence)', () => {
+  // 1. Explicit per-request preference wins over everything.
+  it('explicit vi/en/zh beats conversation preference and detection', () => {
+    expect(resolveTurnLanguage({ requested: 'vi', conversationPreference: 'en', userTexts: ['你好'] })).toEqual({ language: 'vi', source: 'explicit' });
+    expect(resolveTurnLanguage({ requested: 'en', conversationPreference: 'vi', userTexts: ['xin chào'] })).toEqual({ language: 'en', source: 'explicit' });
+    expect(resolveTurnLanguage({ requested: 'zh', conversationPreference: 'en', userTexts: ['hello'] })).toEqual({ language: 'zh', source: 'explicit' });
+  });
+
+  // 'auto' is NOT an explicit preference.
+  it('treats requested "auto" as no explicit preference', () => {
+    expect(resolveTurnLanguage({ requested: 'auto', conversationPreference: 'en', userTexts: ['xin chào'] })).toEqual({ language: 'en', source: 'conversation' });
+    expect(resolveTurnLanguage({ requested: 'auto', conversationPreference: null, userTexts: ['你好'] })).toEqual({ language: 'zh', source: 'detected' });
+  });
+
+  // 2. Conversation preference beats per-turn detection — a Vietnamese message
+  //    inside an English conversation must NOT flip the thread.
+  it('conversation preference wins over detection (no flip on foreign message)', () => {
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'vi', userTexts: ['plan a sprint in English please'] })).toEqual({ language: 'vi', source: 'conversation' });
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'en', userTexts: ['Giải thích Kubernetes deployment cho tôi'] })).toEqual({ language: 'en', source: 'conversation' });
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'zh', userTexts: ['xin chào'] })).toEqual({ language: 'zh', source: 'conversation' });
+  });
+
+  // 3. Detection on the current turn only.
+  it('detects from the current turn when no preference exists', () => {
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: null, userTexts: ['đang quản lý dự án của tôi'] })).toEqual({ language: 'vi', source: 'detected' });
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: null, userTexts: ['你好，请帮我规划一个项目'] })).toEqual({ language: 'zh', source: 'detected' });
+  });
+
+  // Technical terms / quoted text must not flip detection.
+  it('ignores English technical terms and quoted text inside Vietnamese input', () => {
+    expect(resolveTurnLanguage({ userTexts: ['Giải thích Kubernetes deployment cho tôi'] })).toEqual({ language: 'vi', source: 'detected' });
+    expect(resolveTurnLanguage({ userTexts: ['Giải thích câu "How are you?" bằng tiếng Việt.'] })).toEqual({ language: 'vi', source: 'detected' });
+  });
+
+  // 4. Vietnamese fallback.
+  it('falls back to Vietnamese for ambiguous/empty input', () => {
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: null, userTexts: ['plan a sprint'] })).toEqual({ language: 'vi', source: 'fallback' });
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: null, userTexts: [] })).toEqual({ language: 'vi', source: 'fallback' });
+    expect(resolveTurnLanguage({})).toEqual({ language: 'vi', source: 'fallback' });
+  });
+
+  // Old conversations have language = null → behaves like no preference.
+  it('handles legacy conversations with language null', () => {
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: null, userTexts: ['xyz123'] })).toEqual({ language: 'vi', source: 'fallback' });
+    expect(resolveTurnLanguage({ requested: 'auto', conversationPreference: null, userTexts: ['đang làm gì đó'] })).toEqual({ language: 'vi', source: 'detected' });
+  });
+
+  // Unknown persisted codes are ignored (defensive).
+  it('ignores unknown conversation preference codes', () => {
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'fr', userTexts: ['xin chào'] })).toEqual({ language: 'vi', source: 'fallback' });
   });
 });
