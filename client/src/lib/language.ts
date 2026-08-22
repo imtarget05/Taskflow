@@ -17,7 +17,9 @@ export type ResolvedLanguage = Exclude<AgentLanguage, 'auto'>;
 const CJK_RE = /[\u1100-\u11ff\u2e80-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/u;
 
 // Vietnamese-specific letters/diacritics that effectively never appear in English.
-const VI_SPECIAL_RE = /[ăđâôơưáéíóú]/iu;
+// Full Vietnamese tone-mark set, kept in sync with the server resolver.
+const VI_SPECIAL_RE =
+  /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/iu;
 
 // Very common Vietnamese words, even when typed without all diacritics.
 const VI_WORD_RE = /\b(?:đi|đã|được|người|đâu|để|mượn|này|đều|đang|đến|không|khong|của|cua|tôi|toi|chúng|chung|những|nhung)\b/iu;

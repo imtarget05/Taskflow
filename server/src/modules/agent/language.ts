@@ -14,8 +14,11 @@ export type ResolvedLanguage = Exclude<AgentLanguage, 'auto'>;
 const CJK_RE = /[\u1100-\u11ff\u2e80-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/u;
 
 // Vietnamese-specific letters / diacritics that effectively never appear in
-// English. Matching any of these is a decisive Vietnamese signal.
-const VI_SPECIAL_RE = /[ăđâôơưáéíóú]/iu;
+// English. Matching any of these is a decisive Vietnamese signal. Covers the
+// full Vietnamese tone-mark set (all tone variants of a, e, i, o, u, y plus
+// the base letters ă â đ ê ô ơ ư).
+const VI_SPECIAL_RE =
+  /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/iu;
 
 // A few very common Vietnamese words that stay unambiguous even when typed
 // without diacritics. Aligned with the client mirror so detection is identical
@@ -69,6 +72,13 @@ export function detectLanguage(texts: string[]): ResolvedLanguage {
 /** Where the resolved language for a turn came from (precedence order below). */
 export type LanguageSource = 'explicit' | 'conversation' | 'detected' | 'fallback';
 
+/** The only response languages the assistant may ever produce. */
+export const ALLOWED_LANGUAGES = ['vi', 'en', 'zh'] as const;
+
+function isAllowed(value: unknown): value is ResolvedLanguage {
+  return value === 'vi' || value === 'en' || value === 'zh';
+}
+
 export interface TurnLanguage {
   /** The single deterministic assistant language for this turn. */
   language: ResolvedLanguage;
@@ -98,18 +108,20 @@ export function resolveTurnLanguage(input: {
 }): TurnLanguage {
   const { requested, conversationPreference, userTexts = [] } = input;
 
+  // 0. Whitelist — never let an unknown code ('fr', 'de', garbage from the DB,
+  //    a hostile client, …) reach the prompt, the response or persistence.
+  //    'auto' is not a language and is ignored here by design.
+  const explicit = isAllowed(requested) ? requested : null;
+  const preference = isAllowed(conversationPreference) ? conversationPreference : null;
+
   // 1. Explicit per-request choice wins outright.
-  if (requested && requested !== 'auto') {
-    return { language: requested, source: 'explicit' };
+  if (explicit) {
+    return { language: explicit, source: 'explicit' };
   }
 
-  // 2. Persisted conversation preference (only real codes, null/unknown ignored).
-  if (
-    conversationPreference === 'vi' ||
-    conversationPreference === 'en' ||
-    conversationPreference === 'zh'
-  ) {
-    return { language: conversationPreference, source: 'conversation' };
+  // 2. Persisted conversation preference.
+  if (preference) {
+    return { language: preference, source: 'conversation' };
   }
 
   // 3. Detect from the current user turn; detection itself falls back to 'vi'

@@ -92,6 +92,41 @@ describe('resolveTurnLanguage (server-authoritative precedence)', () => {
 
   // Unknown persisted codes are ignored (defensive).
   it('ignores unknown conversation preference codes', () => {
-    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'fr', userTexts: ['xin chào'] })).toEqual({ language: 'vi', source: 'fallback' });
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'fr', userTexts: ['zzz123'] })).toEqual({ language: 'vi', source: 'fallback' });
+    // With a detectable Vietnamese message, detection takes over instead.
+    expect(resolveTurnLanguage({ requested: null, conversationPreference: 'fr', userTexts: ['Xin chào bạn'] })).toEqual({ language: 'vi', source: 'detected' });
+  });
+});
+
+describe('resolveTurnLanguage — invalid language hardening (whitelist)', () => {
+  const INVALID = ['fr', 'de', 'ja', 'ko'];
+
+  it('rejects invalid requested languages and falls through precedence', () => {
+    for (const bad of INVALID) {
+      // Invalid request + valid conversation preference → conversation wins.
+      expect(resolveTurnLanguage({ requested: bad as never, conversationPreference: 'en', userTexts: [] }).language).toBe('en');
+      // Invalid request + no preference + English message → detected en.
+      expect(resolveTurnLanguage({ requested: bad as never, conversationPreference: null, userTexts: ['How does this work?'] }).source).toBe('detected');
+      // Invalid request + nothing else → fallback vi.
+      expect(resolveTurnLanguage({ requested: bad as never }).language).toBe('vi');
+    }
+  });
+
+  it('rejects invalid conversation preferences from the DB', () => {
+    for (const bad of INVALID) {
+      expect(resolveTurnLanguage({ requested: 'auto', conversationPreference: bad, userTexts: ['Hello, can you explain this?'] }).language).toBe('en');
+      expect(resolveTurnLanguage({ requested: null, conversationPreference: bad, userTexts: [] }).language).toBe('vi');
+    }
+  });
+
+  it('never returns a language outside vi|en|zh for any input', () => {
+    const requests = ['vi', 'en', 'zh', 'auto', null, undefined, '', 'fr', 'de', 'ja', 'ko'];
+    const prefs = [null, undefined, 'vi', 'en', 'zh', 'fr', 'de', 'ja', 'ko'];
+    for (const r of requests) {
+      for (const p of prefs) {
+        const result = resolveTurnLanguage({ requested: r as never, conversationPreference: p, userTexts: ['Hello'] });
+        expect(['vi', 'en', 'zh']).toContain(result.language);
+      }
+    }
   });
 });
