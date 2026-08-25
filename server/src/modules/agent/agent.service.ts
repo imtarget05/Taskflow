@@ -1,16 +1,22 @@
 import { extname } from 'path';
-import { Prisma } from '@prisma/client';
+import { Prisma, TaskPriority } from '@prisma/client';
+import { z } from 'zod';
 import { extractText } from 'unpdf';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../lib/prisma';
+import { createProject } from '../project/project.service';
+import { createTask } from '../task/task.service';
 import {
   chatCompletion,
   isLLMConfigured,
   LLMMessage,
   LLMContentPart,
 } from './llm';
-import { buildSystemPrompt, SUMMARIZER_SYSTEM_PROMPT } from './prompt';
+import {
+  buildSystemPrompt,
+  SUMMARIZER_SYSTEM_PROMPT,
+} from './prompt';
 import {
   AgentLanguage,
   ResolvedLanguage,
@@ -50,6 +56,22 @@ export interface ChatOptions {
   projectId?: string | null;
   conversationId?: string | null;
 }
+
+/** A machine-readable create action the model may emit to actually change data. */
+export interface AgentAction {
+  name: AgentActionName;
+  params: Record<string, unknown>;
+}
+
+export type AgentActionName = 'create_project' | 'create_workspace' | 'create_task';
+
+export interface AgentActionResult {
+  name: AgentActionName;
+  ok: boolean;
+  summary: string;
+}
+
+const ACTION_TAG_RE = /\[\[TASKFLOW_ACTION\]\]([\s\S]*?)\[\[\/TASKFLOW_ACTION\]\]/;
 
 const MAX_HISTORY = 20;
 const MAX_MESSAGE_LENGTH = 4000;
@@ -125,7 +147,12 @@ export async function chat(
   userId: string,
   messages: AgentChatMessage[],
   options: ChatOptions = {}
-): Promise<{ reply: string; conversationId: string; language: ResolvedLanguage }> {
+): Promise<{
+  reply: string;
+  conversationId: string;
+  language: ResolvedLanguage;
+  action?: AgentActionResult | null;
+}> {
   if (!isLLMConfigured()) {
     throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
@@ -177,7 +204,18 @@ export async function chat(
     buildSystemPrompt(language) +
     (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '');
   const system: LLMMessage = { role: 'system', content: systemContent };
-  const reply = await chatCompletion([system, ...kept]);
+  const rawReply = await chatCompletion([system, ...kept]);
+
+  // Execute any confirmed create action embedded in the model reply, then fold
+  // its human-readable outcome into the reply the user actually sees.
+  const action = parseAction(rawReply);
+  let reply = rawReply.replace(ACTION_TAG_RE, '').trim();
+  let actionResult: AgentActionResult | null = null;
+  if (action) {
+    actionResult = await executeAction(action, userId);
+    reply = (reply ? `${reply}\n\n` : '') + actionResult.summary;
+    reply = reply.trim();
+  }
 
   const conversationId = await persistConversation(
     userId,
@@ -189,7 +227,7 @@ export async function chat(
     nextSummary
   );
 
-  return { reply, conversationId, language };
+  return { reply, conversationId, language, ...(actionResult ? { action: actionResult } : {}) };
 }
 
 /** Plain text of the LATEST user message — the detection scope for one turn. */
@@ -305,6 +343,116 @@ async function rollingSummary(dropped: LLMMessage[], previous: string | null): P
 
 function fallbackSummary(previous: string | null, source: string): string {
   return `${previous ? `${previous}\n` : ''}${source.slice(0, SUMMARY_MAX_CHARS)}`.trim();
+}
+
+/** Extract and validate a [[TASKFLOW_ACTION]] tag from a model reply. */
+export function parseAction(reply: string): AgentAction | null {
+  const match = ACTION_TAG_RE.exec(reply);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1].trim()) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const { action, params } = parsed as { action?: unknown; params?: unknown };
+    if (typeof action !== 'string') return null;
+    switch (action) {
+      case 'create_project':
+      case 'create_workspace':
+      case 'create_task':
+        return { name: action, params: params && typeof params === 'object' ? (params as Record<string, unknown>) : {} };
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+const createProjectSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().max(1000).optional(),
+  color: z.string().max(20).optional(),
+});
+
+const createTaskSchema = z.object({
+  projectName: z.string().trim().min(1).max(120),
+  title: z.string().trim().min(1).max(500),
+  columnName: z.string().max(120).optional(),
+  description: z.string().max(4000).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  dueDate: z.string().optional(),
+});
+
+/**
+ * Execute a validated create action as the authenticated user. Never throws —
+ * a failure is returned as a not-ok result so the model reply can still be
+ * shown instead of killing the whole chat turn.
+ */
+export async function executeAction(action: AgentAction, userId: string): Promise<AgentActionResult> {
+  try {
+    if (action.name === 'create_project' || action.name === 'create_workspace') {
+      const p = createProjectSchema.safeParse(action.params);
+      if (!p.success) {
+        return { name: action.name, ok: false, summary: `Không thể tạo: ${firstZodIssue(p.error)}` };
+      }
+      const created = await createProject(userId, p.data);
+      return {
+        name: action.name,
+        ok: true,
+        summary: `✅ Đã tạo board "${p.data.name}" (id ${created.id}).`,
+      };
+    }
+
+    if (action.name === 'create_task') {
+      const p = createTaskSchema.safeParse(action.params);
+      if (!p.success) {
+        return { name: action.name, ok: false, summary: `Không thể tạo task: ${firstZodIssue(p.error)}` };
+      }
+      const project = await prisma.projectMember.findFirst({
+        where: { userId, project: { name: p.data.projectName } },
+        select: { project: { select: { id: true } } },
+      });
+      if (!project) {
+        return {
+          name: action.name,
+          ok: false,
+          summary: `⚠️ Không tìm thấy board "${p.data.projectName}" mà bạn là thành viên. Hãy tạo nó trước hoặc kiểm tra lại tên.`,
+        };
+      }
+      const projectId = project.project.id;
+      let column = null;
+      if (p.data.columnName) {
+        column = await prisma.column.findFirst({ where: { projectId, name: p.data.columnName } });
+      }
+      if (!column) {
+        column = await prisma.column.findFirst({ where: { projectId }, orderBy: { position: 'asc' } });
+      }
+      if (!column) {
+        return { name: action.name, ok: false, summary: '⚠️ Board không có cột nào để thêm task.' };
+      }
+      await createTask(userId, {
+        projectId,
+        columnId: column.id,
+        title: p.data.title,
+        ...(p.data.description !== undefined ? { description: p.data.description } : {}),
+        ...(p.data.priority !== undefined ? { priority: p.data.priority as TaskPriority } : {}),
+        ...(p.data.dueDate !== undefined ? { dueDate: p.data.dueDate } : {}),
+      });
+      return {
+        name: action.name,
+        ok: true,
+        summary: `✅ Đã tạo task "${p.data.title}" trong board "${p.data.projectName}" (cột "${column.name}").`,
+      };
+    }
+
+    return { name: action.name, ok: false, summary: `⚠️ Thao tác "${action.name}" chưa được hỗ trợ.` };
+  } catch (err) {
+    const msg = err instanceof AppError ? err.message : 'lỗi không xác định';
+    return { name: action.name, ok: false, summary: `⚠️ Không thể thực hiện: ${msg}` };
+  }
+}
+
+function firstZodIssue(error: z.ZodError): string {
+  return error.issues[0]?.message ?? 'dữ liệu không hợp lệ';
 }
 
 /** Saves or appends the exchanged messages to an AgentConversation row. */
