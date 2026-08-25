@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   FileUp,
   History,
@@ -11,11 +11,6 @@ import {
   Languages,
 } from 'lucide-react';
 import { useAgent, AgentLanguage } from '@/store/agent';
-import {
-  resolveLanguage,
-  languageHint,
-  ResolvedLanguage,
-} from '@/lib/language';
 import { Button } from '@/components/ui';
 import { timeAgo } from '@/lib/time';
 
@@ -55,7 +50,6 @@ export default function ChatBox() {
     projectId,
     language,
     setLanguage,
-    resolvedLanguage: serverLanguage,
     conversations,
     historyOpen,
     setHistoryOpen,
@@ -65,26 +59,25 @@ export default function ChatBox() {
     deleteConversation,
   } = useAgent();
   const [draft, setDraft] = useState('');
-  // Preview ONLY: a client-side guess for the current draft, shown before any
-  // request leaves the browser. The server is the single source of truth — once
-  // it answers, its resolved language is authoritative and this preview is
-  // ignored (see `resolvedLanguage` below).
-  const previewLanguage = useMemo<ResolvedLanguage | null>(() => {
-    if (!draft.trim()) return null;
-    return resolveLanguage([draft]);
-  }, [draft]);
-  // Server's authoritative choice wins; the draft guess is only a placeholder.
-  const resolvedLanguage: ResolvedLanguage = serverLanguage ?? previewLanguage ?? 'vi';
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Only auto-scroll while the user is already at/near the bottom — scrolling
+  // up to re-read history must never be yanked back down.
+  const stickToBottom = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
+  function handleMessagesScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }
+
   useEffect(() => {
-    if (open) {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }
+    if (!open) return;
+    if (!stickToBottom.current) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [open, messages, isTyping, isUploading]);
 
   useEffect(() => {
@@ -143,7 +136,7 @@ export default function ChatBox() {
 
       {open && (
         <div
-          className="fixed bottom-20 right-4 z-50 flex w-[min(94vw,400px)] flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-modal"
+          className="fixed bottom-20 right-4 z-50 flex max-h-[min(80vh,640px)] w-[min(94vw,400px)] flex-col overflow-hidden rounded-2xl border border-line bg-card shadow-modal"
           onDragEnter={(e) => {
             e.preventDefault();
             dragDepth.current += 1;
@@ -237,7 +230,8 @@ export default function ChatBox() {
           {/* Messages */}
           <div
             ref={scrollRef}
-            className="h-[320px] min-h-0 flex-1 space-y-3 overflow-y-auto bg-bg/40 px-4 py-3"
+            onScroll={handleMessagesScroll}
+            className="min-h-[240px] flex-1 space-y-3 overflow-y-auto overscroll-contain bg-bg/40 px-4 py-3"
           >
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-4 px-2 text-center">
@@ -378,29 +372,8 @@ export default function ChatBox() {
                 <span className="sr-only">Send</span>
               </Button>
             </div>
-            {/* Resolved-language indicator: shows the user which language the LLM will reply in. */}
-            <div className="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1">
-              <Languages className="h-3.5 w-3.5 text-accent/70" aria-hidden="true" />
-              <span className="text-[10px] font-medium text-ink">
-                Trả lời:{' '}
-                <span className="text-accent">
-                  {resolvedLanguage === 'vi'
-                    ? 'Tiếng Việt'
-                    : resolvedLanguage === 'en'
-                      ? 'English'
-                      : '中文'}
-                </span>
-              </span>
-              {language === 'auto' && resolvedLanguage === 'vi' && (
-                <span className="text-[9px] text-ink-muted/80">(ưu tiên Việt)</span>
-              )}
-              <span className="shrink-0 text-[10px] text-ink-muted" title={languageHint(resolvedLanguage)}>
-                ?
-              </span>
-            </div>
-            <p className="mt-1.5 text-[10px] text-ink-muted">
-              Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB
-            </p>
+            {/* Resolved-language indicator hidden per UX request; logic kept intact. */}
+
           </form>
 
           {/* History drawer */}
