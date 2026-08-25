@@ -141,19 +141,103 @@ describe('agent.service', () => {
     expect(mockedPrisma.agentConversation.create).not.toHaveBeenCalled();
   });
 
-  it('prefixes the system prompt and trims history to the last 20 messages', async () => {
+  it('prefixes the system prompt and trims history to the last 20 messages, summarizing the overflow', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('ok');
+    mockedChatCompletion
+      .mockResolvedValueOnce('summary of m0..m4') // rolling-summary side call
+      .mockResolvedValue('ok'); // the actual chat reply
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     const many = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
     await chat('u1', many);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    // First LLM call = summary; second = chat reply with system + 20 history.
+    expect(mockedChatCompletion).toHaveBeenCalledTimes(2);
+    expect(mockedChatCompletion.mock.calls[0][0][0].content).toMatch(/compress chat history/i);
+    const messages = mockedChatCompletion.mock.calls[1][0];
     expect(messages).toHaveLength(21); // system + 20 history
     expect(messages[0].role).toBe('system');
+    expect(messages[0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
+    expect(messages[0].content).toMatch(/summary of m0\.\.m4/);
     expect(messages[20]).toEqual({ role: 'user', content: 'm24' });
+    // The regenerated summary is persisted on the conversation row.
+    expect(mockedPrisma.agentConversation.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ summary: 'summary of m0..m4' }) })
+    );
   });
+
+  it('trims by character budget but always keeps the last two messages verbatim', async () => {
+    mockedIsConfigured.mockReturnValue(true);
+    mockedChatCompletion
+      .mockResolvedValueOnce('short summary')
+      .mockResolvedValue('ok');
+    mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+    // Each message is under MAX_MESSAGE_LENGTH (4000) but 10 × 3000 chars
+    // exceeds the 24k context budget → older ones must be summarized away.
+    const many = Array.from({ length: 10 }, () => ({ role: 'user', content: 'a'.repeat(3_000) }));
+    await chat('u1', [...many, { role: 'user', content: 'final question' }]);
+
+    expect(mockedChatCompletion).toHaveBeenCalledTimes(2); // summary + reply
+    const replyMessages = mockedChatCompletion.mock.calls[1][0].slice(1);
+    expect(replyMessages.length).toBeGreaterThanOrEqual(2);
+    expect(replyMessages[replyMessages.length - 1]).toEqual({ role: 'user', content: 'final question' });
+    // The verbatim window fits the character budget.
+    const windowChars = replyMessages.reduce(
+      (n: number, m: { content: string }) => n + m.content.length,
+      0
+    );
+    expect(windowChars).toBeLessThanOrEqual(24_000);
+    expect(mockedChatCompletion.mock.calls[1][0][0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
+  });
+
+  it('folds an existing stored summary into the next rolling summary', async () => {
+    mockedIsConfigured.mockReturnValue(true);
+    mockedChatCompletion
+      .mockResolvedValueOnce('merged summary')
+      .mockResolvedValue('ok');
+    mockedPrisma.agentConversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      language: null,
+      summary: 'old summary',
+    });
+    mockedPrisma.agentConversation.update.mockResolvedValue({});
+
+    const many = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
+    await chat('u1', many, { conversationId: 'c1' });
+
+    // The summarizer receives both the previous summary and the overflow.
+    const summaryCall = mockedChatCompletion.mock.calls[0][0];
+    expect(summaryCall[1].content).toContain('Previous summary:\nold summary');
+
+    // The merged result replaces the stored summary.
+    expect(mockedPrisma.agentConversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'c1' },
+        data: expect.objectContaining({ summary: 'merged summary' }),
+      })
+    );
+  });
+
+  it('keeps working when the summarizer fails (fallback truncation)', async () => {
+    mockedIsConfigured.mockReturnValue(true);
+    mockedChatCompletion
+      .mockRejectedValueOnce(new Error('LLM down'))
+      .mockResolvedValue('ok');
+    mockedPrisma.agentConversation.findFirst.mockResolvedValue({ id: 'c1', language: null, summary: null });
+    mockedPrisma.agentConversation.update.mockResolvedValue({});
+
+    const many = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
+    const result = await chat('u1', many, { conversationId: 'c1' });
+    expect(result.reply).toBe('ok');
+    // Fallback summary = truncated concatenation of dropped messages.
+    expect(mockedPrisma.agentConversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ summary: expect.stringMatching(/^user: m0/) }),
+      })
+    );
+  });
+
 
   it('drops empty or oversized message content', async () => {
     mockedIsConfigured.mockReturnValue(true);
@@ -169,6 +253,22 @@ describe('agent.service', () => {
     const messages = mockedChatCompletion.mock.calls[0][0];
     const history = messages.slice(1);
     expect(history).toEqual([{ role: 'assistant', content: 'a'.repeat(4000) }, { role: 'user', content: 'valid' }]);
+  });
+
+  it('persists image attachments as placeholders, never data URIs', async () => {
+    mockedIsConfigured.mockReturnValue(true);
+    mockedChatCompletion.mockResolvedValue('ok');
+    mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+    await chat('u1', [
+      { role: 'user', content: 'what is this?', image: { mime: 'image/png', dataUrl: PNG_DATA_URL } },
+    ]);
+
+    const stored = mockedPrisma.agentConversation.create.mock.calls[0][0].data.messages;
+    const serialized = JSON.stringify(stored);
+    expect(serialized).not.toContain('data:image');
+    expect(serialized).toContain('[image attachment]');
+    expect(serialized).toContain('what is this?');
   });
 
   it('throws 503 when the LLM is not configured', async () => {

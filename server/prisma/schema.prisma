@@ -111,6 +111,7 @@ model AgentConversation {
   projectId String?
   title     String?
   messages  Json?
+  summary   String?  // Rolling summary of messages trimmed out of the LLM context window
   language  String?  // Resolved language for this conversation ('vi', 'en', 'zh', or null)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
