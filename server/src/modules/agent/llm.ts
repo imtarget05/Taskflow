@@ -34,6 +34,31 @@ export interface ChatCompletionOptions {
   model?: string;
 }
 
+/** A structured tool invocation the provider decided to call. */
+export interface LLMToolCall {
+  name: string;
+  /** JSON string of the function arguments. */
+  arguments: string;
+}
+
+/** An OpenAI-compatible function tool definition passed in the `tools` field. */
+export interface LLMFunctionTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** Structured result of a chat completion that may include tool calls. */
+export interface ChatCompletionWithToolsResult {
+  /** Assistant text (may be empty when the model only returned a tool call). */
+  content: string;
+  /** Zero or more tool calls the model requested. */
+  toolCalls: LLMToolCall[];
+}
+
 /**
  * LLM router tiers. `routeModel()` picks a tier from the question; the tier
  * maps to a concrete model id via `modelForTier()` (env-driven so the router
@@ -171,27 +196,212 @@ export function routeModel(question: string): LLMModelTier {
  * OpenAI-compatible chat completions client. The model and endpoint live only
  * on the server (env) — the browser never sees LLM credentials.
  */
+
+/** Result of a single model chat attempt (no throw for non-OK status). */
+interface ChatAttempt {
+  ok: boolean;
+  content?: string;
+  /** HTTP status when !ok, else 200. */
+  status: number;
+  durationMs?: number;
+}
+
+async function chatWithModel(
+  model: string,
+  messages: LLMMessage[],
+  opts: ChatCompletionOptions
+): Promise<ChatAttempt> {
+  const startedAt = Date.now();
+  const res = await requestWithRetry(`${env.LLM_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: aiHeaders(),
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens ?? 2048,
+    }),
+  });
+  const durationMs = Date.now() - startedAt;
+
+  if (!res.ok) {
+    llmLog('error', 'provider_error', {
+      method: 'POST',
+      path: '/chat/completions',
+      status: res.status,
+      durationMs,
+      exhausted: RETRYABLE_STATUS.has(res.status),
+    });
+    return { ok: false, status: res.status, durationMs };
+  }
+
+  llmLog('info', 'provider_request', { method: 'POST', path: '/chat/completions', status: res.status, durationMs });
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    // Cloudflare Workers AI wraps the same shape in a `result` envelope.
+    result?: { choices?: { message?: { content?: string } }[] };
+  };
+  const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
+  const content = choice?.message?.content;
+  if (typeof content !== 'string') {
+    return { ok: false, status: 200, durationMs };
+  }
+  return { ok: true, content, status: 200, durationMs };
+}
+
 export async function chatCompletion(
   messages: LLMMessage[],
   opts: ChatCompletionOptions = {}
 ): Promise<string> {
-  const data = await aiPost<{
-    choices?: { message?: { content?: string } }[];
-    // Cloudflare Workers AI wraps the same shape in a `result` envelope.
-    result?: { choices?: { message?: { content?: string } }[] };
-  }>('/chat/completions', {
-    model: opts.model ?? env.LLM_MODEL,
-    messages,
-    temperature: opts.temperature ?? 0.7,
-    max_tokens: opts.maxTokens ?? 2048,
-  });
-
-  const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
-  const content = choice?.message?.content;
-  if (typeof content !== 'string') {
-    throw new AppError('LLM returned an invalid response', StatusCodes.BAD_GATEWAY);
+  const primaryModel = opts.model ?? env.LLM_MODEL;
+  if (!primaryModel) {
+    throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
-  return content;
+
+  const first = await chatWithModel(primaryModel, messages, opts);
+
+  // Primary succeeded → return immediately.
+  if (first.ok && typeof first.content === 'string') return first.content;
+
+  // Fallback is only eligible when the provider returned a transient,
+  // retryable failure (e.g. 429 quota / 5xx) AND a fallback model is configured.
+  // Client errors (400/401/403/404) never trigger a fallback.
+  const fallbackModel = env.LLM_FALLBACK_MODEL;
+  const primaryStatus = first.status;
+  if (
+    fallbackModel &&
+    fallbackModel !== primaryModel &&
+    primaryStatus != null &&
+    RETRYABLE_STATUS.has(primaryStatus)
+  ) {
+    llmLog('warn', 'provider_fallback_attempt', {
+      primaryModel,
+      fallbackModel,
+      reason: `${primaryStatus}_exhausted`,
+    });
+    const fb = await chatWithModel(fallbackModel, messages, opts);
+    if (fb.ok && typeof fb.content === 'string') {
+      llmLog('info', 'provider_fallback_success', { model: fallbackModel, durationMs: fb.durationMs });
+      return fb.content;
+    }
+    // Log but do NOT leak credentials/prompt/body.
+    llmLog('error', 'provider_fallback_error', {
+      model: fallbackModel,
+      status: fb.status,
+      exhausted: true,
+    });
+  }
+
+  // Exhausted 429 → safe 503 user message; other provider failures → generic 502.
+  if (primaryStatus === 429) {
+    throw new AppError(
+      'AI service is temporarily unavailable. Please try again shortly.',
+      StatusCodes.SERVICE_UNAVAILABLE
+    );
+  }
+  throw new AppError(`LLM request failed (HTTP ${primaryStatus ?? 'unknown'})`, StatusCodes.BAD_GATEWAY);
+}
+
+/**
+ * Chat completion that ALSO advertises function tools and surfaces any tool
+ * call the provider requests. This is the reliable path for agent actions:
+ * instead of coaxing a free-text JSON tag out of an instruct model, the model
+ * returns a structured `tool_calls` array (OpenAI-compatible — also reading
+ * Cloudflare Workers AI's `result` envelope). Falls back to a secondary model
+ * on transient failures, mirroring `chatCompletion`.
+ *
+ * Returns `{ content, toolCalls }`. `content` is the assistant text (may be
+ * empty), `toolCalls` the requested invocations (may be empty when the model
+ * just replied with text).
+ */
+export async function chatCompletionWithTools(
+  messages: LLMMessage[],
+  tools: LLMFunctionTool[],
+  opts: ChatCompletionOptions = {}
+): Promise<ChatCompletionWithToolsResult> {
+  const primaryModel = opts.model ?? env.LLM_MODEL;
+  if (!primaryModel) {
+    throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
+  }
+
+  const attempt = async (model: string): Promise<ChatCompletionWithToolsResultInternal> => {
+    const startedAt = Date.now();
+    const res = await requestWithRetry(`${env.LLM_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: aiHeaders(),
+      body: JSON.stringify({
+        model,
+        messages,
+        tools,
+        temperature: opts.temperature ?? 0.7,
+        max_tokens: opts.maxTokens ?? 2048,
+      }),
+    });
+    const durationMs = Date.now() - startedAt;
+
+    if (!res.ok) {
+      llmLog('error', 'provider_error', {
+        method: 'POST',
+        path: '/chat/completions',
+        status: res.status,
+        durationMs,
+        exhausted: RETRYABLE_STATUS.has(res.status),
+      });
+      return { ok: false, status: res.status, content: '', toolCalls: [] };
+    }
+
+    llmLog('info', 'provider_request', {
+      method: 'POST',
+      path: '/chat/completions',
+      status: res.status,
+      durationMs,
+    });
+
+    const data = (await res.json()) as {
+      choices?: ToolChoice[];
+      result?: { choices?: ToolChoice[] };
+    };
+    const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
+    const content = typeof choice?.message?.content === 'string' ? choice.message.content : '';
+    const toolCalls: LLMToolCall[] = (choice?.message?.tool_calls ?? []).map((tc) => ({
+      name: tc?.function?.name ?? '',
+      arguments: tc?.function?.arguments ?? '',
+    }));
+    return { ok: true, status: 200, content, toolCalls, durationMs };
+  };
+
+  const first = await attempt(primaryModel);
+  if (first.ok) return { content: first.content, toolCalls: first.toolCalls };
+
+  const fallbackModel = env.LLM_FALLBACK_MODEL;
+  if (fallbackModel && fallbackModel !== primaryModel && RETRYABLE_STATUS.has(first.status)) {
+    const fb = await attempt(fallbackModel);
+    if (fb.ok) return { content: fb.content, toolCalls: fb.toolCalls };
+  }
+
+  if (first.status === 429) {
+    throw new AppError(
+      'AI service is temporarily unavailable. Please try again shortly.',
+      StatusCodes.SERVICE_UNAVAILABLE
+    );
+  }
+  throw new AppError(`LLM request failed (HTTP ${first.status ?? 'unknown'})`, StatusCodes.BAD_GATEWAY);
+}
+
+interface ToolChoice {
+  message?: {
+    content?: null | string;
+    tool_calls?: { function?: { name?: string; arguments?: string } }[];
+  };
+}
+
+interface ChatCompletionWithToolsResultInternal {
+  ok: boolean;
+  status: number;
+  content: string;
+  toolCalls: LLMToolCall[];
+  durationMs?: number;
 }
 
 export interface EmbeddingResult {

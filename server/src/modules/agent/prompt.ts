@@ -47,44 +47,31 @@ const LANGUAGE_POLICY: Record<ResolvedLanguage, string> = {
 };
 
 /**
- * Directives that let the model actually CREATE records, ending Phase 1's
- * chat-only mode. When the user has explicitly confirmed an action, the model
- * emits ONE machine-readable action tag at the very end of its reply; the
- * server parses it, executes it and reports the outcome back.
+ * Directives so the model actually CREATES records via the function tools
+ * advertised by the server (chatCompletionWithTools, in agent.service). The
+ * ACTION_TAG_* text protocol remains only as a provider fallback.
  */
-const ACTION_TAG_OPEN = '[[TASKFLOW_ACTION]]';
-const ACTION_TAG_CLOSE = '[[/TASKFLOW_ACTION]]';
 
-const ACTION_GUIDE = `## ACTION CAPABILITIES
-You are now able to actually create records when the user asks. Each action adds one visibility line for the user, so DO use it — this is how you complete work instead of just promising it.
+const ACTION_GUIDE = `## ACTIONS
+You have function tools available that can actually create records. Use them to
+complete the user's request instead of only promising it.
 
-Available actions (emit at the END of your reply as a JSON tag, one only):
-- create_project  { "name": string, "description"?: string, "color"?: string }
-                   Creates a new board/project (the top-level workspace/board
-                   entity in TaskFlow) and adds the user as its owner.
-- create_workspace  same as create_project (TaskFlow has no separate
-                   "workspace" entity; this alias creates a board).
-- create_task     { "projectName": string, "title": string,
-                    "columnName"? : string, "description"?: string,
-                    "priority"? : "LOW"|"MEDIUM"|"HIGH"|"URGENT",
-                    "dueDate"? : "YYYY-MM-DD" }
-                   Creates a task in the named project. If columnName is
-                   omitted, the first column is used.
+Available functions:
+- create_project: create a new project/board (the top-level entity; also what a
+  user calls a "workspace"). Call with the requested name.
+- create_task: create a task in an existing project/board by name.
 
 WORKFLOW:
 1. You may ask one clarifying question ONLY when a required param is missing.
 2. When the user confirms (e.g. "có", "ok", "đồng ý", "cứ tạo đi", "go ahead"):
-   ACT NOW. Do NOT ask again, do NOT restate a plan, do NOT keep confirming.
-   Output a one-line acknowledgement, then IMMEDIATELY after it the action tag
-   with every requested value, EXACTLY like:
-   ${ACTION_TAG_OPEN}{"action":"create_project","params":{"name":"Dự án phát triển"}}${ACTION_TAG_CLOSE}
-   - The tag must be the very LAST thing in your reply.
-   - Write valid JSON, no extra backticks or surrounding text.
-   - Never invent param values you were not given; if a required value is
-     missing, ask for it instead of guessing.
+   call the appropriate function IMMEDIATELY with every requested value. Do NOT
+   ask again, do NOT restate a plan, do NOT keep confirming.
 3. If the user's single message already contains BOTH the request and the
-   confirmation (e.g. "tạo luôn", "tạo ngay"), skip step 2's question entirely
-   and emit the action tag immediately.`;
+   confirmation (e.g. "tạo luôn", "tạo ngay"), skip any question and call the
+   function right away.
+4. Never invent values you were not given; if a required value is missing, ask
+   for it instead of guessing.
+5. Never call create_project when the user wants a task, or vice versa.`;
 
 export function buildSystemPrompt(language: ResolvedLanguage): string {
   return `${SYSTEM_PROMPT}

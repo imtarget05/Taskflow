@@ -5,6 +5,7 @@ import { AppError } from '../../../utils/errors';
 jest.mock('../llm', () => ({
   isLLMConfigured: jest.fn(),
   chatCompletion: jest.fn(),
+  chatCompletionWithTools: jest.fn(),
 }));
 
 jest.mock('../../../lib/prisma', () => ({
@@ -37,7 +38,7 @@ jest.mock('unpdf', () => ({
   extractText: jest.fn(),
 }));
 
-import { isLLMConfigured, chatCompletion } from '../llm';
+import { isLLMConfigured, chatCompletion, chatCompletionWithTools } from '../llm';
 import { prisma } from '../../../lib/prisma';
 import { extractText } from 'unpdf';
 import { createProject } from '../../project/project.service';
@@ -45,6 +46,7 @@ import { createTask } from '../../task/task.service';
 
 const mockedIsConfigured = isLLMConfigured as jest.Mock;
 const mockedChatCompletion = chatCompletion as jest.Mock;
+const mockedChatCompletionWithTools = chatCompletionWithTools as jest.Mock;
 const mockedCreateProject = createProject as jest.Mock;
 const mockedCreateTask = createTask as jest.Mock;
 const mockedPrisma = prisma as unknown as {
@@ -68,6 +70,8 @@ describe('agent.service', () => {
     jest.clearAllMocks();
     env.LLM_PROVIDER = 'ollama';
     env.LLM_MODEL = 'qwen';
+    // Default: the main turn just replies with text and requests no action.
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] });
   });
 
   afterEach(() => {
@@ -117,7 +121,7 @@ describe('agent.service', () => {
 
   it('chat returns the LLM reply and creates a conversation', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('hello');
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'hello', toolCalls: [] });
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     const result = await chat('u1', [{ role: 'user', content: 'k8s?' }]);
@@ -136,12 +140,12 @@ describe('agent.service', () => {
         language: 'vi',
       },
     });
-    expect(mockedChatCompletion).toHaveBeenCalledTimes(1);
+    expect(mockedChatCompletionWithTools).toHaveBeenCalledTimes(1);
   });
 
   it('updates an existing conversation when conversationId is provided', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('ok');
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] });
     mockedPrisma.agentConversation.findFirst.mockResolvedValue({ id: 'c1', language: null });
 
     await chat('u1', [{ role: 'user', content: 'k8s?' }], { conversationId: 'c1', projectId: 'p1' });
@@ -163,18 +167,19 @@ describe('agent.service', () => {
 
   it('prefixes the system prompt and trims history to the last 20 messages, summarizing the overflow', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion
-      .mockResolvedValueOnce('summary of m0..m4') // rolling-summary side call
-      .mockResolvedValue('ok'); // the actual chat reply
+    mockedChatCompletion.mockResolvedValue('summary of m0..m4'); // rolling-summary side call
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] }); // chat reply
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     const many = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
     await chat('u1', many);
 
-    // First LLM call = summary; second = chat reply with system + 20 history.
-    expect(mockedChatCompletion).toHaveBeenCalledTimes(2);
+    // Summary side call goes through chatCompletion…
+    expect(mockedChatCompletion).toHaveBeenCalledTimes(1);
     expect(mockedChatCompletion.mock.calls[0][0][0].content).toMatch(/compress chat history/i);
-    const messages = mockedChatCompletion.mock.calls[1][0];
+    // …and the main turn through chatCompletionWithTools with system + 20 history.
+    expect(mockedChatCompletionWithTools).toHaveBeenCalledTimes(1);
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages).toHaveLength(21); // system + 20 history
     expect(messages[0].role).toBe('system');
     expect(messages[0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
@@ -188,9 +193,8 @@ describe('agent.service', () => {
 
   it('trims by character budget but always keeps the last two messages verbatim', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion
-      .mockResolvedValueOnce('short summary')
-      .mockResolvedValue('ok');
+    mockedChatCompletion.mockResolvedValue('short summary');
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] });
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     // Each message is under MAX_MESSAGE_LENGTH (4000) but 10 × 3000 chars
@@ -198,8 +202,8 @@ describe('agent.service', () => {
     const many = Array.from({ length: 10 }, () => ({ role: 'user', content: 'a'.repeat(3_000) }));
     await chat('u1', [...many, { role: 'user', content: 'final question' }]);
 
-    expect(mockedChatCompletion).toHaveBeenCalledTimes(2); // summary + reply
-    const replyMessages = mockedChatCompletion.mock.calls[1][0].slice(1);
+    expect(mockedChatCompletion).toHaveBeenCalledTimes(1); // summary
+    const replyMessages = mockedChatCompletionWithTools.mock.calls[0][0].slice(1);
     expect(replyMessages.length).toBeGreaterThanOrEqual(2);
     expect(replyMessages[replyMessages.length - 1]).toEqual({ role: 'user', content: 'final question' });
     // The verbatim window fits the character budget.
@@ -208,14 +212,13 @@ describe('agent.service', () => {
       0
     );
     expect(windowChars).toBeLessThanOrEqual(24_000);
-    expect(mockedChatCompletion.mock.calls[1][0][0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
+    expect(mockedChatCompletionWithTools.mock.calls[0][0][0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
   });
 
   it('folds an existing stored summary into the next rolling summary', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion
-      .mockResolvedValueOnce('merged summary')
-      .mockResolvedValue('ok');
+    mockedChatCompletion.mockResolvedValue('merged summary');
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] });
     mockedPrisma.agentConversation.findFirst.mockResolvedValue({
       id: 'c1',
       language: null,
@@ -241,9 +244,8 @@ describe('agent.service', () => {
 
   it('keeps working when the summarizer fails (fallback truncation)', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion
-      .mockRejectedValueOnce(new Error('LLM down'))
-      .mockResolvedValue('ok');
+    mockedChatCompletion.mockRejectedValueOnce(new Error('LLM down'));
+    mockedChatCompletionWithTools.mockResolvedValue({ content: 'ok', toolCalls: [] });
     mockedPrisma.agentConversation.findFirst.mockResolvedValue({ id: 'c1', language: null, summary: null });
     mockedPrisma.agentConversation.update.mockResolvedValue({});
 
@@ -261,7 +263,6 @@ describe('agent.service', () => {
 
   it('drops empty or oversized message content', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('ok');
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     await chat('u1', [
@@ -270,7 +271,7 @@ describe('agent.service', () => {
       { role: 'user', content: 'valid' },
     ]);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     const history = messages.slice(1);
     expect(history).toEqual([{ role: 'assistant', content: 'a'.repeat(4000) }, { role: 'user', content: 'valid' }]);
   });
@@ -305,11 +306,17 @@ describe('agent.service', () => {
       expect(parseAction(`[[TASKFLOW_ACTION]]not json[[/TASKFLOW_ACTION]]`)).toBeNull();
     });
 
-    it('chat executes a create_project and folds the outcome into the reply', async () => {
+    it('chat executes a create_project from a structured tool call', async () => {
       mockedIsConfigured.mockReturnValue(true);
-      mockedChatCompletion.mockResolvedValue(
-        'Đã tạo board cho bạn.\n[[TASKFLOW_ACTION]]{"action":"create_project","params":{"name":"Dự án phát triển"}}[[/TASKFLOW_ACTION]]'
-      );
+      mockedChatCompletionWithTools.mockResolvedValue({
+        content: 'Đã tạo board cho bạn.',
+        toolCalls: [
+          {
+            name: 'create_project',
+            arguments: JSON.stringify({ name: 'Dự án phát triển' }),
+          },
+        ],
+      });
       mockedCreateProject.mockResolvedValue({ id: 'prj_1' });
       mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
@@ -317,18 +324,40 @@ describe('agent.service', () => {
 
       expect(mockedCreateProject).toHaveBeenCalledWith('u1', { name: 'Dự án phát triển' });
       expect(result.reply).toContain('Đã tạo board "Dự án phát triển"');
+      expect(result.reply).toContain('Đã tạo board cho bạn.');
+      expect(result.action).toEqual({
+        name: 'create_project',
+        ok: true,
+        summary: '✅ Đã tạo board "Dự án phát triển" (id prj_1).',
+      });
+    });
+
+    it('falls back to the text-tag protocol when the provider ignores tools', async () => {
+      mockedIsConfigured.mockReturnValue(true);
+      mockedChatCompletionWithTools.mockResolvedValue({
+        content:
+          'Đã tạo board cho bạn.\n[[TASKFLOW_ACTION]]{"action":"create_project","params":{"name":"Tag Board"}}[[/TASKFLOW_ACTION]]',
+        toolCalls: [],
+      });
+      mockedCreateProject.mockResolvedValue({ id: 'prj_2' });
+      mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+      const result = await chat('u1', [{ role: 'user', content: 'có' }]);
+
+      expect(mockedCreateProject).toHaveBeenCalledWith('u1', { name: 'Tag Board' });
+      expect(result.reply).toContain('Đã tạo board "Tag Board"');
       expect(result.reply).not.toContain('TASKFLOW_ACTION');
-      expect(result.action).toEqual({ name: 'create_project', ok: true, summary: '✅ Đã tạo board "Dự án phát triển" (id prj_1).' });
-      // The stripped reply (without the tag) is what gets persisted.
+      // The stripped reply is what gets persisted.
       const persisted = mockedPrisma.agentConversation.create.mock.calls[0][0].data.messages;
       expect(JSON.stringify(persisted)).not.toContain('TASKFLOW_ACTION');
     });
 
     it('returns a not-ok summary when create_project params are invalid', async () => {
       mockedIsConfigured.mockReturnValue(true);
-      mockedChatCompletion.mockResolvedValue(
-        '[[TASKFLOW_ACTION]]{"action":"create_project","params":{"name":"  "}}[[/TASKFLOW_ACTION]]'
-      );
+      mockedChatCompletionWithTools.mockResolvedValue({
+        content: '',
+        toolCalls: [{ name: 'create_project', arguments: JSON.stringify({ name: '  ' }) }],
+      });
       mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
       const result = await chat('u1', [{ role: 'user', content: 'có' }]);
@@ -339,9 +368,19 @@ describe('agent.service', () => {
 
     it('chat executes create_task in the user project and column', async () => {
       mockedIsConfigured.mockReturnValue(true);
-      mockedChatCompletion.mockResolvedValue(
-        '[[TASKFLOW_ACTION]]{"action":"create_task","params":{"projectName":"TaskFlow","title":"Onboarding","priority":"HIGH"}}[[/TASKFLOW_ACTION]]'
-      );
+      mockedChatCompletionWithTools.mockResolvedValue({
+        content: '',
+        toolCalls: [
+          {
+            name: 'create_task',
+            arguments: JSON.stringify({
+              projectName: 'TaskFlow',
+              title: 'Onboarding',
+              priority: 'HIGH',
+            }),
+          },
+        ],
+      });
       mockedPrisma.projectMember.findFirst.mockResolvedValue({ project: { id: 'prj_1' } });
       mockedPrisma.column.findFirst.mockResolvedValueOnce({ id: 'col_1', name: 'To Do' });
       mockedCreateTask.mockResolvedValue({ id: 't1' });
@@ -364,9 +403,12 @@ describe('agent.service', () => {
 
     it('returns not-ok when the project for create_task does not exist', async () => {
       mockedIsConfigured.mockReturnValue(true);
-      mockedChatCompletion.mockResolvedValue(
-        '[[TASKFLOW_ACTION]]{"action":"create_task","params":{"projectName":"Ghost","title":"X"}}[[/TASKFLOW_ACTION]]'
-      );
+      mockedChatCompletionWithTools.mockResolvedValue({
+        content: '',
+        toolCalls: [
+          { name: 'create_task', arguments: JSON.stringify({ projectName: 'Ghost', title: 'X' }) },
+        ],
+      });
       mockedPrisma.projectMember.findFirst.mockResolvedValue(null);
       mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
@@ -388,12 +430,11 @@ describe('agent.service', () => {
 
   it('injects the detected language into the system prompt (default priority: Vietnamese)', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('ok');
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     await chat('u1', [{ role: 'user', content: 'đang quản lý dự án của tôi' }]);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].role).toBe('system');
     expect(messages[0].content).toMatch(/RESPONSE LANGUAGE POLICY/);
     expect(messages[0].content).toMatch(/Vietnamese/);
@@ -401,12 +442,11 @@ describe('agent.service', () => {
 
   it('respects an explicit language preference from the client', async () => {
     mockedIsConfigured.mockReturnValue(true);
-    mockedChatCompletion.mockResolvedValue('ok');
     mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
 
     await chat('u1', [{ role: 'user', content: 'plan a sprint' }], { language: 'zh' });
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].content).toContain('中文');
   });
 
@@ -440,7 +480,7 @@ describe('agent.service', () => {
       { role: 'user', content: 'plan a sprint' },
     ]);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].role).toBe('system');
     // Detection runs on the LATEST user message only → Vietnamese fallback,
     // NOT Chinese (a whole-history scan would wrongly force a Chinese reply).
@@ -459,7 +499,7 @@ describe('agent.service', () => {
       { role: 'user', content: '你好吗' },
     ]);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].content).toContain('中文');
   });
 
@@ -475,7 +515,7 @@ describe('agent.service', () => {
     });
 
     expect(result.language).toBe('en');
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].content).toMatch(/English/);
     // Detection must NOT overwrite a real preference.
     const updateData = mockedPrisma.agentConversation.update.mock.calls[0][0].data;
@@ -505,7 +545,7 @@ describe('agent.service', () => {
     });
 
     expect(result.language).toBe('vi');
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].content).toMatch(/Vietnamese/);
     updateData = mockedPrisma.agentConversation.update.mock.calls[0][0].data;
     expect(updateData).not.toHaveProperty('language'); // unchanged → not rewritten
@@ -522,7 +562,7 @@ describe('agent.service', () => {
       { conversationId: 'c1', language: 'auto' }
     );
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     expect(messages[0].content).toMatch(/Vietnamese/);
     expect(messages[0].content).not.toMatch(/Resolved response language: English/);
   });
@@ -621,7 +661,7 @@ describe('agent.service images & vision', () => {
       },
     ]);
 
-    const messages = mockedChatCompletion.mock.calls[0][0];
+    const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     const userMsg = messages[messages.length - 1];
     expect(userMsg.role).toBe('user');
     expect(Array.isArray(userMsg.content)).toBe(true);
