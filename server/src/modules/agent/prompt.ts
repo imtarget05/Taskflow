@@ -72,15 +72,19 @@ Available actions (emit at the END of your reply as a JSON tag, one only):
                    omitted, the first column is used.
 
 WORKFLOW:
-1. As before, confirm your plan with the user when anything is missing.
-2. Only when the user has EXPLICITLY confirmed (e.g. "có", "ok", "đồng ý",
-   "go ahead") do you act: produce a short confirmation message, then
-   immediately after it a single line EXACTLY like:
-   ${ACTION_TAG_OPEN}{"action":"create_task","params":{"projectName":"TaskFlow","title":"Onboarding"}}${ACTION_TAG_CLOSE}
+1. You may ask one clarifying question ONLY when a required param is missing.
+2. When the user confirms (e.g. "có", "ok", "đồng ý", "cứ tạo đi", "go ahead"):
+   ACT NOW. Do NOT ask again, do NOT restate a plan, do NOT keep confirming.
+   Output a one-line acknowledgement, then IMMEDIATELY after it the action tag
+   with every requested value, EXACTLY like:
+   ${ACTION_TAG_OPEN}{"action":"create_project","params":{"name":"Dự án phát triển"}}${ACTION_TAG_CLOSE}
+   - The tag must be the very LAST thing in your reply.
    - Write valid JSON, no extra backticks or surrounding text.
    - Never invent param values you were not given; if a required value is
      missing, ask for it instead of guessing.
-3. The system will execute it and tell you the outcome in a later message.`;
+3. If the user's single message already contains BOTH the request and the
+   confirmation (e.g. "tạo luôn", "tạo ngay"), skip step 2's question entirely
+   and emit the action tag immediately.`;
 
 export function buildSystemPrompt(language: ResolvedLanguage): string {
   return `${SYSTEM_PROMPT}
