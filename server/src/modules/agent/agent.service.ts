@@ -10,7 +10,7 @@ import {
   LLMMessage,
   LLMContentPart,
 } from './llm';
-import { buildSystemPrompt } from './prompt';
+import { buildSystemPrompt, SUMMARIZER_SYSTEM_PROMPT } from './prompt';
 import {
   AgentLanguage,
   ResolvedLanguage,
@@ -53,6 +53,19 @@ export interface ChatOptions {
 
 const MAX_HISTORY = 20;
 const MAX_MESSAGE_LENGTH = 4000;
+/**
+ * Rolling-context budget (Phase 1+2 memory plan):
+ *  - MIN_KEEP_RECENT messages are always sent verbatim, even over budget, so
+ *    the user's latest request is never trimmed away.
+ *  - When older messages no longer fit (char budget or MAX_HISTORY), they are
+ *    folded into a rolling summary persisted on AgentConversation.summary and
+ *    injected into the system prompt — the agent keeps full long-term context
+ *    at a bounded token cost.
+ */
+const MIN_KEEP_RECENT = 2;
+const MAX_CONTEXT_CHARS = 24_000;
+const SUMMARY_MAX_CHARS = 1_500;
+const SUMMARY_SOURCE_CHARS = 12_000;
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_UPLOAD_TEXT_CHARS = 20_000;
@@ -117,8 +130,10 @@ export async function chat(
     throw new AppError('AI assistant is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
 
+  // No count-based pre-slice here: splitHistory() below owns BOTH the message
+  // cap and the character budget, so overflow is summarized instead of lost.
   const history: LLMMessage[] = [];
-  for (const m of messages.slice(-MAX_HISTORY)) {
+  for (const m of messages) {
     const msg = toLLMMessage(m);
     if (msg) history.push(msg);
   }
@@ -126,12 +141,13 @@ export async function chat(
     throw new AppError('No message content provided', StatusCodes.BAD_REQUEST);
   }
 
-  // Load the persisted conversation preference (null on old/new conversations).
-  // The SERVER is the single source of truth for response language.
+  // Load the persisted conversation preference and rolling summary (null on
+  // old/new conversations). The SERVER is the single source of truth for the
+  // response language and for long-term conversational memory.
   const existing = options.conversationId
     ? await prisma.agentConversation.findFirst({
         where: { id: options.conversationId, userId },
-        select: { id: true, language: true },
+        select: { id: true, language: true, summary: true },
       })
     : null;
 
@@ -147,10 +163,31 @@ export async function chat(
   });
   const language = turn.language;
 
-  const system: LLMMessage = { role: 'system', content: buildSystemPrompt(language) };
-  const reply = await chatCompletion([system, ...history]);
+  // Split the history into a verbatim recent window and an overflow that gets
+  // folded into the rolling summary. Only overflow triggers a summary call.
+  const { kept, dropped } = splitHistory(history);
+  let activeSummary = existing?.summary ?? null;
+  let nextSummary: string | undefined;
+  if (dropped.length > 0) {
+    nextSummary = await rollingSummary(dropped, activeSummary);
+    activeSummary = nextSummary;
+  }
 
-  const conversationId = await persistConversation(userId, history, options, reply, existing, turn);
+  const systemContent =
+    buildSystemPrompt(language) +
+    (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '');
+  const system: LLMMessage = { role: 'system', content: systemContent };
+  const reply = await chatCompletion([system, ...kept]);
+
+  const conversationId = await persistConversation(
+    userId,
+    history,
+    options,
+    reply,
+    existing,
+    turn,
+    nextSummary
+  );
 
   return { reply, conversationId, language };
 }
@@ -196,17 +233,93 @@ function textOf(m: LLMMessage): string {
     .join(' ');
 }
 
+/**
+ * Plain-text projection of an LLM message for PERSISTENCE: image parts become a
+ * short placeholder instead of the full data URI, so stored conversations stay
+ * small even when the user attaches screenshots.
+ */
+function persistedContent(m: LLMMessage): string {
+  if (typeof m.content === 'string') return m.content;
+  return m.content
+    .map((p) => (p.type === 'text' ? p.text : '[image attachment]'))
+    .join('\n')
+    .trim();
+}
+
+export interface HistorySplit {
+  /** Recent messages sent verbatim to the LLM this turn. */
+  kept: LLMMessage[];
+  /** Older messages that overflowed the context budget. */
+  dropped: LLMMessage[];
+}
+
+/**
+ * Split the history into the verbatim recent window and the overflow. Walks
+ * backwards accumulating character cost; stops at MAX_CONTEXT_CHARS or
+ * MAX_HISTORY messages, but ALWAYS keeps the last MIN_KEEP_RECENT messages so
+ * the user's latest request is never trimmed.
+ */
+function splitHistory(history: LLMMessage[]): HistorySplit {
+  const minKept = Math.min(MIN_KEEP_RECENT, history.length);
+  let start = history.length;
+  let chars = 0;
+  // The most recent messages are always sent verbatim, even over budget.
+  for (let i = 0; i < minKept; i += 1) {
+    start -= 1;
+    chars += textOf(history[start]).length;
+  }
+  // Extend further back only while the combined window fits the budget.
+  while (start > 0) {
+    const nextStart = start - 1;
+    const len = textOf(history[nextStart]).length;
+    if (history.length - nextStart > MAX_HISTORY || chars + len > MAX_CONTEXT_CHARS) break;
+    start = nextStart;
+    chars += len;
+  }
+  return { kept: history.slice(start), dropped: history.slice(0, start) };
+}
+
+/**
+ * Fold overflow messages — plus the previous rolling summary, if any — into one
+ * compact summary paragraph via an LLM side call. Never throws: on failure it
+ * degrades to a truncated concatenation so chat keeps working.
+ */
+async function rollingSummary(dropped: LLMMessage[], previous: string | null): Promise<string> {
+  let source = dropped.map((m) => `${m.role}: ${textOf(m)}`).join('\n');
+  if (source.length > SUMMARY_SOURCE_CHARS) source = source.slice(-SUMMARY_SOURCE_CHARS);
+  try {
+    const out = await chatCompletion([
+      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: previous
+          ? `Previous summary:\n${previous}\n\nNewer messages to fold in:\n${source}`
+          : `Messages to summarize:\n${source}`,
+      },
+    ]);
+    return out.slice(0, SUMMARY_MAX_CHARS).trim() || fallbackSummary(previous, source);
+  } catch {
+    return fallbackSummary(previous, source);
+  }
+}
+
+function fallbackSummary(previous: string | null, source: string): string {
+  return `${previous ? `${previous}\n` : ''}${source.slice(0, SUMMARY_MAX_CHARS)}`.trim();
+}
+
 /** Saves or appends the exchanged messages to an AgentConversation row. */
 async function persistConversation(
   userId: string,
   history: LLMMessage[],
   options: ChatOptions,
   reply: string,
-  existing: { id: string; language: string | null } | null,
-  turn: TurnLanguage
+  existing: { id: string; language: string | null; summary: string | null } | null,
+  turn: TurnLanguage,
+  nextSummary?: string
 ): Promise<string> {
+  // Persist plain-text entries only — image data URIs never reach the database.
   const messages = [
-    ...history.map((m) => ({ role: m.role, content: m.content })),
+    ...history.map((m) => ({ role: m.role, content: persistedContent(m) })),
     { role: 'assistant' as const, content: reply },
   ] as Prisma.InputJsonValue;
   const projectId = options.projectId ?? null;
@@ -223,7 +336,12 @@ async function persistConversation(
 
     await prisma.agentConversation.update({
       where: { id: existing.id },
-      data: { messages, projectId, ...(nextLanguage !== undefined ? { language: nextLanguage } : {}) },
+      data: {
+        messages,
+        projectId,
+        ...(nextLanguage !== undefined ? { language: nextLanguage } : {}),
+        ...(nextSummary !== undefined ? { summary: nextSummary } : {}),
+      },
     });
     return existing.id;
   }
@@ -236,6 +354,7 @@ async function persistConversation(
       title: (firstUserText ? textOf(firstUserText) : '').slice(0, 80),
       messages,
       language: turn.language,
+      ...(nextSummary !== undefined ? { summary: nextSummary } : {}),
     },
   });
   return created.id;

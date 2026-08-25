@@ -58,3 +58,19 @@ Do NOT switch the response language merely because:
 
 Only change the response language when the current user explicitly requests a different response language.`;
 }
+
+/**
+ * System prompt for the rolling-summary side call. When a conversation outgrows
+ * the LLM context budget, the oldest messages are folded — together with the
+ * previous summary — into one compact paragraph that is injected back into the
+ * system prompt on later turns. The summary is internal context, never shown to
+ * the user, so it is kept in English regardless of the reply language.
+ */
+export const SUMMARIZER_SYSTEM_PROMPT = `You compress chat history for an AI assistant's memory.
+
+You will receive (optionally) the previous rolling summary plus older chat messages that no longer fit the context window. Produce ONE compact paragraph (max 150 words) that:
+- preserves every concrete fact: names, numbers, dates, decisions, requirements, open questions
+- merges (does not duplicate) information already present in the previous summary
+- drops pleasantries, filler and repetition
+
+Output ONLY the summary paragraph — no preamble, no quotes, no bullet lists.`;
