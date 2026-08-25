@@ -9,9 +9,12 @@ import { createProject } from '../project/project.service';
 import { createTask } from '../task/task.service';
 import {
   chatCompletion,
+  chatCompletionWithTools,
   isLLMConfigured,
   LLMMessage,
   LLMContentPart,
+  LLMFunctionTool,
+  LLMToolCall,
 } from './llm';
 import {
   buildSystemPrompt,
@@ -72,6 +75,52 @@ export interface AgentActionResult {
 }
 
 const ACTION_TAG_RE = /\[\[TASKFLOW_ACTION\]\]([\s\S]*?)\[\[\/TASKFLOW_ACTION\]\]/;
+
+/**
+ * Function tools advertised to the LLM via OpenAI-compatible `tools`. The model
+ * returns a structured `tool_calls` request for an action — far more reliable
+ * than coaxing a free-text JSON tag out of an instruct model. The provider maps
+ * the function name to our create actions; `toolCallToAction` converts them.
+ */
+const AGENT_TOOLS: LLMFunctionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'create_project',
+      description:
+        "Create a new project/board (the top-level entity; also what a user calls a 'workspace'). Adds the current user as its owner. Only call this after the user has explicitly confirmed creation.",
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Project/board name' },
+          description: { type: 'string', description: 'Optional description' },
+          color: { type: 'string', description: 'Optional color hex or keyword' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description:
+        "Create a task in an existing project/board that the user is a member of, addressed by its name. Only call this after the user has explicitly confirmed creation.",
+      parameters: {
+        type: 'object',
+        properties: {
+          projectName: { type: 'string', description: 'Name of the existing project/board' },
+          title: { type: 'string', description: 'Task title' },
+          columnName: { type: 'string', description: 'Optional column name' },
+          description: { type: 'string', description: 'Optional task description' },
+          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+          dueDate: { type: 'string', description: 'YYYY-MM-DD' },
+        },
+        required: ['projectName', 'title'],
+      },
+    },
+  },
+];
 
 const MAX_HISTORY = 20;
 const MAX_MESSAGE_LENGTH = 4000;
@@ -204,12 +253,15 @@ export async function chat(
     buildSystemPrompt(language) +
     (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '');
   const system: LLMMessage = { role: 'system', content: systemContent };
-  const rawReply = await chatCompletion([system, ...kept]);
+  const completion = await chatCompletionWithTools([system, ...kept], AGENT_TOOLS);
 
-  // Execute any confirmed create action embedded in the model reply, then fold
-  // its human-readable outcome into the reply the user actually sees.
-  const action = parseAction(rawReply);
-  let reply = rawReply.replace(ACTION_TAG_RE, '').trim();
+  // Recover the action from EITHER a structured tool call (preferred) or a
+  // free-text tag as a fallback for providers that ignore the tools field.
+  const tagAction = parseAction(completion.content ?? '');
+  const action = completion.toolCalls.length
+    ? toolCallToAction(completion.toolCalls[0])
+    : tagAction;
+  let reply = (completion.content ?? '').replace(ACTION_TAG_RE, '').trim();
   let actionResult: AgentActionResult | null = null;
   if (action) {
     actionResult = await executeAction(action, userId);
@@ -365,6 +417,25 @@ export function parseAction(reply: string): AgentAction | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Convert a structured tool call from the provider into an AgentAction. Only
+ * the tool names we advertised map to actions; unknown tool names are ignored.
+ * The function arguments arrive as a JSON string, parsed into `params`.
+ */
+export function toolCallToAction(toolCall: LLMToolCall): AgentAction | null {
+  if (toolCall.name !== 'create_project' && toolCall.name !== 'create_task') return null;
+  let params: Record<string, unknown> = {};
+  try {
+    const parsed = toolCall.arguments ? (JSON.parse(toolCall.arguments) as unknown) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      params = parsed as Record<string, unknown>;
+    }
+  } catch {
+    params = {};
+  }
+  return { name: toolCall.name, params };
 }
 
 const createProjectSchema = z.object({
