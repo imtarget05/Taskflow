@@ -1,4 +1,4 @@
-import { chatCompletion, embed, isLLMConfigured, modelForTier, rerank, routeModel } from '../llm';
+import { chatCompletion, chatCompletionWithTools, embed, isLLMConfigured, modelForTier, rerank, routeModel } from '../llm';
 import { env } from '../../../config/env';
 import { AppError } from '../../../utils/errors';
 
@@ -7,6 +7,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     base: env.LLM_BASE_URL,
     model: env.LLM_MODEL,
     key: env.LLM_API_KEY,
+    fallback: env.LLM_FALLBACK_MODEL,
   };
   const fetchMock = jest.fn();
 
@@ -21,6 +22,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     env.LLM_BASE_URL = original.base;
     env.LLM_MODEL = original.model;
     env.LLM_API_KEY = original.key;
+    env.LLM_FALLBACK_MODEL = original.fallback;
   });
 
   beforeEach(() => {
@@ -28,6 +30,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     env.LLM_BASE_URL = 'http://llm.test/v1';
     env.LLM_MODEL = 'test-model';
     env.LLM_API_KEY = 'secret';
+    env.LLM_FALLBACK_MODEL = undefined;
   });
 
   it('reports configured state', () => {
@@ -133,6 +136,128 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toBeInstanceOf(AppError);
   });
 
+  describe('fallback model', () => {
+    it('does NOT call fallback when primary succeeds', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: 'primary-ok' } }] }),
+      });
+
+      const reply = await chatCompletion([{ role: 'user', content: 'x' }]);
+      expect(reply).toBe('primary-ok');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, init] = fetchMock.mock.calls[0];
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.model).toBe('test-model');
+    });
+
+    it('calls fallback once when primary 429 is exhausted and returns success', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock
+        // primary: 429 x3 (bounded retries exhausted)
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        // fallback: success on first call
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: 'fallback-ok' } }] }),
+        });
+
+      const reply = await chatCompletion([{ role: 'user', content: 'x' }]);
+      expect(reply).toBe('fallback-ok');
+      // 3 primary retries + 1 fallback attempt
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      const last = fetchMock.mock.calls[3];
+      const body = JSON.parse((last[1] as RequestInit).body as string);
+      expect(body.model).toBe('fallback-8b');
+    });
+
+    it('does NOT fallback when no fallback model configured (keeps 503 behavior)', async () => {
+      env.LLM_FALLBACK_MODEL = undefined;
+      fetchMock.mockResolvedValue({ ok: false, status: 429 });
+
+      await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+        statusCode: 503,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(3); // bounded, no extra fallback call
+    });
+
+    it('does NOT fallback on client errors (400)', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock.mockResolvedValue({ ok: false, status: 400 });
+
+      await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toBeInstanceOf(AppError);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // no retry, no fallback
+    });
+
+    it.each([401, 403])('does NOT fallback on auth failure (HTTP %i)', async (status) => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock.mockResolvedValue({ ok: false, status });
+
+      await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+        statusCode: 502,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1); // no retry, no fallback
+    });
+
+    it('throws safe 503 when fallback also fails with 429', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock.mockResolvedValue({ ok: false, status: 429 });
+
+      await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toMatchObject({
+        statusCode: 503,
+        message: 'AI service is temporarily unavailable. Please try again shortly.',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(6); // 3 primary + 3 fallback retries
+    });
+
+    it('does not leak credentials in fallback logs', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock.mockResolvedValue({ ok: false, status: 429 });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await chatCompletion([{ role: 'user', content: 'x' }]).catch(() => {});
+
+      for (const spy of [warnSpy, errSpy]) {
+        for (const call of spy.mock.calls) {
+          expect(String(call.join(' '))).not.toContain('secret');
+        }
+      }
+      warnSpy.mockRestore();
+      errSpy.mockRestore();
+    });
+
+    it('fallback receives the same messages (language directive preserved)', async () => {
+      env.LLM_FALLBACK_MODEL = 'fallback-8b';
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce({ ok: false, status: 429 })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: 'fb' } }] }),
+        });
+
+      await chatCompletion([
+        { role: 'system', content: 'Reply in Vietnamese.' },
+        { role: 'user', content: 'Xin chào' },
+      ]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      const fbBody = JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string);
+      expect(fbBody.messages).toEqual([
+        { role: 'system', content: 'Reply in Vietnamese.' },
+        { role: 'user', content: 'Xin chào' },
+      ]);
+    });
+  });
+
   it('throws when the response has no content', async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ choices: [] }) });
     await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toBeInstanceOf(AppError);
@@ -142,6 +267,155 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     env.LLM_BASE_URL = undefined;
     env.LLM_MODEL = undefined;
     await expect(chatCompletion([{ role: 'user', content: 'x' }])).rejects.toThrow(/not configured/);
+  });
+});
+
+describe('llm chatCompletionWithTools (function calling)', () => {
+  const original = {
+    base: env.LLM_BASE_URL,
+    model: env.LLM_MODEL,
+    key: env.LLM_API_KEY,
+    fallback: env.LLM_FALLBACK_MODEL,
+  };
+  const fetchMock = jest.fn();
+
+  beforeAll(() => {
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterAll(() => {
+    env.LLM_BASE_URL = original.base;
+    env.LLM_MODEL = original.model;
+    env.LLM_API_KEY = original.key;
+    env.LLM_FALLBACK_MODEL = original.fallback;
+  });
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    env.LLM_BASE_URL = 'http://llm.test/v1';
+    env.LLM_MODEL = 'tool-model';
+    env.LLM_API_KEY = 'secret';
+    env.LLM_FALLBACK_MODEL = undefined;
+  });
+
+  const TOOLS = [
+    {
+      type: 'function' as const,
+      function: {
+        name: 'create_project',
+        description: 'Create a project',
+        parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      },
+    },
+  ];
+
+  it('sends the tools array and parses tool_calls from the choices envelope', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: { content: null, tool_calls: [{ function: { name: 'create_project', arguments: '{"name":"Marketing"}' } }] },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      }),
+    });
+
+    const out = await chatCompletionWithTools([{ role: 'user', content: 'tao board Marketing' }], TOOLS);
+
+    expect(out.toolCalls).toEqual([{ name: 'create_project', arguments: '{"name":"Marketing"}' }]);
+    expect(out.content).toBe('');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://llm.test/v1/chat/completions');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.model).toBe('tool-model');
+    expect(body.tools).toEqual(TOOLS);
+    expect(body.messages).toEqual([{ role: 'user', content: 'tao board Marketing' }]);
+  });
+
+  it('parses tool_calls from the Cloudflare result.choices envelope', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          choices: [
+            { message: { content: '', tool_calls: [{ function: { name: 'create_task', arguments: '{"projectName":"QA","title":"Fix"}' } }] } },
+          ],
+        },
+      }),
+    });
+
+    const out = await chatCompletionWithTools([{ role: 'user', content: 'x' }], TOOLS);
+    expect(out.toolCalls).toEqual([{ name: 'create_task', arguments: '{"projectName":"QA","title":"Fix"}' }]);
+  });
+
+  it('returns empty toolCalls and text content when the model replies without tools', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'Bạn muốn tạo board gì?' } }] }),
+    });
+
+    const out = await chatCompletionWithTools([{ role: 'user', content: 'chào' }], TOOLS);
+    expect(out.content).toBe('Bạn muốn tạo board gì?');
+    expect(out.toolCalls).toEqual([]);
+  });
+
+  it('falls back to the fallback model on exhausted 429 and keeps its tool_calls', async () => {
+    env.LLM_FALLBACK_MODEL = 'fallback-tool-model';
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: null, tool_calls: [{ function: { name: 'create_project', arguments: '{"name":"FB"}' } }] } }],
+        }),
+      });
+
+    const out = await chatCompletionWithTools([{ role: 'user', content: 'x' }], TOOLS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4); // 3 primary retries + 1 fallback
+    const fbBody = JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string);
+    expect(fbBody.model).toBe('fallback-tool-model');
+    // Fallback receives the same tools + messages.
+    expect(fbBody.tools).toEqual(TOOLS);
+    expect(out.toolCalls).toEqual([{ name: 'create_project', arguments: '{"name":"FB"}' }]);
+  });
+
+  it('throws safe 503 when both models exhaust 429', async () => {
+    env.LLM_FALLBACK_MODEL = 'fallback-tool-model';
+    fetchMock.mockResolvedValue({ ok: false, status: 429 });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(chatCompletionWithTools([{ role: 'user', content: 'x' }], TOOLS)).rejects.toMatchObject({
+      statusCode: 503,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(6); // 3 primary + 3 fallback
+
+    for (const spy of [warnSpy, errSpy]) {
+      for (const call of spy.mock.calls) {
+        expect(String(call.join(' '))).not.toContain('secret');
+      }
+    }
+    warnSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('does NOT fall back on client errors (400)', async () => {
+    env.LLM_FALLBACK_MODEL = 'fallback-tool-model';
+    fetchMock.mockResolvedValue({ ok: false, status: 400 });
+
+    await expect(chatCompletionWithTools([{ role: 'user', content: 'x' }], TOOLS)).rejects.toMatchObject({
+      statusCode: 502,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
