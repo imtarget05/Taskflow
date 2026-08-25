@@ -34,17 +34,44 @@ const LANGUAGE_POLICY: Record<ResolvedLanguage, string> = {
 };
 
 /**
- * Compose the system prompt with the deterministic language directive for this
- * turn. `language` comes from resolveTurnLanguage() — the prompt layer NEVER
- * detects language itself. The directive is authoritative: the model MUST reply
- * in `language` and must not let quoted text, technical terms, code, or earlier
- * messages in another language override it. Only an explicit user request may
- * change the response language.
- *
- * @param language The resolved assistant language for this turn ('vi' | 'en' | 'zh').
+ * Directives that let the model actually CREATE records, ending Phase 1's
+ * chat-only mode. When the user has explicitly confirmed an action, the model
+ * emits ONE machine-readable action tag at the very end of its reply; the
+ * server parses it, executes it and reports the outcome back.
  */
+const ACTION_TAG_OPEN = '[[TASKFLOW_ACTION]]';
+const ACTION_TAG_CLOSE = '[[/TASKFLOW_ACTION]]';
+
+const ACTION_GUIDE = `## ACTION CAPABILITIES
+You are now able to actually create records when the user asks. Each action adds one visibility line for the user, so DO use it — this is how you complete work instead of just promising it.
+
+Available actions (emit at the END of your reply as a JSON tag, one only):
+- create_project  { "name": string, "description"?: string, "color"?: string }
+                   Creates a new board/project (the top-level workspace/board
+                   entity in TaskFlow) and adds the user as its owner.
+- create_workspace  same as create_project (TaskFlow has no separate
+                   "workspace" entity; this alias creates a board).
+- create_task     { "projectName": string, "title": string,
+                    "columnName"? : string, "description"?: string,
+                    "priority"? : "LOW"|"MEDIUM"|"HIGH"|"URGENT",
+                    "dueDate"? : "YYYY-MM-DD" }
+                   Creates a task in the named project. If columnName is
+                   omitted, the first column is used.
+
+WORKFLOW:
+1. As before, confirm your plan with the user when anything is missing.
+2. Only when the user has EXPLICITLY confirmed (e.g. "có", "ok", "đồng ý",
+   "go ahead") do you act: produce a short confirmation message, then
+   immediately after it a single line EXACTLY like:
+   ${ACTION_TAG_OPEN}{"action":"create_task","params":{"projectName":"TaskFlow","title":"Onboarding"}}${ACTION_TAG_CLOSE}
+   - Write valid JSON, no extra backticks or surrounding text.
+   - Never invent param values you were not given; if a required value is
+     missing, ask for it instead of guessing.
+3. The system will execute it and tell you the outcome in a later message.`;
+
 export function buildSystemPrompt(language: ResolvedLanguage): string {
   return `${SYSTEM_PROMPT}
+${ACTION_GUIDE}
 
 ## RESPONSE LANGUAGE POLICY
 Resolved response language: ${LANGUAGE_POLICY[language]}

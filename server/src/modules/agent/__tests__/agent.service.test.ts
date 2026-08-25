@@ -1,4 +1,4 @@
-import { chat, agentStatus, parseUpload, sniffImage, MAX_IMAGE_BYTES } from '../agent.service';
+import { chat, agentStatus, parseUpload, sniffImage, MAX_IMAGE_BYTES, parseAction } from '../agent.service';
 import { env } from '../../../config/env';
 import { AppError } from '../../../utils/errors';
 
@@ -16,7 +16,21 @@ jest.mock('../../../lib/prisma', () => ({
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
+    projectMember: {
+      findFirst: jest.fn(),
+    },
+    column: {
+      findFirst: jest.fn(),
+    },
   },
+}));
+
+jest.mock('../../project/project.service', () => ({
+  createProject: jest.fn(),
+}));
+
+jest.mock('../../task/task.service', () => ({
+  createTask: jest.fn(),
 }));
 
 jest.mock('unpdf', () => ({
@@ -26,9 +40,13 @@ jest.mock('unpdf', () => ({
 import { isLLMConfigured, chatCompletion } from '../llm';
 import { prisma } from '../../../lib/prisma';
 import { extractText } from 'unpdf';
+import { createProject } from '../../project/project.service';
+import { createTask } from '../../task/task.service';
 
 const mockedIsConfigured = isLLMConfigured as jest.Mock;
 const mockedChatCompletion = chatCompletion as jest.Mock;
+const mockedCreateProject = createProject as jest.Mock;
+const mockedCreateTask = createTask as jest.Mock;
 const mockedPrisma = prisma as unknown as {
   agentConversation: {
     findFirst: jest.Mock;
@@ -37,6 +55,8 @@ const mockedPrisma = prisma as unknown as {
     update: jest.Mock;
     deleteMany: jest.Mock;
   };
+  projectMember: { findFirst: jest.Mock };
+  column: { findFirst: jest.Mock };
 };
 const mockedExtractText = extractText as jest.Mock;
 
@@ -269,6 +289,91 @@ describe('agent.service', () => {
     expect(serialized).not.toContain('data:image');
     expect(serialized).toContain('[image attachment]');
     expect(serialized).toContain('what is this?');
+  });
+
+  describe('create actions', () => {
+    it('parseAction extracts a validated action from a full reply', () => {
+      const reply = `Đã tạo xong!\n[[TASKFLOW_ACTION]]{"action":"create_task","params":{"projectName":"TaskFlow","title":"Onboarding"}}[[/TASKFLOW_ACTION]]`;
+      expect(parseAction(reply)).toEqual({
+        name: 'create_task',
+        params: { projectName: 'TaskFlow', title: 'Onboarding' },
+      });
+      expect(parseAction('just text, no action')).toBeNull();
+      expect(
+        parseAction(`[[TASKFLOW_ACTION]]{"action":"delete_everything","params":{}}[[/TASKFLOW_ACTION]]`)
+      ).toBeNull();
+      expect(parseAction(`[[TASKFLOW_ACTION]]not json[[/TASKFLOW_ACTION]]`)).toBeNull();
+    });
+
+    it('chat executes a create_project and folds the outcome into the reply', async () => {
+      mockedIsConfigured.mockReturnValue(true);
+      mockedChatCompletion.mockResolvedValue(
+        'Đã tạo board cho bạn.\n[[TASKFLOW_ACTION]]{"action":"create_project","params":{"name":"Dự án phát triển"}}[[/TASKFLOW_ACTION]]'
+      );
+      mockedCreateProject.mockResolvedValue({ id: 'prj_1' });
+      mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+      const result = await chat('u1', [{ role: 'user', content: 'có' }]);
+
+      expect(mockedCreateProject).toHaveBeenCalledWith('u1', { name: 'Dự án phát triển' });
+      expect(result.reply).toContain('Đã tạo board "Dự án phát triển"');
+      expect(result.reply).not.toContain('TASKFLOW_ACTION');
+      expect(result.action).toEqual({ name: 'create_project', ok: true, summary: '✅ Đã tạo board "Dự án phát triển" (id prj_1).' });
+      // The stripped reply (without the tag) is what gets persisted.
+      const persisted = mockedPrisma.agentConversation.create.mock.calls[0][0].data.messages;
+      expect(JSON.stringify(persisted)).not.toContain('TASKFLOW_ACTION');
+    });
+
+    it('returns a not-ok summary when create_project params are invalid', async () => {
+      mockedIsConfigured.mockReturnValue(true);
+      mockedChatCompletion.mockResolvedValue(
+        '[[TASKFLOW_ACTION]]{"action":"create_project","params":{"name":"  "}}[[/TASKFLOW_ACTION]]'
+      );
+      mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+      const result = await chat('u1', [{ role: 'user', content: 'có' }]);
+      expect(result.action?.name).toBe('create_project');
+      expect(result.reply).toContain('Không thể tạo');
+      expect(mockedCreateProject).not.toHaveBeenCalled();
+    });
+
+    it('chat executes create_task in the user project and column', async () => {
+      mockedIsConfigured.mockReturnValue(true);
+      mockedChatCompletion.mockResolvedValue(
+        '[[TASKFLOW_ACTION]]{"action":"create_task","params":{"projectName":"TaskFlow","title":"Onboarding","priority":"HIGH"}}[[/TASKFLOW_ACTION]]'
+      );
+      mockedPrisma.projectMember.findFirst.mockResolvedValue({ project: { id: 'prj_1' } });
+      mockedPrisma.column.findFirst.mockResolvedValueOnce({ id: 'col_1', name: 'To Do' });
+      mockedCreateTask.mockResolvedValue({ id: 't1' });
+      mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+      const result = await chat('u1', [{ role: 'user', content: 'có' }]);
+
+      expect(mockedPrisma.column.findFirst).toHaveBeenCalledWith({
+        where: { projectId: 'prj_1' },
+        orderBy: { position: 'asc' },
+      });
+      expect(mockedCreateTask).toHaveBeenCalledWith('u1', {
+        projectId: 'prj_1',
+        columnId: 'col_1',
+        title: 'Onboarding',
+        priority: 'HIGH',
+      });
+      expect(result.reply).toContain('Đã tạo task "Onboarding"');
+    });
+
+    it('returns not-ok when the project for create_task does not exist', async () => {
+      mockedIsConfigured.mockReturnValue(true);
+      mockedChatCompletion.mockResolvedValue(
+        '[[TASKFLOW_ACTION]]{"action":"create_task","params":{"projectName":"Ghost","title":"X"}}[[/TASKFLOW_ACTION]]'
+      );
+      mockedPrisma.projectMember.findFirst.mockResolvedValue(null);
+      mockedPrisma.agentConversation.create.mockResolvedValue({ id: 'c1' });
+
+      const result = await chat('u1', [{ role: 'user', content: 'có' }]);
+      expect(result.reply).toContain('Không tìm thấy board "Ghost"');
+      expect(mockedCreateTask).not.toHaveBeenCalled();
+    });
   });
 
   it('throws 503 when the LLM is not configured', async () => {
