@@ -13,6 +13,8 @@ import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import type { Activity, ProjectSummary } from '@/types';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
+import OnboardingModal from '@/components/onboarding/OnboardingModal';
+import { onboardingDismissed } from '@/lib/onboarding';
 import {
   Avatar,
   Button,
@@ -43,6 +45,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
+  // First-run onboarding: only for accounts with zero projects whose browser
+  // has not dismissed the walkthrough before.
+  const [showOnboarding, setShowOnboarding] = useState(() => !onboardingDismissed());
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -367,6 +372,13 @@ function ProjectCard({ project, progress, onEdit, onColorChange }: ProjectCardPr
           onClose={() => setSettingsProject(null)}
         />
       )}
+
+      {/* First-run onboarding — only while the account has no projects */}
+      <OnboardingModal
+        open={showOnboarding && !isLoading && (projects?.length ?? 0) === 0}
+        onClose={() => setShowOnboarding(false)}
+        onCreateProject={() => setOpen(true)}
+      />
     </div>
   );
 }
