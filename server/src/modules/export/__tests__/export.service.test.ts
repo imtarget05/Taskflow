@@ -1,4 +1,4 @@
-import { exportCsv, exportToGoogleSheets } from '../export.service';
+import { exportCsv, exportToGoogleSheets, exportTxt } from '../export.service';
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
@@ -98,6 +98,24 @@ describe('export.service', () => {
       expect(lines[2]).toContain('Ship v1');
       expect(lines[2]).toContain('Done');
       expect(lines[2].endsWith(',')).toBe(true); // empty description
+    });
+  });
+
+  describe('exportTxt', () => {
+    it('renders a readable plain-text summary', async () => {
+      mockedPrisma.projectMember.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockedPrisma.project.findUnique.mockResolvedValue(BOARD);
+
+      const { text, filename } = await exportTxt('p1', 'u1');
+
+      expect(filename).toBe('taskflow_Launch_Site.txt');
+      expect(text).toContain('Launch, Site! — TaskFlow export');
+      expect(text).toContain('## To Do');
+      expect(text).toContain('[Open] Design, landing (HIGH, due 2026-09-01, Jane, Doe)');
+      expect(text).toContain('Hero, with "quotes"');
+      expect(text).toContain('## Done');
+      expect(text).toContain('[Done] Ship v1 (MEDIUM, due —, —)');
+      expect(text).toContain('\r\n');
     });
   });
 

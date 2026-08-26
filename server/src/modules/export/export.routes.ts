@@ -6,8 +6,9 @@ const router = Router();
 
 router.use(authenticate);
 
-// GET /api/projects/:projectId/export/csv
 router.get('/:projectId/export/csv', exportController.csv);
+// GET /api/projects/:projectId/export/txt
+router.get('/:projectId/export/txt', exportController.txt);
 // GET /api/projects/:projectId/export/sheets
 router.get('/:projectId/export/sheets', exportController.sheets);
 
