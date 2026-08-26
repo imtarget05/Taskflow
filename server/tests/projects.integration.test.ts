@@ -90,6 +90,36 @@ describe('Projects API integration', () => {
   }
 
   describe('Projects', () => {
+    it('creates a project with custom columns when columnNames is provided', async () => {
+      const res = await authed(ownerAgent)
+        .post('/api/projects')
+        .send({
+          name: 'Wizard Project',
+          description: 'Created via wizard',
+          columnNames: ['Backlog', 'Đang làm', 'Review', 'Xong'],
+        });
+      expect(res.status).toBe(201);
+
+      const board = await ownerAgent.get(`/api/projects/${res.body.data.id}`);
+      const columns = (board.body.data.project.columns as { name: string; position: number }[]).map(
+        (c) => ({ name: c.name, position: c.position })
+      );
+      expect(columns.map((c) => c.name)).toEqual(['Backlog', 'Đang làm', 'Review', 'Xong']);
+      expect(columns.map((c) => c.position)).toEqual([0, 1, 2, 3]);
+    });
+
+    it('rejects more than 8 columns or blank column names', async () => {
+      const tooMany = await authed(ownerAgent)
+        .post('/api/projects')
+        .send({ name: 'Too many', columnNames: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] });
+      expect(tooMany.status).toBe(400);
+
+      const blank = await authed(ownerAgent)
+        .post('/api/projects')
+        .send({ name: 'Blank col', columnNames: ['Todo', '   '] });
+      expect(blank.status).toBe(400);
+    });
+
     it('creates a project with three default columns', async () => {
       const id = await createProject();
 

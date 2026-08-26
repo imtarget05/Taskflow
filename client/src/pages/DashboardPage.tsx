@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -7,12 +7,13 @@ import {
   Plus,
   TriangleAlert,
 } from 'lucide-react';
-import { useProjects, useCreateProject, useUpdateProject, useRecentActivities } from '@/hooks/useProjects';
+import { useProjects, useUpdateProject, useRecentActivities } from '@/hooks/useProjects';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import type { Activity, ProjectSummary } from '@/types';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
+import CreateProjectWizard from '@/components/project/CreateProjectWizard';
 import OnboardingModal from '@/components/onboarding/OnboardingModal';
 import { onboardingDismissed } from '@/lib/onboarding';
 import {
@@ -22,12 +23,9 @@ import {
   ColorPopover,
   EmptyState,
   ErrorState,
-  Input,
-  Modal,
   ProgressBar,
   SectionHeading,
   Skeleton,
-  Textarea,
 } from '@/components/ui';
 
 /**
@@ -39,7 +37,6 @@ export default function DashboardPage() {
   const { data: projects, isLoading, error, refetch } = useProjects();
   const { data: stats } = useAnalyticsOverview();
   const { data: recentActivities } = useRecentActivities(12);
-  const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -48,25 +45,8 @@ export default function DashboardPage() {
   // First-run onboarding: only for accounts with zero projects whose browser
   // has not dismissed the walkthrough before.
   const [showOnboarding, setShowOnboarding] = useState(() => !onboardingDismissed());
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [submitError, setSubmitError] = useState('');
   const [settingsProject, setSettingsProject] = useState<ProjectSummary | null>(null);
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
-    setSubmitError('');
-    if (!name.trim()) return;
-    try {
-      await createProject.mutateAsync({ name: name.trim(), description: description.trim() || undefined });
-      setOpen(false);
-      setName('');
-      setDescription('');
-      toast('success', 'Project created');
-    } catch {
-      setSubmitError('Unable to create project. Please try again.');
-    }
-  }
 interface MetricCardProps {
   label: string;
   /** Rendered value; skeleton while undefined. */
@@ -330,39 +310,8 @@ function ProjectCard({ project, progress, onEdit, onColorChange }: ProjectCardPr
         </div>
       </section>
 
-      {/* New project modal */}
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="New project"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" form="new-project-form" disabled={!name.trim()} loading={createProject.isPending}>
-              Create project
-            </Button>
-          </>
-        }
-      >
-        <form id="new-project-form" onSubmit={handleCreate} className="space-y-4">
-          <Input
-            label="Project name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Website launch"
-            autoFocus
-            required
-            error={submitError || undefined}
-          />
-          <Textarea
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What is this project about? (optional)"
-            rows={3}
-          />
-        </form>
-      </Modal>
+      {/* New project wizard (4 steps: basics → columns → members → review) */}
+      {open && <CreateProjectWizard onClose={() => setOpen(false)} />}
 
       {/* Project settings modal */}
       {settingsProject && (
