@@ -15,6 +15,8 @@ const analyseLimiter = rateLimit({
 const router = Router();
 
 router.post('/analyse', authenticate, analyseLimiter, nlpController.analyse);
+router.post('/feedback', authenticate, nlpController.feedback);
+router.get('/stats', authenticate, nlpController.stats);
 router.get('/', authenticate, nlpController.list);
 router.get('/:id', authenticate, nlpController.get);
 router.delete('/:id', authenticate, nlpController.remove);

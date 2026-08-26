@@ -1,5 +1,17 @@
 import 'dotenv/config';
 
+// Langfuse v3 ships ESM-only dynamic imports that Jest's CommonJS runtime
+// cannot load. Mock the SDK module-wide so no test accidentally pulls in the
+// real package — tracing is a no-op under test, which matches production when
+// LANGFUSE_* keys are absent.
+jest.mock('langfuse', () => {
+  const Langfuse = jest.fn().mockImplementation(() => ({
+    trace: jest.fn(() => ({ span: jest.fn(() => ({ update: jest.fn(), end: jest.fn() })), update: jest.fn() })),
+    flushAsync: jest.fn().mockResolvedValue(undefined),
+  }));
+  return { Langfuse };
+});
+
 process.env.NODE_ENV = 'test';
 // Keep in-memory rate limiters far above the integration test request volume.
 process.env.RATE_LIMIT_MAX = '5000';

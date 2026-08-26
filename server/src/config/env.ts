@@ -56,6 +56,12 @@ const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
   GOOGLE_SHEETS_DELEGATED_USER: z.string().optional(),
+  // Langfuse observability for the agent module (optional; tracing is a no-op
+  // when these are absent). Keys are NEVER committed — set per environment.
+  LANGFUSE_PUBLIC_KEY: z.string().optional(),
+  LANGFUSE_SECRET_KEY: z.string().optional(),
+  LANGFUSE_BASEURL: z.string().url().optional(),
+  APP_ENV: z.string().default('development'),
   // n8n integration (user-hosted instance, reached server-side only).
   N8N_API_URL: z.string().url().optional(),
   N8N_API_KEY: z.string().optional(),
@@ -131,6 +137,10 @@ export const env = {
   GOOGLE_SERVICE_ACCOUNT_EMAIL: parsed.success ? parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL : undefined,
   GOOGLE_PRIVATE_KEY: parsed.success ? parsed.data.GOOGLE_PRIVATE_KEY : undefined,
   GOOGLE_SHEETS_DELEGATED_USER: parsed.success ? parsed.data.GOOGLE_SHEETS_DELEGATED_USER : undefined,
+  LANGFUSE_PUBLIC_KEY: parsed.success ? parsed.data.LANGFUSE_PUBLIC_KEY : undefined,
+  LANGFUSE_SECRET_KEY: parsed.success ? parsed.data.LANGFUSE_SECRET_KEY : undefined,
+  LANGFUSE_BASEURL: parsed.success ? parsed.data.LANGFUSE_BASEURL : undefined,
+  APP_ENV: parsed.success ? parsed.data.APP_ENV : 'development',
   N8N_API_URL: parsed.success ? parsed.data.N8N_API_URL : undefined,
   N8N_API_KEY: parsed.success ? parsed.data.N8N_API_KEY : undefined,
   N8N_SIGNING_SECRET: parsed.success ? parsed.data.N8N_SIGNING_SECRET : undefined,

@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { closeSocket, initSocket } from './lib/socket';
 import { prisma } from './lib/prisma';
+import { flushTracer } from './modules/agent/tracer';
 
 let httpServer: ReturnType<typeof http.createServer> | null = null;
 
@@ -31,6 +32,8 @@ async function gracefulShutdown(signal: string): Promise<void> {
     if (httpServer) await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
     await closeSocket();
     await prisma.$disconnect();
+    // Flush any pending Langfuse traces (no-op when tracing is disabled).
+    await flushTracer();
     clearTimeout(forceExit);
     process.exit(0);
   } catch (error) {

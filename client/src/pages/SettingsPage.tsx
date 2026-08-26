@@ -4,6 +4,7 @@ import { useAuth } from '@/store/auth';
 import { useTheme } from '@/store/theme-context';
 import { useToast } from '@/store/toast';
 import { Avatar, Button, ConfirmDialog } from '@/components/ui';
+import NlpStatsPanel from '@/components/nlp/NlpStatsPanel';
 
 const THEMES = [
   { value: 'light' as const, label: 'Light', icon: Sun },
@@ -66,6 +67,11 @@ export default function SettingsPage() {
           <LogOut className="h-4 w-4" aria-hidden="true" />
           Log out
         </Button>
+      </section>
+
+      <section className="mt-4" aria-labelledby="nlp-heading">
+        <h2 id="nlp-heading" className="mb-2 text-sm font-semibold">NLP analysis quality</h2>
+        <NlpStatsPanel />
       </section>
 
       <ConfirmDialog

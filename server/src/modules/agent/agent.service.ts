@@ -11,6 +11,7 @@ import {
   chatCompletion,
   chatCompletionWithTools,
   isLLMConfigured,
+  routeModel,
   LLMMessage,
   LLMContentPart,
   LLMFunctionTool,
@@ -27,6 +28,7 @@ import {
   TurnLanguage,
 } from './language';
 import { env } from '../../config/env';
+import { traceAgentTurn } from './tracer';
 
 export interface AgentChatMessage {
   role: string;
@@ -253,22 +255,65 @@ export async function chat(
     buildSystemPrompt(language) +
     (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '');
   const system: LLMMessage = { role: 'system', content: systemContent };
-  const completion = await chatCompletionWithTools([system, ...kept], AGENT_TOOLS);
 
-  // Recover the action from EITHER a structured tool call (preferred) or a
-  // free-text tag as a fallback for providers that ignore the tools field.
-  const tagAction = parseAction(completion.content ?? '');
-  const action = completion.toolCalls.length
-    ? toolCallToAction(completion.toolCalls[0])
-    : tagAction;
-  let reply = (completion.content ?? '').replace(ACTION_TAG_RE, '').trim();
-  let actionResult: AgentActionResult | null = null;
-  if (action) {
-    actionResult = await executeAction(action, userId);
-    reply = (reply ? `${reply}\n\n` : '') + actionResult.summary;
-    reply = reply.trim();
-  }
+  // The whole turn is wrapped in a Langfuse trace (no-op when LANGFUSE_* keys
+  // are absent). Inside, we record an LLM span (model + latency) and an action
+  // span whose output carries the guardrail decision (accepted / rejected).
+  const result = await traceAgentTurn(
+    {
+      userId,
+      conversationId: options.conversationId ?? 'new',
+      userMessage: lastUserTexts(messages).join(' ').slice(0, 500),
+      projectId: options.projectId,
+    },
+    async (trace) => {
+      const llmStart = Date.now();
+      const completion = await chatCompletionWithTools([system, ...kept], AGENT_TOOLS);
+      const llmMs = Date.now() - llmStart;
+      if (trace) {
+        const span = trace.span({ name: 'llm' });
+        span.update({
+          input: { toolCount: AGENT_TOOLS.length },
+          output: {
+            model: env.LLM_MODEL,
+            latencyMs: llmMs,
+            toolCalls: completion.toolCalls.length,
+          },
+          metadata: { tier: routeModel(lastUserTexts(messages).join(' ')) },
+        });
+        span.end();
+      }
 
+      const tagAction = parseAction(completion.content ?? '');
+      const action = completion.toolCalls.length
+        ? toolCallToAction(completion.toolCalls[0])
+        : tagAction;
+
+      let reply = (completion.content ?? '').replace(ACTION_TAG_RE, '').trim();
+      let actionResult: AgentActionResult | null = null;
+
+      if (action) {
+        // executeAction is the guardrail: it validates params (Zod) and the
+        // user's RBAC membership, and returns ok:false (never throws) on block.
+        const res = await executeAction(action, userId);
+        actionResult = res;
+        if (trace) {
+          const span = trace.span({ name: 'action' });
+          span.update({
+            input: { name: action.name, params: action.params },
+            output: { decision: res.ok ? 'accepted' : 'rejected', summary: res.summary },
+          });
+          span.end();
+        }
+        reply = (reply ? `${reply}\n\n` : '') + res.summary;
+        reply = reply.trim();
+      }
+
+      return { completion, reply, actionResult };
+    }
+  );
+
+  const { reply, actionResult } = result;
   const conversationId = await persistConversation(
     userId,
     history,

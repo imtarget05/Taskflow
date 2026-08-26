@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Wand2 } from 'lucide-react';
-import { useAnalyseText, type AnalyseResponse } from '@/hooks/useNlp';
+import { useAnalyseText, useNlpFeedback, type AnalyseResponse } from '@/hooks/useNlp';
 import { Badge, Button } from '@/components/ui';
 
 interface AiInsightPanelProps {
@@ -37,14 +37,38 @@ function pct(n: number): string {
  */
 export default function AiInsightPanel({ projectId, taskId, text, onApplyPriority }: AiInsightPanelProps) {
   const analyse = useAnalyseText();
+  const feedback = useNlpFeedback();
   const [result, setResult] = useState<AnalyseResponse | null>(null);
+  // Tracks whether the user already gave explicit feedback for this analysis,
+  // so we never double-count (applied + ignored).
+  const resolved = useRef(false);
 
   function run() {
+    resolved.current = false;
     analyse.mutate(
       { projectId, taskId, text },
       { onSuccess: (data) => setResult(data) }
     );
   }
+
+  // Implicit "ignored" signal: once a result is shown, if the user does not
+  // click Apply within 8s we record it as ignored (silent eval). A click on
+  // Apply sets resolved.current so this timer becomes a no-op.
+  useEffect(() => {
+    if (!result) return;
+    const timer = setTimeout(() => {
+      if (!resolved.current) {
+        resolved.current = true;
+        feedback.mutate({
+          analysisId: result.id,
+          category: result.category,
+          priority: result.priority,
+          decision: 'ignored',
+        });
+      }
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [result, feedback]);
 
   return (
     <div>
@@ -103,7 +127,16 @@ export default function AiInsightPanel({ projectId, taskId, text, onApplyPriorit
             <Button
               variant="primary"
               size="sm"
-              onClick={() => onApplyPriority(result.priority)}
+              onClick={() => {
+                resolved.current = true;
+                feedback.mutate({
+                  analysisId: result.id,
+                  category: result.category,
+                  priority: result.priority,
+                  decision: 'applied',
+                });
+                onApplyPriority(result.priority);
+              }}
               aria-label={`Áp dụng ưu tiên ${result.priority}`}
             >
               <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
