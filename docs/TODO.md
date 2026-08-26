@@ -1,54 +1,43 @@
 # TaskFlow — Todo & Tiến độ hoàn thiện
 
-> Cập nhật lần cuối: 2026-08-21
+> Cập nhật lần cuối: 2026-08-26
 
 ## ✅ Đã hoàn thành
 
 - [x] Fix Google OAuth test failures
 - [x] Tạo landing page marketing chuyên nghiệp (`client/src/pages/LandingPage.tsx`)
 - [x] **Cải thiện Dashboard với thống kê & quick actions**
-  - Cards thống kê (tổng project/task, hoàn thành, quá hạn)
-  - Quick Actions + Recent Activity + Quick Links
-  - Khôi phục modal **New project** và **Project settings** (đang dở khi refactor)
-  - Dọn sạch code chết & lỗi type; `tsc`/`eslint`/`vitest`/build pass
-- [x] ChatBox AI: nhận diện ngôn ngữ & ưu tiên trả lời **Tiếng Việt**
-  - `server/src/modules/agent/language.ts` (phát hiện vi/en/zh, mặc định `vi`)
-  - Đưa language policy vào system prompt; client có selector ngôn ngữ + lưu localStorage
-- [x] **Cải thiện UI components — tạo mới `Dropdown` + `Tooltip`** (`client/src/components/ui/`)
-  - `Dropdown`: menu truy cập được (aria role/menu), điều hướng bằng phím mũi tên/Home/End/Escape, click ngoài đóng, focus restore, item chọn có check
-  - `Tooltip`: tooltip hover/focus có arrow, 4 hướng, hỗ trợ reduced-motion
-  - Đã thêm animation `animate-rise` + `animate-fade-in` + hiệu ứng `card-hover` trong `index.css`
-- [x] **Áp dụng UI cải tiến trên Dashboard** (lấy cảm hứng design SaaS hiện đại)
-  - Đổi "Quick Actions" thành menu `Dropdown` thật (New project / Toggle activity)
-  - Gắn `Tooltip` cho nút icon-only (Toggle recent activity)
-  - Thêm `card-hover` (nâng nhẹ + đổ bóng) cho project card + `animate-fade-in` cho stats
-  - Dọn sạch `QuickAction` component chết & state `showQuickActions`, giảm kích thước file
+- [x] ChatBox AI: nhận diện ngôn ngữ & ưu tiên trả lời **Tiếng Việt** (+ merge `feature/language-architecture`: language persistence per conversation)
+- [x] UI primitives `Dropdown` + `Tooltip` — dùng trên Dashboard, aria đầy đủ
+- [x] Áp dụng UI cải tiến trên Dashboard (design SaaS hiện đại)
+
+### Đợt hoàn thành 2026-08-26 (sprint này)
+
+- [x] Fix bug schema `env.ts` thiếu `LLM_FALLBACK_MODEL` (3 suite fail do tsc)
+- [x] Bật Postgres local qua Docker → integration tests xanh toàn bộ
+- [x] Commit WIP tồn đọng: Export TXT + module NLP server + Dropdown/Tooltip + useNlp hook
+- [x] Merge nhánh `feature/language-architecture` (giải xung đột 5 file: agent.service, prompt, ChatBox, schema, test)
+- [x] **NLP end-to-end**: panel "Phân tích AI" trong TaskDetail drawer, áp priority 1-click
+- [x] **Dashboard recent activity thật**: endpoint `GET /api/activities` liên-project (member-scoped) + section feed
+- [x] **Trang 404** riêng thay cho redirect im lặng; ErrorBoundary đã có sẵn ở root
+- [x] **Onboarding 3 bước** cho user mới (tạo project → mời member → kanban), dismiss lưu localStorage
+- [x] **Wizard tạo project 4 bước**: API nhận `columnNames` (custom cột), UI step indicator, Back-safe
+- [x] **Inline sửa tiêu đề task trên card** (nút bút chì hover, Enter lưu/Esc huỷ)
+- [x] **Task detail drawer có tabs** Chi tiết / Bình luận / Hoạt động (activity của task đó)
+- [x] **Framer Motion micro-interactions** cho drawer (bundle 175.4 kB ≤ budget 180 kB)
+- [x] Dark-mode fix: ErrorBoundary chuyển sang semantic tokens
+- [x] Tách `DashboardPage` (332 → 142 dòng) thành `pages/dashboard/*`
+- [x] **Google Sheets export nâng cấp**: thêm sheet "Progress" (thống kê tiến độ)
+- [x] **Báo cáo tiến độ TXT tiếng Việt**: `GET /api/projects/:id/export/progress` (% hoàn thành, task quá hạn, chi tiết theo cột) + nút "Báo cáo tiến độ" trên ExportMenu
+- [x] Deploy: CI green → GHCR → Render + Cloudflare Pages; smoke 5/6 gates pass (gate còn lại là direct-origin URL Render free tier)
 
 ## 🚧 Đang làm
 
-- (không có — chuyển sang danh sách mới bên dưới)
+- (không có)
 
-## 📋 Công việc còn lại
+## 📋 Ý tưởng tiếp theo (backlog)
 
-### UI / UX
-- [ ] **Cải thiện Project creation flow (wizard)** — tách từng bước: thông tin cơ bản → cột mặc định → mời thành viên → xác nhận
-- [ ] **Nâng cấp Kanban board**
-  - Inline edit tiêu đề task / cột
-  - Drag-drop mượt hơn (giữ vị trí khi optimistic update, xử lý edge case)
-  - Task detail slide-over (thay modal toàn màn hình)
-- [ ] **Task detail modal → Slide-over panel với tabs** — tabs: Chi tiết, Bình luận, Hoạt động
-- [ ] **Cải thiện UI components:**
-  - [x] Tạo mới `Dropdown` + `Tooltip` (đã được tham chiếu trong code, chưa tồn tại trong `@/components/ui`) — ✅ đã tạo và dùng trên Dashboard
-  - [ ] Rà soát `Button`, `Input`, `Card`, `Avatar`, `Badge` đúng design tokens trong `TASKFLOW_MASTER_UI_UX_PRODUCT_SPEC.md`
-- [ ] **Thêm animations & micro-interactions (Framer Motion)** — fade/slide khi mở modal, task chuyển cột, skeleton loading
-- [ ] **Responsive breakpoints tối ưu** — dashboard, board, settings trên mobile/tablet
-- [ ] **Dark mode polish** — kiểm tra toàn bộ màn hình (đã có dark tokens trong CSS variables)
-
-### Trải nghiệm người dùng
-- [ ] **Onboarding flow cho user mới** — sau đăng ký: tạo project đầu tiên, mời member, hướng dẫn kanban
-- [ ] **Improved error boundaries & loading states** — React ErrorBoundary toàn cục, trang 404, empty states đồng nhất
-- [ ] Dashboard: hiển thị recent activity thật (thay mock `[]`) từ API `/activity`
-
-### Kiến trúc / Chất lượng
-- [ ] Rà soát `client/src/pages/DashboardPage.tsx` — tách `RecentActivity`/`ProjectCard` thành component riêng để giảm kích thước file
-- [ ] Chạy lại full test suite cả client + server trước mỗi lần merge
+- [ ] Email digest hàng tuần (báo cáo tiến độ tự gửi qua SMTP đã cấu hình sẵn)
+- [ ] NLP analysis bulk cho cả column/project
+- [ ] Saved views / filter presets cho board
+- [ ] Xuất báo cáo tiến độ định dạng PDF

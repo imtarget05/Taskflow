@@ -52,6 +52,19 @@ Live: app `https://taskflow.pages.dev` · api `https://taskflow-server-illy.onre
 ## Phase J — Docs
 - README deploy/usage đã có; bổ sung log này. Screenshots production: chụp thủ công khi cần (chưa tự động).
 
+## Phase K — Hoàn thiện tính năng (2026-08-26)
+- Fix env schema `LLM_FALLBACK_MODEL`; Postgres local qua Docker → toàn bộ suite xanh.
+- Merge `feature/language-architecture` (language persistence per AgentConversation).
+- NLP end-to-end: AiInsightPanel trong TaskDetail, áp priority 1-click.
+- Dashboard: feed hoạt động liên-project thật (`GET /api/activities`), tách component `pages/dashboard/*` (332→142 dòng).
+- 404 page riêng; onboarding 3 bước cho user mới (localStorage dismiss).
+- Project wizard 4 bước; API nhận `columnNames` custom cột mặc định.
+- Kanban: inline sửa tiêu đề task trên card (pencil hover-reveal).
+- TaskDetail drawer: tabs Chi tiết / Bình luận / Hoạt động.
+- Framer Motion cho drawer (reduced-motion aware); bundle gzip 175.4 kB ≤ 180 budget.
+- Export: Báo cáo tiến độ TXT tiếng Việt (`/export/progress`) + Google Sheets thêm tab "Progress".
+- Deploy: CI green → GHCR → Render + Cloudflare Pages. Smoke prod 5/6 gates (gate fail = direct-origin URL Render free tier, app qua Pages hoạt động chuẩn).
+
 ## Definition of done (mọi phase)
 - `npm run typecheck|lint|test|build` cả 2 workspace xanh trước commit; CI green; deploy prod + smoke thật trên production.
-- Server: 13 suites/110 tests · client: 2 suites. CI: `lint-test-build` (postgres service + migrate deploy) → docker push GHCR → Render deploy hook.
+- Server: 26 suites/274 tests · client: 8 suites/27 tests. CI: `lint-test-build` (postgres service + migrate deploy) → docker push GHCR → Render deploy hook.
