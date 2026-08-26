@@ -38,10 +38,15 @@ const envSchema = z.object({
   LLM_MODEL: z.string().optional(),
   LLM_MODEL_PREMIUM: z.string().optional(),
   LLM_MODEL_REASONING: z.string().optional(),
+  // Optional lighter model used when the primary model is 429/5xx-exhausted
+  // (e.g. Cloudflare Workers AI daily neuron quota). Empty/whitespace → disabled.
+  LLM_FALLBACK_MODEL: z
+    .string()
+    .trim()
+    .transform((value) => value || undefined)
+    .optional(),
   LLM_EMBED_MODEL: z.string().optional(),
   LLM_RERANK_MODEL: z.string().optional(),
-  // Used when the primary model returns a transient failure (429/5xx).
-  LLM_FALLBACK_MODEL: z.string().optional(),
   LLM_API_KEY: z.string().optional(),
   LLM_TIMEOUT_MS: z.coerce.number().default(120_000),
   // Legal research (tra cứu pháp luật) — RAG over Vietnamese legislation.
@@ -116,9 +121,9 @@ export const env = {
   LLM_MODEL: parsed.success ? parsed.data.LLM_MODEL : undefined,
   LLM_MODEL_PREMIUM: parsed.success ? parsed.data.LLM_MODEL_PREMIUM : undefined,
   LLM_MODEL_REASONING: parsed.success ? parsed.data.LLM_MODEL_REASONING : undefined,
+  LLM_FALLBACK_MODEL: parsed.success ? parsed.data.LLM_FALLBACK_MODEL : undefined,
   LLM_EMBED_MODEL: parsed.success ? parsed.data.LLM_EMBED_MODEL : undefined,
   LLM_RERANK_MODEL: parsed.success ? parsed.data.LLM_RERANK_MODEL : undefined,
-  LLM_FALLBACK_MODEL: parsed.success ? parsed.data.LLM_FALLBACK_MODEL : undefined,
   LLM_API_KEY: parsed.success ? parsed.data.LLM_API_KEY : undefined,
   LLM_TIMEOUT_MS: parsed.success ? parsed.data.LLM_TIMEOUT_MS : 120_000,
   LEGAL_ENABLED: parsed.success ? parsed.data.LEGAL_ENABLED === 'true' : false,
