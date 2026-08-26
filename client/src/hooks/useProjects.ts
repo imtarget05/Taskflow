@@ -433,6 +433,16 @@ export function useExportTxt(projectId: string) {
   });
 }
 
+/** Vietnamese progress report (GET /projects/:id/export/progress). */
+export function useExportProgress(projectId: string) {
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const res = await api.get<string>(`/projects/${projectId}/export/progress`, { responseType: 'text' });
+      return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    },
+  });
+}
+
 /** Cross-project recent activities for the dashboard feed (GET /api/activities). */
 export function useRecentActivities(limit = 12) {
   return useQuery({
