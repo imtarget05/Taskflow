@@ -23,6 +23,17 @@
 - Nhóm cần một công cụ Kanban cộng tác real-time: nhiều người kéo-thả task, cập nhật trực tiếp không cần refresh.
 - TaskFlow giải quyết: quản lý project, cột/task Kanban, drag-and-drop, comment, phân quyền, audit log, realtime qua Socket.io.
 
+## Tính năng chính
+
+- **Kanban board realtime** — drag-drop (dnd-kit), inline sửa tiêu đề task, optimistic updates, live status pill.
+- **Task detail slide-over** với 3 tabs: Chi tiết / Bình luận / Hoạt động; auto-save debounce 700ms.
+- **AI Agent chat** — tạo project/task bằng hội thoại (function calling), rolling-summary memory, tự động trả lời tiếng Việt.
+- **NLP ticket analysis** — nút "Phân tích AI" gợi ý phân loại + mức ưu tiên cho task, áp dụng 1-click (`POST /api/nlp/analyse`).
+- **Xuất dữ liệu** — CSV, TXT tóm tắt, **Báo cáo tiến độ tiếng Việt** (% hoàn thành, task quá hạn), Google Sheets (kèm tab Progress).
+- **Dashboard** — thống kê thật từ analytics API, feed hoạt động liên project, onboarding 3 bước cho user mới.
+- **Wizard tạo project** 4 bước (thông tin → cột mặc định → thành viên → xác nhận).
+- Bảo mật production-grade: JWT httpOnly + refresh rotation, CSRF, rate limit, Zod validation, RBAC.
+
 ## Cấu trúc dự án
 
 ```
