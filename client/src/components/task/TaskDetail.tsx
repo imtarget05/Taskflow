@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, Send, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useAddComment, useDeleteComment, useDeleteTask, useUpdateTask } from '@/hooks/useProjects';
+import AiInsightPanel from '@/components/task/AiInsightPanel';
 import { timeAgo } from '@/lib/time';
 import type { ProjectMember, TaskPriority } from '@/types';
 import { useToast } from '@/store/toast';
@@ -243,6 +244,15 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
               aria-label="Task description"
             />
           </div>
+
+          {canEdit && (
+            <AiInsightPanel
+              projectId={projectId}
+              taskId={taskId}
+              text={`${form.title}\n${form.description ?? ''}`.trim()}
+              onApplyPriority={(priority) => patch({ priority })}
+            />
+          )}
 
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted">Due date</p>
