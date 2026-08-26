@@ -82,6 +82,34 @@ function buildRows(board: BoardData): string[][] {
   return rows;
 }
 
+/**
+ * Progress-summary rows for the "Progress" sheet tab: headline numbers a
+ * manager reads in five seconds. All labels are Vietnamese to match the
+ * product's primary audience.
+ */
+export function buildProgressRows(board: BoardData): string[][] {
+  const tasks = board.columns.flatMap((c) => c.tasks);
+  const total = tasks.length;
+  const done = tasks.filter((t) => t.completed).length;
+  const open = total - done;
+  const today = new Date();
+  const overdue = tasks.filter(
+    (t) => !t.completed && t.dueDate !== null && new Date(t.dueDate) < today
+  ).length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return [
+    ['Metric', 'Value'],
+    ['Dự án', board.name],
+    ['Tổng số task', String(total)],
+    ['Hoàn thành', String(done)],
+    ['Còn mở', String(open)],
+    ['Quá hạn', String(overdue)],
+    ['Tiến độ (%)', String(percent)],
+    ['Xuất lúc', new Date().toLocaleString('vi-VN')],
+  ];
+}
+
 /** Deterministic filename slug for a project (used by every export format). */
 export function exportSlug(projectName: string): string {
   return (
@@ -127,6 +155,67 @@ export function exportTxt(
     const filename = `taskflow_${exportSlug(board.name)}.txt`;
     return { filename, text };
   });
+}
+
+/**
+ * Human-readable progress report: headline numbers first (tổng / hoàn thành /
+ * quá hạn / tiến độ %), then a per-column breakdown. Vietnamese labels — this
+ * is the report a manager forwards to stakeholders.
+ */
+export function buildProgressReport(board: BoardData): string {
+  const tasks = board.columns.flatMap((c) => c.tasks);
+  const total = tasks.length;
+  const done = tasks.filter((t) => t.completed).length;
+  const open = total - done;
+  const today = new Date();
+  const overdueTasks = tasks.filter(
+    (t) => !t.completed && t.dueDate !== null && new Date(t.dueDate) < today
+  );
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const lines: string[] = [
+    `BÁO CÁO TIẾN ĐỘ — ${board.name}`,
+    `Xuất lúc: ${new Date().toLocaleString('vi-VN')}`,
+    '',
+    '== TỔNG QUAN ==',
+    `Tổng số task : ${total}`,
+    `Hoàn thành   : ${done}`,
+    `Còn mở       : ${open}`,
+    `Quá hạn      : ${overdueTasks.length}`,
+    `Tiến độ      : ${percent}%`,
+  ];
+
+  if (overdueTasks.length > 0) {
+    lines.push('', '== TASK QUÁ HẠN ==');
+    for (const t of overdueTasks) {
+      const due = t.dueDate ? new Date(t.dueDate).toLocaleDateString('vi-VN') : '—';
+      lines.push(`- ${t.title} (hạn ${due}, ${t.priority})`);
+    }
+  }
+
+  lines.push('', '== CHI TIẾT THEO CỘT ==');
+  for (const column of board.columns) {
+    const colDone = column.tasks.filter((t) => t.completed).length;
+    lines.push(`## ${column.name} (${colDone}/${column.tasks.length} xong)`);
+    for (const t of column.tasks) {
+      const mark = t.completed ? '[x]' : '[ ]';
+      const assignees = t.assignments.map((a) => a.user.name).join(', ') || 'chưa giao';
+      lines.push(`  ${mark} ${t.title} — ${t.priority}, ${assignees}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\r\n') + '\r\n';
+}
+
+export function exportProgressReport(
+  projectId: string,
+  userId: string
+): Promise<{ filename: string; text: string }> {
+  return loadBoardForExport(projectId, userId).then((board) => ({
+    filename: `baocao_${exportSlug(board.name)}.txt`,
+    text: buildProgressReport(board),
+  }));
 }
 
 export async function exportToGoogleSheets(
@@ -175,6 +264,28 @@ export async function exportToGoogleSheets(
     requestBody: { values: rows },
   });
 
+  // Second tab: progress summary (headline numbers for managers).
+  const progressRows = buildProgressRows(board);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          addSheet: {
+            properties: { title: 'Progress', rightToLeft: false },
+          },
+        },
+      ],
+    },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: 'Progress!A1',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: progressRows },
+  });
+
+  // Bold header styling on both tabs.
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {

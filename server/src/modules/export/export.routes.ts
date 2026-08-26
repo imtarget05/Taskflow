@@ -9,6 +9,8 @@ router.use(authenticate);
 router.get('/:projectId/export/csv', exportController.csv);
 // GET /api/projects/:projectId/export/txt
 router.get('/:projectId/export/txt', exportController.txt);
+// GET /api/projects/:projectId/export/progress — Vietnamese progress report
+router.get('/:projectId/export/progress', exportController.progressReport);
 // GET /api/projects/:projectId/export/sheets
 router.get('/:projectId/export/sheets', exportController.sheets);
 

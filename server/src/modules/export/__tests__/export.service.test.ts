@@ -1,4 +1,4 @@
-import { exportCsv, exportToGoogleSheets, exportTxt } from '../export.service';
+import { exportCsv, exportToGoogleSheets, exportTxt, exportProgressReport } from '../export.service';
 
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
@@ -119,6 +119,27 @@ describe('export.service', () => {
     });
   });
 
+  describe('exportProgressReport', () => {
+    it('renders a Vietnamese progress report with headline numbers', async () => {
+      mockedPrisma.projectMember.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockedPrisma.project.findUnique.mockResolvedValue(BOARD);
+
+      const { text, filename } = await exportProgressReport('p1', 'u1');
+
+      expect(filename).toBe('baocao_Launch_Site.txt');
+      expect(text).toContain('BÁO CÁO TIẾN ĐỘ — Launch, Site!');
+      expect(text).toContain('Tổng số task : 2');
+      expect(text).toContain('Hoàn thành   : 1');
+      expect(text).toContain('Còn mở       : 1');
+      expect(text).toContain('Tiến độ      : 50%');
+      expect(text).toContain('== CHI TIẾT THEO CỘT ==');
+      expect(text).toContain('## To Do (0/1 xong)');
+      expect(text).toContain('[ ] Design, landing — HIGH, Jane, Doe');
+      expect(text).toContain('## Done (1/1 xong)');
+      expect(text).toContain('[x] Ship v1 — MEDIUM, chưa giao');
+    });
+  });
+
   describe('exportToGoogleSheets', () => {
     it('returns 501 when the service account is not configured', async () => {
       const origEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -130,6 +151,70 @@ describe('export.service', () => {
 
       env.GOOGLE_SERVICE_ACCOUNT_EMAIL = origEmail;
       env.GOOGLE_PRIVATE_KEY = origKey;
+    });
+
+    it('writes a Tasks sheet plus a Tiến độ summary sheet and shares the file', async () => {
+      const origEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+      const origKey = env.GOOGLE_PRIVATE_KEY;
+      env.GOOGLE_SERVICE_ACCOUNT_EMAIL = 'sa@taskflow.iam.gserviceaccount.com';
+      env.GOOGLE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----';
+      mockedPrisma.projectMember.findUnique.mockResolvedValue({ role: 'OWNER' });
+      mockedPrisma.project.findUnique.mockResolvedValue(BOARD);
+
+      try {
+      const result = await exportToGoogleSheets('p1', 'u1', 'me@x.com');
+      expect(result.spreadsheetId).toBe('sheet-1');
+      expect(result.url).toContain('docs.google.com/spreadsheets/d/sheet-1');
+
+      const { google } = jest.requireMock('googleapis') as {
+        google: {
+          sheets: jest.Mock;
+          drive: jest.Mock;
+        };
+      };
+      const sheetsApi = google.sheets.mock.results[0].value;
+      const valuesUpdate = sheetsApi.spreadsheets.values.update;
+      const batchUpdate = sheetsApi.spreadsheets.batchUpdate;
+      const permissionsCreate = google.drive.mock.results[0].value.permissions.create;
+
+      // First write = task rows into Sheet1 (Tasks).
+      expect(valuesUpdate).toHaveBeenCalledTimes(2);
+      const [tasksCall] = valuesUpdate.mock.calls;
+      expect(tasksCall[0].range).toBe('Sheet1!A1');
+      expect(tasksCall[0].requestBody.values[0]).toEqual([
+        'Task', 'Column', 'Priority', 'Assignees', 'Due date', 'Status', 'Description',
+      ]);
+
+      // Second write = progress summary rows.
+      const [, progressCall] = valuesUpdate.mock.calls;
+      expect(progressCall[0].range).toBe('Progress!A1');
+      const progressRows = progressCall[0].requestBody.values as string[][];
+      expect(progressRows[0]).toEqual(['Metric', 'Value']);
+      const metric = (name: string) => progressRows.find((r) => r[0] === name)?.[1];
+      expect(metric('Tổng số task')).toBe('2');
+      expect(metric('Hoàn thành')).toBe('1');
+      expect(metric('Còn mở')).toBe('1');
+      expect(metric('Tiến độ (%)')).toBe('50');
+
+      // A "Progress" sheet tab is added before it is written to.
+      const allBatchArgs = batchUpdate.mock.calls.map((c: unknown[]) => c[0]) as {
+        requestBody?: { requests?: { addSheet?: unknown }[] };
+      }[];
+      const addSheetRequest = allBatchArgs.find((arg) =>
+        arg.requestBody?.requests?.some((r) => r.addSheet)
+      );
+      expect(addSheetRequest).toBeTruthy();
+
+      // The requesting user is granted writer access.
+      expect(permissionsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: { role: 'writer', type: 'user', emailAddress: 'me@x.com' },
+        })
+      );
+      } finally {
+        env.GOOGLE_SERVICE_ACCOUNT_EMAIL = origEmail;
+        env.GOOGLE_PRIVATE_KEY = origKey;
+      }
     });
   });
 });

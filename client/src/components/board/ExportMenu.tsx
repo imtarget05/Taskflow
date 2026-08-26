@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
-import { useExportCsv, useExportSheets, useExportTxt } from '@/hooks/useProjects';
+import { BarChart3, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
+import { useExportCsv, useExportSheets, useExportTxt, useExportProgress } from '@/hooks/useProjects';
 import { useToast } from '@/store/toast';
 import { Button } from '@/components/ui';
 
@@ -25,6 +25,7 @@ export default function ExportMenu({ projectId, projectName }: ExportMenuProps) 
   const sheets = useExportSheets(projectId);
   const csv = useExportCsv(projectId);
   const txt = useExportTxt(projectId);
+  const progress = useExportProgress(projectId);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -80,6 +81,17 @@ export default function ExportMenu({ projectId, projectName }: ExportMenuProps) 
     });
   }
 
+  function handleProgress() {
+    progress.mutate(undefined, {
+      onSuccess: (text) => {
+        setOpen(false);
+        downloadText(text, `baocao_${projectName.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'project'}.txt`, 'text/plain;charset=utf-8');
+        toast('success', 'Đã tải báo cáo tiến độ');
+      },
+      onError: () => toast('error', 'Export failed', 'Unable to generate the progress report.'),
+    });
+  }
+
   return (
     <div ref={ref} className="relative">
       <Button
@@ -88,7 +100,7 @@ export default function ExportMenu({ projectId, projectName }: ExportMenuProps) 
         onClick={() => setOpen((v) => !v)}
         aria-label="Export project data"
         aria-expanded={open}
-        disabled={sheets.isPending || csv.isPending || txt.isPending}
+        disabled={sheets.isPending || csv.isPending || txt.isPending || progress.isPending}
       >
         <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline">Export</span>
@@ -130,6 +142,18 @@ export default function ExportMenu({ projectId, projectName }: ExportMenuProps) 
             <span className="min-w-0">
               <span className="block font-medium">Download TXT</span>
               <span className="block text-xs text-ink-muted">Readable plain-text project summary</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleProgress}
+            disabled={progress.isPending}
+            className="flex w-full items-center gap-2.5 border-t border-line px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+          >
+            <BarChart3 className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block font-medium">Báo cáo tiến độ</span>
+              <span className="block text-xs text-ink-muted">Tổng quan % hoàn thành + task quá hạn</span>
             </span>
           </button>
         </div>

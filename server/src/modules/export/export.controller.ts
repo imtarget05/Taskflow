@@ -21,6 +21,18 @@ export const txt = asyncHandler(async (req: Request, res: Response) => {
     .send(text);
 });
 
+export const progressReport = asyncHandler(async (req: Request, res: Response) => {
+  const { filename, text } = await exportService.exportProgressReport(
+    String(req.params.projectId),
+    req.user!.id
+  );
+  res
+    .status(StatusCodes.OK)
+    .setHeader('Content-Type', 'text/plain; charset=utf-8')
+    .setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    .send(text);
+});
+
 export const sheets = asyncHandler(async (req: Request, res: Response) => {
   const result = await exportService.exportToGoogleSheets(
     String(req.params.projectId),
