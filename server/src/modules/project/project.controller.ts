@@ -9,6 +9,13 @@ const createSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(1000).optional(),
   color: z.string().max(20).optional(),
+  // Optional custom default columns (project creation wizard). When omitted,
+  // the service falls back to the standard To Do / In Progress / Done trio.
+  columnNames: z
+    .array(z.string().trim().min(1).max(60))
+    .min(1)
+    .max(8)
+    .optional(),
 });
 
 const updateSchema = z.object({

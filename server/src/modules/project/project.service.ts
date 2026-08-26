@@ -8,7 +8,7 @@ import { createActivity } from '../activity/activity.service';
 
 export async function createProject(
   ownerId: string,
-  data: { name: string; description?: string; color?: string }
+  data: { name: string; description?: string; color?: string; columnNames?: string[] }
 ): Promise<{ id: string }> {
   const project = await prisma.project.create({
     data: {
@@ -19,8 +19,12 @@ export async function createProject(
     },
   });
 
-  // Create default kanban columns.
-  const defaults = ['To Do', 'In Progress', 'Done'];
+  // Create default kanban columns — custom names from the creation wizard when
+  // provided, otherwise the standard trio.
+  const defaults =
+    data.columnNames && data.columnNames.length > 0
+      ? data.columnNames.map((n) => n.trim()).filter(Boolean)
+      : ['To Do', 'In Progress', 'Done'];
   await prisma.column.createMany({
     data: defaults.map((name, i) => ({ projectId: project.id, name, position: i })),
   });

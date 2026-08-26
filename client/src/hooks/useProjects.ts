@@ -25,7 +25,12 @@ export function useProjects() {
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string; color?: string }) => {
+    mutationFn: async (data: {
+      name: string;
+      description?: string;
+      color?: string;
+      columnNames?: string[];
+    }) => {
       const res = await api.post<{ data: { id: string } }>('/projects', data);
       return res.data.data;
     },
