@@ -14,6 +14,8 @@ export interface Project {
   description?: string | null;
   color?: string | null;
   ownerId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectSummary extends Project {
