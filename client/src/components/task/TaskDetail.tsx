@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion, useReducedMotion } from 'framer-motion';
 import { CalendarDays, History, Send, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
+import { overlayFade, quickEase, softSpring } from '@/lib/motion';
 import { useAddComment, useDeleteComment, useDeleteTask, useUpdateTask } from '@/hooks/useProjects';
 import AiInsightPanel from '@/components/task/AiInsightPanel';
 import { timeAgo } from '@/lib/time';
@@ -66,6 +68,7 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
   const [comment, setComment] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [tab, setTab] = useState<'detail' | 'comments' | 'activity'>('detail');
+  const reduceMotion = useReducedMotion() ?? false;
   const closeRef = useRef<HTMLButtonElement>(null);
   const { toast } = useToast();
   const updateTask = useUpdateTask(projectId);
@@ -470,15 +473,26 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
 
   return (
     <div className="fixed inset-0 z-50" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
-      <aside
+      <motion.div
+        variants={reduceMotion ? undefined : overlayFade}
+        initial={reduceMotion ? false : 'hidden'}
+        animate={reduceMotion ? false : 'visible'}
+        transition={quickEase}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <motion.aside
         role="dialog"
         aria-modal="true"
         aria-label="Task details"
+        initial={reduceMotion ? false : { x: '100%' }}
+        animate={{ x: 0 }}
+        transition={softSpring}
         className="absolute inset-y-0 right-0 flex h-full w-full max-w-md flex-col overflow-hidden bg-surface shadow-modal md:max-w-lg"
       >
         {content}
-      </aside>
+      </motion.aside>
 
       <ConfirmDialog
         open={confirmDelete}
