@@ -69,6 +69,9 @@ export interface Activity {
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   user: User;
+  /** Present on the cross-project dashboard feed (GET /api/activities). */
+  projectId?: string;
+  projectName?: string;
 }
 
 export interface BoardData {

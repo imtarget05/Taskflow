@@ -427,3 +427,16 @@ export function useExportTxt(projectId: string) {
     },
   });
 }
+
+/** Cross-project recent activities for the dashboard feed (GET /api/activities). */
+export function useRecentActivities(limit = 12) {
+  return useQuery({
+    queryKey: ['activities', 'recent', limit],
+    queryFn: async () => {
+      const res = await api.get<{ data: (Activity & { projectName: string })[] }>(
+        `/activities?limit=${limit}`
+      );
+      return res.data.data;
+    },
+  });
+}
