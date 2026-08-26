@@ -41,10 +41,10 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren<unkno
   render(): React.ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-bg px-4">
           <div className="card max-w-md w-full p-8 text-center">
-            <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
-            <p className="text-slate-600 mb-6">
+            <h1 className="text-2xl font-bold text-danger mb-4">Something went wrong</h1>
+            <p className="text-ink-secondary mb-6">
               We're sorry for the inconvenience. Please try refreshing the page or contact support if the problem persists.
             </p>
             <button
@@ -55,8 +55,8 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren<unkno
             </button>
             {import.meta.env.DEV && this.state.error && (
               <details className="mt-4 text-left">
-                <summary className="cursor-pointer text-sm text-slate-500">Error details</summary>
-                <pre className="mt-2 text-xs bg-slate-100 p-2 rounded overflow-auto">
+                <summary className="cursor-pointer text-sm text-ink-muted">Error details</summary>
+                <pre className="mt-2 text-xs bg-surface-2 p-2 rounded overflow-auto">
                   {this.state.error.stack}
                 </pre>
               </details>
