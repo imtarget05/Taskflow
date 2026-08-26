@@ -418,3 +418,12 @@ export function useExportCsv(projectId: string) {
     },
   });
 }
+
+export function useExportTxt(projectId: string) {
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const res = await api.get<string>(`/projects/${projectId}/export/txt`, { responseType: 'text' });
+      return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    },
+  });
+}

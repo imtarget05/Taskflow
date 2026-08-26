@@ -82,12 +82,50 @@ function buildRows(board: BoardData): string[][] {
   return rows;
 }
 
+/** Deterministic filename slug for a project (used by every export format). */
+export function exportSlug(projectName: string): string {
+  return (
+    projectName.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'project'
+  );
+}
+
 export function exportCsv(projectId: string, userId: string): Promise<{ filename: string; csv: string }> {
   return loadBoardForExport(projectId, userId).then((board) => {
     const rows = buildRows(board);
     const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\r\n');
-    const filename = `taskflow_${board.name.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'project'}.csv`;
+    const filename = `taskflow_${exportSlug(board.name)}.csv`;
     return { filename, csv };
+  });
+}
+
+/**
+ * Human-readable plain-text export. Unlike CSV, values are printed in labelled
+ * sections so the file is easy to read and mail/attachments-friendly.
+ */
+export function exportTxt(
+  projectId: string,
+  userId: string
+): Promise<{ filename: string; text: string }> {
+  return loadBoardForExport(projectId, userId).then((board) => {
+    const lines: string[] = [
+      `${board.name} — TaskFlow export`,
+      `Generated: ${new Date().toLocaleString()}`,
+      '',
+      ...board.columns.flatMap((column) => {
+        const tasks = column.tasks.map((task) => {
+          const assignees = task.assignments.map((a) => a.user.name).join(', ') || '—';
+          const due = task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-CA') : '—';
+          const status = task.completed ? 'Done' : 'Open';
+          const head = `[${status}] ${task.title} (${task.priority}, due ${due}, ${assignees})`;
+          return task.description ? `${head}\n  ${task.description}` : head;
+        });
+        return [`## ${column.name}`, ...tasks, ''];
+      }),
+    ].flat();
+    if (board.columns.length === 0) lines.push('No columns yet.');
+    const text = lines.map((l) => (l ?? '').replace(/\r?\n/g, '\r\n')).join('\r\n') + '\r\n';
+    const filename = `taskflow_${exportSlug(board.name)}.txt`;
+    return { filename, text };
   });
 }
 
