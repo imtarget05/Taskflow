@@ -368,3 +368,112 @@ function keywordsFrom(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((k): k is string => typeof k === 'string').slice(0, 8);
   return [];
 }
+
+// ---------------------------------------------------------------------------
+// Implicit feedback (the "eval ngầm"): when a user clicks Apply on an NLP
+// suggestion, that is a positive label; analyzing a result without applying is
+// treated as "ignored". Aggregating these lets us measure classification
+// quality from real behavior — no manual labeling needed.
+// ---------------------------------------------------------------------------
+
+export type NlpDecision = 'applied' | 'ignored';
+
+export async function recordFeedback(input: {
+  userId: string;
+  analysisId: string;
+  category: string;
+  priority: string;
+  decision: NlpDecision;
+}): Promise<void> {
+  if (input.decision !== 'applied' && input.decision !== 'ignored') return;
+  await prisma.nlpFeedback.create({
+    data: {
+      userId: input.userId,
+      analysisId: input.analysisId,
+      category: input.category,
+      priority: input.priority,
+      decision: input.decision,
+    },
+  });
+}
+
+export interface NlpStatsRow {
+  category: string;
+  total: number;
+  applied: number;
+  ignored: number;
+  applyRate: number;
+}
+
+export interface NlpStats {
+  /** Per-category apply rates (sorted by total desc). */
+  byCategory: NlpStatsRow[];
+  /** Distribution of priorityConfidence buckets across analysed tickets. */
+  confidenceBuckets: { bucket: string; count: number }[];
+  /** Headline numbers. */
+  totalFeedback: number;
+  overallApplyRate: number;
+}
+
+export async function getNlpStats(userId: string): Promise<NlpStats> {
+  const [feedback, analyses] = await Promise.all([
+    prisma.nlpFeedback.findMany({
+      where: { userId },
+      select: { category: true, decision: true },
+    }),
+    prisma.ticketAnalysis.findMany({
+      where: { userId },
+      select: { priorityConfidence: true },
+    }),
+  ]);
+
+  const byCat = new Map<string, { total: number; applied: number; ignored: number }>();
+  let totalApplied = 0;
+  for (const f of feedback) {
+    const row = byCat.get(f.category) ?? { total: 0, applied: 0, ignored: 0 };
+    row.total += 1;
+    if (f.decision === 'applied') {
+      row.applied += 1;
+      totalApplied += 1;
+    } else {
+      row.ignored += 1;
+    }
+    byCat.set(f.category, row);
+  }
+
+  const byCategory: NlpStatsRow[] = [...byCat.entries()]
+    .map(([category, r]) => ({
+      category,
+      total: r.total,
+      applied: r.applied,
+      ignored: r.ignored,
+      applyRate: r.total > 0 ? Number((r.applied / r.total).toFixed(3)) : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  // Confidence buckets: <0.5 (low), 0.5–0.7, 0.7–0.85, 0.85–0.95, ≥0.95 (high).
+  const buckets: Record<string, number> = {
+    'low(<0.5)': 0,
+    '0.5-0.7': 0,
+    '0.7-0.85': 0,
+    '0.85-0.95': 0,
+    'high(>=0.95)': 0,
+  };
+  for (const a of analyses) {
+    const c = a.priorityConfidence;
+    if (c < 0.5) buckets['low(<0.5)'] += 1;
+    else if (c < 0.7) buckets['0.5-0.7'] += 1;
+    else if (c < 0.85) buckets['0.7-0.85'] += 1;
+    else if (c < 0.95) buckets['0.85-0.95'] += 1;
+    else buckets['high(>=0.95)'] += 1;
+  }
+  const confidenceBuckets = Object.entries(buckets).map(([bucket, count]) => ({ bucket, count }));
+
+  const totalFeedback = feedback.length;
+  return {
+    byCategory,
+    confidenceBuckets,
+    totalFeedback,
+    overallApplyRate: totalFeedback > 0 ? Number((totalApplied / totalFeedback).toFixed(3)) : 0,
+  };
+}

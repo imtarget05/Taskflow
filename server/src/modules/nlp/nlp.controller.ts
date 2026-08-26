@@ -16,6 +16,13 @@ const listSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+const feedbackSchema = z.object({
+  analysisId: z.string().min(1).max(60),
+  category: z.string().min(1).max(80),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
+  decision: z.enum(['applied', 'ignored']),
+});
+
 export const analyse = asyncHandler(async (req: Request, res: Response) => {
   const parsed = analyseSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -29,6 +36,20 @@ export const analyse = asyncHandler(async (req: Request, res: Response) => {
     candidates: d.candidates,
     duplicateThreshold: d.duplicateThreshold,
   });
+  res.status(StatusCodes.OK).json({ success: true, data: result });
+});
+
+export const feedback = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = feedbackSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+  await nlpService.recordFeedback({ userId: req.user!.id, ...parsed.data });
+  res.status(StatusCodes.OK).json({ success: true });
+});
+
+export const stats = asyncHandler(async (req: Request, res: Response) => {
+  const result = await nlpService.getNlpStats(req.user!.id);
   res.status(StatusCodes.OK).json({ success: true, data: result });
 });
 

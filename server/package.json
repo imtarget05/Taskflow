@@ -34,6 +34,7 @@
     "helmet": "^8.0.0",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
+    "langfuse": "^3.38.20",
     "multer": "^2.2.0",
     "pino-http": "^10.5.0",
     "prisma": "^5.22.0",

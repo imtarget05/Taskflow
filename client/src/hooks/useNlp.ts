@@ -49,3 +49,46 @@ export function useAnalyses() {
     },
   });
 }
+
+export interface NlpStatsRow {
+  category: string;
+  total: number;
+  applied: number;
+  ignored: number;
+  applyRate: number;
+}
+
+export interface NlpStats {
+  byCategory: NlpStatsRow[];
+  confidenceBuckets: { bucket: string; count: number }[];
+  totalFeedback: number;
+  overallApplyRate: number;
+}
+
+export type NlpDecision = 'applied' | 'ignored';
+
+/** Implicit feedback: a 1-click apply is a positive label; viewing without
+ * applying is treated as "ignored" (the silent-eval signal). */
+export function useNlpFeedback() {
+  return useMutation({
+    mutationFn: async (payload: {
+      analysisId: string;
+      category: string;
+      priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+      decision: NlpDecision;
+    }): Promise<void> => {
+      await api.post('/nlp/feedback', payload);
+    },
+  });
+}
+
+/** Aggregate apply rates + confidence distribution for the current user. */
+export function useNlpStats() {
+  return useQuery({
+    queryKey: ['nlp', 'stats'],
+    queryFn: async () => {
+      const res = await api.get<{ data: NlpStats }>('/nlp/stats');
+      return res.data.data;
+    },
+  });
+}

@@ -45,6 +45,7 @@ model User {
   chatGroupMemberships ChatGroupMember[]
   chatMessages   ChatMessage[]
   ticketAnalyses TicketAnalysis[]
+  nlpFeedbacks  NlpFeedback[]
 
   @@map("users")
 }
@@ -220,6 +221,7 @@ model TicketAnalysis {
   duplicateOf        String?
   duplicateScore     Float?
   createdAt          DateTime @default(now())
+  feedbacks         NlpFeedback[]
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -227,6 +229,23 @@ model TicketAnalysis {
 
   @@index([userId, createdAt])
   @@map("ticket_analyses")
+}
+
+model NlpFeedback {
+  id         String   @id @default(cuid())
+  userId     String
+  analysisId String
+  category   String
+  priority   String // LOW | MEDIUM | HIGH | URGENT
+  decision   String // applied | ignored
+  createdAt  DateTime @default(now())
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysisRef TicketAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([category])
+  @@map("nlp_feedbacks")
 }
 
 model RefreshToken {
