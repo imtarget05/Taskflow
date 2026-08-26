@@ -12,6 +12,7 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const BoardPage = lazy(() => import('./pages/BoardPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function pageFallback() {
   return (
@@ -128,7 +129,14 @@ export default function App() {
           />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="*"
+        element={
+          <Suspense fallback={null}>
+            <NotFoundPage />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 }
