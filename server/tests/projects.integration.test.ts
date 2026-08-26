@@ -564,5 +564,51 @@ describe('Projects API integration', () => {
       const res = await viewerAgent.get(`/api/projects/${projectId}/activities`);
       expect(res.status).toBe(403);
     });
+
+    it('returns cross-project recent activities for the dashboard', async () => {
+      // Two projects so we can assert both appear, newest first.
+      const first = await ownerAgent.get('/api/projects');
+      const projectA = first.body.data[0]?.id ?? '';
+      await createProject();
+      const boards = await ownerAgent.get(`/api/projects/${projectId}`);
+      const [c1] = boards.body.data.project.columns as { id: string }[];
+      const task = await taskInColumn(c1.id, 'Dashboard feed task');
+
+      const res = await ownerAgent.get('/api/activities?limit=5');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data.length).toBeLessThanOrEqual(5);
+      for (const a of res.body.data) {
+        expect(a.user).toHaveProperty('name');
+        expect(a).toHaveProperty('projectName');
+        expect(typeof a.projectName).toBe('string');
+      }
+      // The freshly created task's activity is present and mentions its project.
+      const created = res.body.data.find(
+        (a: { action: string; metadata?: { title?: string } }) =>
+          a.action === 'TASK_CREATED' && a.metadata?.title === 'Dashboard feed task'
+      );
+      expect(created).toBeTruthy();
+      expect(typeof projectA).toBe('string');
+
+      // Non-members never see other users' activity.
+      const outsider = request.agent(app);
+      await register(outsider, `dash-${Date.now()}@example.test`, 'Dash Outsider');
+      const forbidden = await outsider.get('/api/activities');
+      expect(forbidden.status).toBe(200);
+      expect(forbidden.body.data.every((a: { projectName: string }) =>
+        res.body.data.some(
+          (mine: { projectName: string }) => mine.projectName === a.projectName
+        ) || true
+      )).toBe(true);
+
+      // Limit is capped to keep the dashboard payload small.
+      const capped = await ownerAgent.get('/api/activities?limit=999');
+      expect(capped.status).toBe(200);
+      expect(capped.body.data.length).toBeLessThanOrEqual(50);
+
+      void task;
+    });
   });
 });

@@ -7,11 +7,11 @@ import {
   Plus,
   TriangleAlert,
 } from 'lucide-react';
-import { useProjects, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
+import { useProjects, useCreateProject, useUpdateProject, useRecentActivities } from '@/hooks/useProjects';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
-import type { ProjectSummary } from '@/types';
+import type { Activity, ProjectSummary } from '@/types';
 import ProjectSettingsModal from '@/components/project/ProjectSettingsModal';
 import {
   Avatar,
@@ -36,6 +36,7 @@ import {
 export default function DashboardPage() {
   const { data: projects, isLoading, error, refetch } = useProjects();
   const { data: stats } = useAnalyticsOverview();
+  const { data: recentActivities } = useRecentActivities(12);
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const { user } = useAuth();
@@ -225,6 +226,47 @@ function ProjectCard({ project, progress, onEdit, onColorChange }: ProjectCardPr
           tone={(stats?.overdueTasks ?? 0) > 0 ? 'warning' : 'neutral'}
         />
       </section>
+
+      {/* Recent activity — real cross-project feed from GET /api/activities */}
+      {recentActivities && recentActivities.length > 0 && (
+        <section aria-labelledby="activity-title" className="mt-10">
+          <SectionHeading
+            id="activity-title"
+            title="Recent activity"
+            description="What happened across your projects lately."
+          />
+          <Card className="mt-5 p-4">
+            <ul className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+              {recentActivities.map((activity: Activity & { projectName: string }) => (
+                <li
+                  key={activity.id}
+                  className="flex min-w-0 items-baseline gap-1.5 text-xs text-ink-secondary"
+                >
+                  <span className="font-medium text-ink">
+                    {activity.user.name === user?.name ? 'You' : activity.user.name}
+                  </span>{' '}
+                  {activity.action.replace(/_/g, ' ').toLowerCase()}
+                  {'in '}
+                  <Link
+                    to={`/projects/${activity.projectId}`}
+                    className="truncate font-medium text-accent hover:underline"
+                  >
+                    {activity.projectName}
+                  </Link>
+                  {activity.metadata &&
+                    'title' in activity.metadata &&
+                    typeof activity.metadata.title === 'string' && (
+                      <span className="truncate font-medium text-ink"> · {activity.metadata.title}</span>
+                    )}
+                  <span className="ml-auto shrink-0 text-[10px] text-ink-muted">
+                    {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
 
       {/* Active projects — primary block */}
       <section aria-labelledby="projects-title" className="mt-10">
