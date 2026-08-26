@@ -43,3 +43,12 @@ server/prisma/*.db
 
 # Cloudflare Pages / Wrangler
 .wrangler/
+
+# OpenCode / agent tooling
+.commandcode/
+
+# tsc build artifact for vite.config.ts
+client/vite.config.d.ts
+
+# Hermes agent workspace
+.hermes/
