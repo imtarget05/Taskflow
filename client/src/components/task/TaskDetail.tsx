@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, Send, Trash2, X } from 'lucide-react';
+import { CalendarDays, History, Send, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useAddComment, useDeleteComment, useDeleteTask, useUpdateTask } from '@/hooks/useProjects';
 import AiInsightPanel from '@/components/task/AiInsightPanel';
 import { timeAgo } from '@/lib/time';
 import type { ProjectMember, TaskPriority } from '@/types';
 import { useToast } from '@/store/toast';
-import { Avatar, Badge, Button, ConfirmDialog, Input, Skeleton, Textarea } from '@/components/ui';
+import { Avatar, Badge, Button, ConfirmDialog, EmptyState, Input, Skeleton, Textarea } from '@/components/ui';
 
 
 interface TaskDetailProps {
@@ -65,6 +65,7 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
   const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
   const [comment, setComment] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tab, setTab] = useState<'detail' | 'comments' | 'activity'>('detail');
   const closeRef = useRef<HTMLButtonElement>(null);
   const { toast } = useToast();
   const updateTask = useUpdateTask(projectId);
@@ -81,6 +82,27 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
     },
     enabled: !!projectId && !!taskId,
   });
+
+  // Activities of THIS task only — used by the "Hoạt động" tab. The endpoint
+  // returns project-level activity; filter to the open task client-side.
+  const { data: activities } = useQuery({
+    queryKey: ['task-activities', projectId],
+    queryFn: async () => {
+      const res = await api.get<{
+        data: {
+          id: string;
+          action: string;
+          metadata?: Record<string, unknown> | null;
+          createdAt: string;
+          user: { id: string; name: string };
+          taskId: string | null;
+        }[];
+      }>(`/projects/${projectId}/activities`);
+      return res.data.data;
+    },
+    enabled: !!projectId && tab === 'activity',
+  });
+  const taskActivities = (activities ?? []).filter((a) => a.taskId === taskId);
 
   useEffect(() => {
     if (taskData) setForm(fromTask(taskData));
@@ -212,7 +234,41 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        {/* Tab bar — Chi tiết / Bình luận / Hoạt động */}
+        <div role="tablist" aria-label="Task detail sections" className="flex shrink-0 gap-1 border-b border-line px-5">
+          {(
+            [
+              { id: 'detail', label: 'Chi tiết' },
+              { id: 'comments', label: 'Bình luận' },
+              { id: 'activity', label: 'Hoạt động' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              type="button"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-ink-muted hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Chi tiết */}
+        <div
+          role="tabpanel"
+          aria-label="Chi tiết"
+          hidden={tab !== 'detail'}
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4"
+        >
+          {tab === 'detail' && (
+            <>
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted">Priority</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Task priority">
@@ -300,6 +356,19 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
             </div>
           </div>
 
+          {isFetching && <div className="sr-only" role="status">Refreshing task…</div>}
+            </>
+          )}
+        </div>
+
+        {/* Bình luận */}
+        <div
+          role="tabpanel"
+          aria-label="Bình luận"
+          hidden={tab !== 'comments'}
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4"
+        >
+          {tab === 'comments' && (
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted">Comments</p>
             {canEdit ? (
@@ -350,8 +419,37 @@ export default function TaskDetail({ projectId, taskId, members, onClose, userRo
               )}
             </ul>
           </div>
+          )}
+        </div>
 
-          {isFetching && <div className="sr-only" role="status">Refreshing task…</div>}
+        {/* Hoạt động */}
+        <div
+          role="tabpanel"
+          aria-label="Hoạt động"
+          hidden={tab !== 'activity'}
+          className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4"
+        >
+          {tab === 'activity' && (
+            <>
+              {taskActivities.length > 0 ? (
+                <ul className="space-y-2">
+                  {taskActivities.map((a) => (
+                    <li key={a.id} className="flex items-baseline gap-1.5 text-xs text-ink-secondary">
+                      <span className="font-medium text-ink">{a.user.name}</span>{' '}
+                      {a.action.replace(/_/g, ' ').toLowerCase()}
+                      <span className="ml-auto shrink-0 text-[10px] text-ink-muted">{timeAgo(a.createdAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  icon={<History className="h-6 w-6" aria-hidden="true" />}
+                  title="Chưa có hoạt động nào"
+                  className="py-8"
+                />
+              )}
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-end border-t border-line px-5 py-3">
