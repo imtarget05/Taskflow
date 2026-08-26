@@ -374,6 +374,9 @@ export default function ChatBox() {
             </div>
             {/* Resolved-language indicator hidden per UX request; logic kept intact. */}
 
+            <p className="mt-1.5 text-[10px] text-ink-muted">
+              Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB
+            </p>
           </form>
 
           {/* History drawer */}

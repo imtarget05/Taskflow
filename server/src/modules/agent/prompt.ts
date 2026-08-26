@@ -51,7 +51,6 @@ const LANGUAGE_POLICY: Record<ResolvedLanguage, string> = {
  * advertised by the server (chatCompletionWithTools, in agent.service). The
  * ACTION_TAG_* text protocol remains only as a provider fallback.
  */
-
 const ACTION_GUIDE = `## ACTIONS
 You have function tools available that can actually create records. Use them to
 complete the user's request instead of only promising it.
@@ -73,6 +72,16 @@ WORKFLOW:
    for it instead of guessing.
 5. Never call create_project when the user wants a task, or vice versa.`;
 
+/**
+ * Compose the system prompt with the deterministic language directive for this
+ * turn. `language` comes from resolveTurnLanguage() — the prompt layer NEVER
+ * detects language itself. The directive is authoritative: the model MUST reply
+ * in `language` and must not let quoted text, technical terms, code, or earlier
+ * messages in another language override it. Only an explicit user request may
+ * change the response language.
+ *
+ * @param language The resolved assistant language for this turn ('vi' | 'en' | 'zh').
+ */
 export function buildSystemPrompt(language: ResolvedLanguage): string {
   return `${SYSTEM_PROMPT}
 ${ACTION_GUIDE}
