@@ -2,6 +2,24 @@ import request from 'supertest';
 import { createApp } from '../src/app';
 import { prisma } from '../src/lib/prisma';
 
+/** Convert supertest's set-cookie header (string | string[] | undefined) into
+ * a single Cookie header value for `.set('Cookie', ...)`. Supertest expects a
+ * string, not an array — passing the raw array is what throws the TypeError. */
+function cookieHeaderValue(setCookie: unknown): string {
+  if (!setCookie) return '';
+  if (typeof setCookie === 'string') return setCookie;
+  if (Array.isArray(setCookie)) return setCookie.join('; ');
+  return String(setCookie);
+}
+
+/** Extract just the refresh_token cookie from a set-cookie header value. */
+function refreshCookieOnly(setCookie: unknown): string {
+  const all = cookieHeaderValue(setCookie);
+  const cookies = all.split(';').map((c) => c.trim());
+  const refresh = cookies.find((c) => c.startsWith('refresh_token='));
+  return refresh ?? '';
+}
+
 describe('Auth API integration', () => {
   let app: ReturnType<typeof createApp>;
 
@@ -114,7 +132,7 @@ describe('Auth API integration', () => {
 
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Cookie', reg.headers['set-cookie']);
+        .set('Cookie', cookieHeaderValue(reg.headers['set-cookie']));
 
       expect(res.status).toBe(200);
       expect(res.body.user.email).toBe('me@taskflow.dev');
@@ -130,10 +148,7 @@ describe('Auth API integration', () => {
         .post('/api/auth/register')
         .send({ email: 'type@taskflow.dev', password: 'password123', name: 'Type User' });
 
-      const cookies = reg.headers['set-cookie'] as unknown as string[];
-      const refreshCookie = cookies.find((c) => c.startsWith('refresh_token=')) as string;
-
-      const res = await request(app).get('/api/auth/me').set('Cookie', refreshCookie);
+      const res = await request(app).get('/api/auth/me').set('Cookie', refreshCookieOnly(reg.headers['set-cookie']));
       expect(res.status).toBe(401);
     });
 
@@ -146,7 +161,7 @@ describe('Auth API integration', () => {
 
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Cookie', reg.headers['set-cookie']);
+        .set('Cookie', cookieHeaderValue(reg.headers['set-cookie']));
       expect(res.status).toBe(401);
     });
 
