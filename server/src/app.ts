@@ -22,6 +22,7 @@ import agentRoutes from './modules/agent/agent.routes';
 import legalRoutes from './modules/legal/legal.routes';
 import exportRoutes from './modules/export/export.routes';
 import nlpRoutes from './modules/nlp/nlp.routes';
+import supplychainRoutes from './modules/supplychain/supplychain.routes';
 
 function isAllowedOrigin(origin: string): boolean {
   if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
@@ -90,6 +91,7 @@ export function createApp(): Express {
   app.use('/api/agent', agentRoutes);
   app.use('/api/agent/legal', legalRoutes);
   app.use('/api/nlp', nlpRoutes);
+  app.use('/api/sc', supplychainRoutes);
   app.use('/api/projects', exportRoutes);
 
   app.use(notFoundHandler);

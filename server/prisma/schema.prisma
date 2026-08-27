@@ -277,6 +277,8 @@ model Project {
   activities Activity[]
   chatGroup  ChatGroup?
   ticketAnalyses TicketAnalysis[]
+  orders     Order[]
+  inventoryItems InventoryItem[]
 
   @@map("projects")
 }
@@ -381,4 +383,94 @@ model Activity {
 
   @@index([projectId, createdAt])
   @@map("activities")
+}
+
+// ---------------------------------------------------------------------------
+// Supply Chain domain (Phase 2 — P2P / Order-to-Cash automation)
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING_APPROVAL
+  APPROVED
+  IN_FULFILLMENT
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  CLOSED
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique // e.g. "SUP-001"
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+
+  @@map("suppliers")
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  projectId    String
+  supplierId   String
+  orderNumber  String      @unique // PO number / internal reference
+  status       OrderStatus @default(PENDING_APPROVAL)
+  requestDate  DateTime?
+  deliveryDate DateTime?
+  totalAmount  Float?
+  currency     String      @default("VND")
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  lineItems    LineItem[]
+
+  @@map("orders")
+  @@index([projectId, status])
+  @@index([supplierId])
+}
+
+model LineItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  sku         String
+  description String?
+  quantity    Int
+  unitPrice   Float
+  amount      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("line_items")
+  @@index([orderId])
+}
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  projectId   String
+  sku         String
+  name        String
+  quantity    Int      @default(0)
+  unit        String   @default("Cái")
+  location    String?  // e.g. "Kho A - Kệ 3"
+  minStock    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_items")
+  @@index([projectId, sku])
+  @@index([projectId])
 }
