@@ -1,0 +1,35 @@
+name: Agent Eval Nightly
+
+# Chạy bộ eval agent (32 câu tiếng Việt) mỗi ngày lúc midnight UTC để
+# đảm bảo stub LLM heuristic không bị phá vỡ bởi thay đổi code.
+# Ngoài ra cho phép chạy thủ công qua workflow_dispatch.
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # midnight UTC mỗi ngày
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Agent Eval Set (32/32)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run agent eval
+        working-directory: server
+        run: npm run eval:agent
