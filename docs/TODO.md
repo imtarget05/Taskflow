@@ -30,6 +30,7 @@
 - [x] **Google Sheets export nâng cấp**: thêm sheet "Progress" (thống kê tiến độ)
 - [x] **Báo cáo tiến độ TXT tiếng Việt**: `GET /api/projects/:id/export/progress` (% hoàn thành, task quá hạn, chi tiết theo cột) + nút "Báo cáo tiến độ" trên ExportMenu
 - [x] Deploy: CI green → GHCR → Render + Cloudflare Pages; smoke 5/6 gates pass (gate còn lại là direct-origin URL Render free tier)
+- [x] **Observability & Evaluation (2026-08-27)**: Langfuse agent tracing env-gated, NLP implicit feedback (applied/ignored) + stats endpoint, agent eval set 32/32 câu tiếng Việt với nightly CI, docs OBSERVABILITY.md
 
 ## 🚧 Đang làm
 

@@ -65,6 +65,14 @@ Live: app `https://taskflow.pages.dev` · api `https://taskflow-server-illy.onre
 - Export: Báo cáo tiến độ TXT tiếng Việt (`/export/progress`) + Google Sheets thêm tab "Progress".
 - Deploy: CI green → GHCR → Render + Cloudflare Pages. Smoke prod 5/6 gates (gate fail = direct-origin URL Render free tier, app qua Pages hoạt động chuẩn).
 
+## Phase L — Observability & Evaluation (2026-08-27)
+- Langfuse agent tracing: `tracer.ts` env-gated (LANGFUSE_PUBLIC_KEY/SECRET_KEY), bọc `chat()` trong `traceAgentTurn`, ghi span LLM + action. No-op khi không có key. Test `tracer.test.ts` 3/3 pass.
+- NLP implicit feedback: model `NlpFeedback`, endpoint `POST /nlp/feedback` + `GET /nlp/stats`, UI `AiInsightPanel` ghi applied/ignored, `NlpStatsPanel` trên SettingsPage.
+- Agent eval set: 32 câu tiếng Việt (`server/tests/eval/agent-eval.json` + `agent-eval.test.ts`), stub LLM heuristic, mock tracer, `skipPersist` để bypass DB. 32/32 pass.
+- Nightly CI: `.github/workflows/eval-nightly.yml` chạy `npm run eval:agent` midnight UTC + workflow_dispatch.
+- Docs: `docs/OBSERVABILITY.md` mới, README mục Observability, TODO.md và IMPLEMENTATION_LOG.md cập nhật.
+- Commit: `1f81f5e` (tracing + NLP + stats), `b8d1208` (eval set + nightly CI + skipPersist), `0b5df8d` (skipPersist), `42a6a44` (docs observability).
+
 ## Definition of done (mọi phase)
 - `npm run typecheck|lint|test|build` cả 2 workspace xanh trước commit; CI green; deploy prod + smoke thật trên production.
 - Server: 26 suites/274 tests · client: 8 suites/27 tests. CI: `lint-test-build` (postgres service + migrate deploy) → docker push GHCR → Render deploy hook.
