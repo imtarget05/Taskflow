@@ -60,6 +60,7 @@ export interface ChatOptions {
   language?: AgentLanguage | null;
   projectId?: string | null;
   conversationId?: string | null;
+  skipPersist?: boolean;
 }
 
 /** A machine-readable create action the model may emit to actually change data. */
@@ -314,15 +315,18 @@ export async function chat(
   );
 
   const { reply, actionResult } = result;
-  const conversationId = await persistConversation(
-    userId,
-    history,
-    options,
-    reply,
-    existing,
-    turn,
-    nextSummary
-  );
+  const conversationId =
+    options.skipPersist && !options.conversationId
+      ? `eval-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : await persistConversation(
+          userId,
+          history,
+          options,
+          reply,
+          existing,
+          turn,
+          nextSummary
+        );
 
   return { reply, conversationId, language, ...(actionResult ? { action: actionResult } : {}) };
 }
