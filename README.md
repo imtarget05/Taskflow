@@ -191,7 +191,9 @@ Browser → Cloudflare (TLS, CDN, WAF)
 
 - Logs: pino-http (structured JSON) — redact cookie/auth header.
 - Health: `/api/health` (liveness-style, không qua rate limiter).
-- Metrics/tracing (Prometheus, OpenTelemetry): nằm trong lộ trình (Roadmap).
+- Langfuse agent tracing (optional, env-gated): `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASEURL` — tracing no-op khi không set. Xem `docs/OBSERVABILITY.md`.
+- NLP implicit feedback: panel "Phân tích AI" trong TaskDetail ghi `applied`/`ignored` vào DB, endpoint `GET /nlp/stats` để đo apply rate. Xem `docs/OBSERVABILITY.md`.
+- **Agent eval set**: 32 câu tiếng Việt trong `server/tests/eval/agent-eval.json`, runner `npm run eval:agent` (Jest, stub LLM heuristic), hourly CI nightly `.github/workflows/eval-nightly.yml`. Xem `docs/OBSERVABILITY.md`.
 
 ## Scalability
 
