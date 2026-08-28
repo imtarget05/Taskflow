@@ -53,3 +53,7 @@ client/vite.config.d.ts
 # Hermes agent workspace
 .hermes/
 supply-chain-automation/.venv/
+supply-chain-automation/mlops/mlflow.db
+supply-chain-automation/mlops/artifacts/
+supply-chain-automation/mlops/mlruns/
+supply-chain-automation/apis/__pycache__/
