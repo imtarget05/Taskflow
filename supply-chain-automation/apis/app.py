@@ -68,3 +68,23 @@ async def metrics():
         "fill_rate_example": 94.2,
         "otif_example": 88.5
     }
+
+# ---------------------------------------------------------------------------
+# Phase 3 — LangGraph agent: 4-column Kanban workflow
+# PO_Received → Approval → Fulfillment → Shipment
+# ---------------------------------------------------------------------------
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mlops"))
+from agent_workflow import run as agent_run  # noqa: E402
+
+
+class AgentRequest(BaseModel):
+    order_id: str
+    message: str
+
+
+@app.post("/agent/process-order")
+async def agent_process_order(request: AgentRequest):
+    return {"status": "ok", "data": agent_run(request.order_id, request.message)}
