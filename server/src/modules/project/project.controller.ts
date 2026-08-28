@@ -1,5 +1,5 @@
 import { Role } from '@prisma/client';
-import { Request, Response } from 'express';
+import { Request, Response, RequestHandler } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 import { asyncHandler, AppError, validationError } from '../../utils/errors';
@@ -94,4 +94,15 @@ export const members = asyncHandler(async (req: Request, res: Response) => {
   if (!params.success) throw new AppError('Invalid project id', StatusCodes.BAD_REQUEST);
   const result = await projectService.listMembers(params.data.projectId, req.user!.id);
   res.status(StatusCodes.OK).json({ success: true, data: result });
+});
+
+export const createSCProject: RequestHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { name, description, color } = req.body;
+  if (!name) throw new AppError('Project name is required', StatusCodes.BAD_REQUEST);
+  const { id } = await projectService.createSCProject(req.user!.id, {
+    name,
+    description,
+    color,
+  });
+  res.status(StatusCodes.CREATED).json({ success: true, data: { id } });
 });

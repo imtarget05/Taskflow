@@ -39,6 +39,43 @@ export async function createProject(
   return { id: project.id };
 }
 
+export async function createSCProject(
+  ownerId: string,
+  data: { name: string; description?: string; color?: string },
+): Promise<{ id: string }> {
+  const project = await prisma.project.create({
+    data: {
+      name: data.name.trim(),
+      description: data.description,
+      color: data.color,
+      ownerId,
+    },
+  });
+
+  // Tạo 4 cột SC mặc định với columnType = SC_WORKFLOW
+  const scColumns = [
+    { name: 'PO Received' },
+    { name: 'Approved' },
+    { name: 'Fulfillment' },
+    { name: 'Shipped' },
+  ];
+
+  await prisma.column.createMany({
+    data: scColumns.map((col, i) => ({
+      projectId: project.id,
+      name: col.name,
+      position: i,
+      columnType: 'SC_WORKFLOW' as any,
+    })),
+  });
+
+  await prisma.projectMember.create({
+    data: { projectId: project.id, userId: ownerId, role: Role.OWNER },
+  });
+
+  return { id: project.id };
+}
+
 export async function listProjects(userId: string) {
   const memberships = await prisma.projectMember.findMany({
     where: { userId },
