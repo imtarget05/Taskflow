@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { asyncHandler } from '../../utils/errors';
+import { asyncHandler, AppError } from '../../utils/errors';
 import { prisma } from '../../lib/prisma';
 import * as agenticService from './agentic.service';
 import { AnalyseOrderResult } from '../supplychain/sc-nlp.service';
@@ -12,7 +12,7 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
   const { orderId, projectId } = req.body;
 
   if (!orderId || !projectId) {
-    throw new Error('orderId and projectId are required');
+    throw new AppError('orderId and projectId are required', StatusCodes.BAD_REQUEST);
   }
 
   const userId = req.user!.id;
@@ -24,11 +24,11 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
   });
 
   if (!order) {
-    throw new Error('Order not found');
+    throw new AppError('Order not found', StatusCodes.NOT_FOUND);
   }
 
   if (order.projectId !== projectId) {
-    throw new Error('Order does not belong to project');
+    throw new AppError('Order does not belong to project', StatusCodes.BAD_REQUEST);
   }
 
   // 2. Chạy rule-based analysis (dùng orderNumber + notes làm context)
@@ -78,7 +78,8 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
       decision: decision.decision,
       action: decision.action,
       reason: decision.reason,
-      taskId: result.taskId ?? result.humanTaskId ?? null,
+      taskId: result.taskId ?? null,
+      humanTaskId: result.humanTaskId ?? null,
       agenticDecisionId: agenticDecision.id,
       llmUsed: analysis.llmUsed,
     },

@@ -22,7 +22,7 @@ export const createOrderSchema = z.object({
     'DELIVERED',
     'CANCELLED',
     'CLOSED',
-  ]),
+  ]).default('PENDING_APPROVAL'),
   requestDate: z.string().datetime().optional(),
   deliveryDate: z.string().datetime().optional(),
   totalAmount: z.number().min(0).optional(),
