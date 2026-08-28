@@ -52,3 +52,4 @@ client/vite.config.d.ts
 
 # Hermes agent workspace
 .hermes/
+supply-chain-automation/.venv/
