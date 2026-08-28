@@ -330,6 +330,7 @@ model Task {
   position    Int
   completed   Boolean      @default(false)
   createdById String
+  metadata    Json? // Custom fields: orderId, PO reference, v.v.
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
