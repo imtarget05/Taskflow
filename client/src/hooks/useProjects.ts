@@ -30,11 +30,18 @@ export function useCreateProject() {
       description?: string;
       color?: string;
       columnNames?: string[];
+      endpoint?: string;
     }) => {
-      const res = await api.post<{ data: { id: string } }>('/projects', data);
+      const endpoint = data.endpoint ?? '/projects';
+      const res = await api.post<{ data: { id: string } }>(endpoint, data);
       return res.data.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      if (variables?.endpoint === '/projects/sc') {
+        qc.invalidateQueries({ queryKey: ['board'] });
+      }
+    },
   });
 }
 

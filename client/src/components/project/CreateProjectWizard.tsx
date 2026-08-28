@@ -26,8 +26,11 @@ export default function CreateProjectWizard({ onClose }: CreateProjectWizardProp
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [projectType, setProjectType] = useState<'kanban' | 'sc'>('kanban');
   const [columns, setColumns] = useState<string[]>([...DEFAULT_COLUMNS]);
   const [submitError, setSubmitError] = useState('');
+
+  const scColumns = ['PO Received', 'Approved', 'Fulfillment', 'Shipped'];
 
   function updateColumn(i: number, value: string) {
     setColumns((cols) => cols.map((c, idx) => (idx === i ? value : c)));
@@ -41,6 +44,16 @@ export default function CreateProjectWizard({ onClose }: CreateProjectWizardProp
     setColumns((cols) => (cols.length > 1 ? cols.filter((_, idx) => idx !== i) : cols));
   }
 
+  function applySCType() {
+    setProjectType('sc');
+    setColumns([...scColumns]);
+  }
+
+  function applyKanbanType() {
+    setProjectType('kanban');
+    setColumns([...DEFAULT_COLUMNS]);
+  }
+
   async function handleSubmit(e?: FormEvent) {
     e?.preventDefault();
     setSubmitError('');
@@ -49,7 +62,10 @@ export default function CreateProjectWizard({ onClose }: CreateProjectWizardProp
       const created = await createProject.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
-        columnNames: columns.map((c) => c.trim()).filter(Boolean),
+        columnNames: projectType === 'kanban'
+          ? columns.map((c) => c.trim()).filter(Boolean)
+          : undefined,
+        endpoint: projectType === 'sc' ? '/projects/sc' : '/projects',
       });
       onClose();
       if (created?.id) navigate(`/projects/${created.id}`);
@@ -132,6 +148,35 @@ export default function CreateProjectWizard({ onClose }: CreateProjectWizardProp
             placeholder="Project này về điều gì? (không bắt buộc)"
             rows={3}
           />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={applyKanbanType}
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                projectType === 'kanban'
+                  ? 'border-accent bg-accent-soft text-accent-ink'
+                  : 'border-line bg-surface-2 text-ink-secondary hover:border-ink-muted'
+              }`}
+            >
+              Kanban Board
+            </button>
+            <button
+              type="button"
+              onClick={applySCType}
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                projectType === 'sc'
+                  ? 'border-accent bg-accent-soft text-accent-ink'
+                  : 'border-line bg-surface-2 text-ink-secondary hover:border-ink-muted'
+              }`}
+            >
+              Supply Chain
+            </button>
+          </div>
+          {projectType === 'sc' && (
+            <p className="text-xs text-ink-secondary">
+              Tự động tạo 4 cột: PO Received → Approved → Fulfillment → Shipped
+            </p>
+          )}
         </form>
       )}
 
