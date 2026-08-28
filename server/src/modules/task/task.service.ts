@@ -151,6 +151,18 @@ export async function getTask(taskId: string) {
   return task;
 }
 
+export async function updateTaskMetadata(taskId: string, metadata: Record<string, unknown>) {
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Task not found', 404);
+  return prisma.task.update({
+    where: { id: taskId },
+    data: { metadata: metadata as Prisma.InputJsonValue },
+    include: {
+      assignments: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+    },
+  });
+}
+
 export async function listTasks(projectId: string) {
   return prisma.task.findMany({
     where: { projectId },
