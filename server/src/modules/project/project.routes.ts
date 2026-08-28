@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate);
 
 router.post('/', projectController.create);
+router.post('/sc', projectController.createSCProject);
 router.get('/', projectController.list);
 router.get('/:projectId', projectController.getById);
 router.patch('/:projectId', projectController.update);
