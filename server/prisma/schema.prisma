@@ -20,6 +20,11 @@ enum TaskPriority {
   URGENT
 }
 
+enum ColumnType {
+  STANDARD // Kanban regular
+  SC_WORKFLOW // Supply Chain workflow: PO Received → Approved → Fulfillment → Shipped
+}
+
 model User {
   id        String    @id @default(cuid())
   email     String    @unique
@@ -299,12 +304,13 @@ model ProjectMember {
 }
 
 model Column {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   projectId String
   name      String
   position  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  columnType ColumnType @default(STANDARD)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks   Task[]
