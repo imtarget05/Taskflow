@@ -24,6 +24,8 @@ import exportRoutes from './modules/export/export.routes';
 import nlpRoutes from './modules/nlp/nlp.routes';
 import supplychainRoutes from './modules/supplychain/supplychain.routes';
 import scNlpRoutes from './modules/supplychain/sc-nlp.routes';
+import scDashboardRoutes from './modules/supplychain/sc-dashboard.routes';
+import agenticRoutes from './modules/agentic/agentic.routes';
 
 function isAllowedOrigin(origin: string): boolean {
   if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
@@ -93,7 +95,9 @@ export function createApp(): Express {
   app.use('/api/agent/legal', legalRoutes);
   app.use('/api/nlp', nlpRoutes);
   app.use('/api/sc', supplychainRoutes);
-  app.use('/api/sc/nlp', scNlpRoutes);
+  app.use('/api/sc', scNlpRoutes);
+  app.use('/api/sc', scDashboardRoutes);
+  app.use('/api/sc/agentic', agenticRoutes);
   app.use('/api/projects', exportRoutes);
 
   app.use(notFoundHandler);

@@ -66,6 +66,7 @@ export const createOrder: RequestHandler = async (req, res) => {
     project: { connect: { id: raw.projectId } },
     supplier: { connect: { id: raw.supplierId } },
     orderNumber: raw.orderNumber,
+    status: raw.status,
     requestDate: raw.requestDate ? new Date(raw.requestDate) : null,
     deliveryDate: raw.deliveryDate ? new Date(raw.deliveryDate) : null,
     totalAmount: raw.totalAmount,
