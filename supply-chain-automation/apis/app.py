@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 import numpy as np
@@ -43,10 +45,42 @@ async def health():
 
 @app.post("/forecast", response_model=ForecastResponse)
 async def forecast(request: ForecastRequest):
+    """Real Prophet forecast from the MLflow registry, with synthetic fallback."""
+    try:
+        import mlflow
+        import pandas as pd
+        from datetime import datetime, timedelta
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
+        model = _get_cached_prophet()
+        future = pd.DataFrame({"ds": pd.date_range(datetime.utcnow(), periods=request.days, freq="D")})
+        fc = model.predict(future)
+        return ForecastResponse(
+            product_id=request.product_id,
+            forecast=[round(float(v), 2) for v in fc["yhat"].tolist()],
+            model="prophet",
+        )
+    except Exception as exc:  # noqa: BLE001 — registry/server unavailable → fallback
+        print(f"[forecast] Prophet unavailable ({exc}); using synthetic baseline")
     np.random.seed(request.product_id)
     base = 100 + np.random.randn() * 20
-    forecast = [base + np.random.randn() * 10 for _ in range(request.days)]
-    return ForecastResponse(product_id=request.product_id, forecast=forecast, model="prophet")
+    forecast_vals = [base + np.random.randn() * 10 for _ in range(request.days)]
+    return ForecastResponse(product_id=request.product_id, forecast=forecast_vals, model="prophet-fallback")
+
+
+_PROPHET_CACHE: dict = {}
+
+
+def _get_cached_prophet():
+    """Cache the registry-loaded Prophet model for 10 minutes."""
+    import mlflow
+    import time as _time
+    cached = _PROPHET_CACHE.get("model")
+    if cached and _time.time() - _PROPHET_CACHE.get("ts", 0) < 600:
+        return cached
+    model = mlflow.prophet.load_model("models:/prophet_forecasting@challenger")
+    _PROPHET_CACHE["model"] = model
+    _PROPHET_CACHE["ts"] = _time.time()
+    return model
 
 @app.post("/inventory/recommended-order", response_model=InventoryResponse)
 async def recommended_order(request: InventoryRequest):
