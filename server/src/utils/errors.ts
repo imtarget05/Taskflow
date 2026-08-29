@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ReasonPhrases, StatusCodes } from 'http-status-codes';
 import { ZodError } from 'zod';
 import { logger } from '../lib/logger';
@@ -26,11 +26,11 @@ export class AppError extends Error {
 }
 
 /** Wrap async route handlers so rejections reach the error middleware. */
-export const asyncHandler =
-  (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
-  (req: Request, res: Response, next: NextFunction) => {
+export const asyncHandler = (fn: RequestHandler): RequestHandler => {
+  return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
+};
 
 /** 404 handler for unmatched routes. */
 export function notFoundHandler(req: Request, res: Response): void {
