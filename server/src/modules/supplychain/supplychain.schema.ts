@@ -52,7 +52,6 @@ export const createLineItemSchema = z.object({
 });
 
 export const adjustInventorySchema = z.object({
-  id: z.string(),
   quantity: z.number().int(),
   reason: z.string().max(200).optional(),
 });

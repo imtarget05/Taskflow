@@ -33,7 +33,7 @@ router.get('/inventory', asyncHandler(supplychainController.getInventory));
 router.get('/inventory/:id', asyncHandler(supplychainController.getInventoryItem));
 router.post('/inventory', asyncHandler(supplychainController.createInventoryItem));
 router.patch('/inventory/:id', asyncHandler(supplychainController.updateInventoryItem));
-router.post('/inventory/:id/adjust', asyncHandler(supplychainController.adjustInventory));
+router.patch('/inventory/:id/adjust', asyncHandler(supplychainController.adjustInventory));
 router.delete('/inventory/:id', asyncHandler(supplychainController.deleteInventoryItem));
 
 export default router;
