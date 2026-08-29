@@ -126,6 +126,47 @@ export async function resolveSCColumnId(projectId: string, preferredName = 'PO R
   return (preferred ?? columns[0]).id;
 }
 
+// ---------------------------------------------------------------------------
+// Option A-2 — Wire the LangGraph ML agent (Python FastAPI) into the Node flow.
+// Best-effort enrichment: pulls the EOQ / reorder suggestion from the deployed
+// ML endpoint and stores it on the created task's metadata. Any failure (service
+// down, timeout, non-2xx) is swallowed so the core decision flow is unaffected.
+// ---------------------------------------------------------------------------
+const ML_AGENT_URL = process.env.SC_ML_AGENT_URL ?? 'http://127.0.0.1:8001';
+
+export type MlEoqSuggestion = {
+  fetched: boolean;
+  eoq?: number;
+  safetyStock?: number;
+  reorderPoint?: number;
+  note: string;
+};
+
+export async function fetchMlEoq(orderId: string, orderNumber: string | null): Promise<MlEoqSuggestion> {
+  try {
+    const res = await fetch(`${ML_AGENT_URL}/inventory/recommended-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ demand: 10000, order_cost: 80, holding_cost: 2, lead_time: 5, z_score: 1.65 }),
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) {
+      return { fetched: false, note: `ML agent ${res.status}` };
+    }
+    const data = (await res.json()) as { eoq?: number; safety_stock?: number; reorder_point?: number };
+    return {
+      fetched: true,
+      eoq: data.eoq,
+      safetyStock: data.safety_stock,
+      reorderPoint: data.reorder_point,
+      note: `langgraph-agent (order ${orderNumber ?? orderId})`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { fetched: false, note: `ML agent unavailable (${msg})` };
+  }
+}
+
 export async function executeDecision(
   projectId: string,
   actorId: string,
@@ -164,9 +205,20 @@ async function executeAutoAction(
         description: `Đơn hàng: ${orderNumber ?? orderId}`,
         priority: TaskPriority.HIGH,
       });
-      await updateTaskMetadata(task.id, { orderId, source: 'agentic' });
-      emitToProject(projectId, SOCKET_EVENTS.TASK_CREATED, { ...task, agentic: true });
-      return { taskId: task.id, notification: `Agent tạo task: ${action.taskTitle}` };
+      const eoq = await fetchMlEoq(orderId, orderNumber);
+      await updateTaskMetadata(task.id, {
+        orderId,
+        source: 'agentic',
+        mlEoq: eoq.eoq,
+        mlSafetyStock: eoq.safetyStock,
+        mlReorderPoint: eoq.reorderPoint,
+        mlAgent: eoq.note,
+      });
+      emitToProject(projectId, SOCKET_EVENTS.TASK_CREATED, { ...task, agentic: true, eoq });
+      return {
+        taskId: task.id,
+        notification: `Agent tạo task: ${action.taskTitle}${eoq.fetched ? ` (EOQ ${eoq.eoq} từ LangGraph)` : ''}`,
+      };
     }
     case 'notify': {
       emitToProject(projectId, 'sc:agentic:notify', {
