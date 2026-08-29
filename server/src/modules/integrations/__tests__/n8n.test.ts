@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { env } from '../../../config/env';
+import { describe, it, expect, jest, afterEach } from '@jest/globals';
 
 // Mock the env module so we control N8N configuration per test.
-vi.mock('../../../config/env', () => ({
+jest.mock('../../../config/env', () => ({
   env: {
     NODE_ENV: 'test',
     N8N_API_URL: undefined,
@@ -12,25 +11,19 @@ vi.mock('../../../config/env', () => ({
 }));
 
 // Mock the logger to keep test output clean.
-vi.mock('../../lib/logger', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+jest.mock('../../../lib/logger', () => ({
+  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 import { dispatchToN8n, isN8nConfigured } from '../n8n';
+import { env } from '../../../config/env';
 
 describe('n8n integration client', () => {
   afterEach(() => {
-    vi.restoreAllMocks();
-    // reset module-level env between tests
-    const e = env;
-    e.N8N_API_URL = undefined;
-    e.N8N_API_KEY = undefined;
-    e.N8N_SIGNING_SECRET = undefined;
+    jest.restoreAllMocks();
+    env.N8N_API_URL = undefined;
+    env.N8N_API_KEY = undefined;
+    env.N8N_SIGNING_SECRET = undefined;
   });
 
   it('isN8nConfigured is false when N8N_API_URL missing', () => {
@@ -38,7 +31,7 @@ describe('n8n integration client', () => {
   });
 
   it('skips dispatch and returns false when n8n is not configured', async () => {
-    const fetchSpy = vi.spyOn(global, 'fetch');
+    const fetchSpy = jest.spyOn(global, 'fetch');
     const ok = await dispatchToN8n({
       path: '/webhook/taskflow',
       event: 'agentic.decision',
@@ -49,10 +42,8 @@ describe('n8n integration client', () => {
   });
 
   it('delivers payload to the webhook when configured', async () => {
-    const e = env;
-    e.N8N_API_URL = 'http://localhost:5678';
-
-    const fetchSpy = vi
+    env.N8N_API_URL = 'http://localhost:5678';
+    const fetchSpy = jest
       .spyOn(global, 'fetch')
       .mockResolvedValue({ ok: true, status: 200 } as unknown as Response);
 
@@ -78,15 +69,11 @@ describe('n8n integration client', () => {
     env.N8N_API_KEY = 'secret-key';
     env.N8N_SIGNING_SECRET = 'sign-secret';
 
-    const fetchSpy = vi
+    const fetchSpy = jest
       .spyOn(global, 'fetch')
       .mockResolvedValue({ ok: true, status: 200 } as unknown as Response);
 
-    await dispatchToN8n({
-      path: '/wh',
-      event: 'inventory.adjust',
-      payload: { sku: 'A' },
-    });
+    await dispatchToN8n({ path: '/wh', event: 'inventory.adjust', payload: { sku: 'A' } });
 
     const [, init] = fetchSpy.mock.calls[0];
     expect((init!.headers as Record<string, string>).authorization).toBe('Bearer secret-key');
@@ -95,14 +82,8 @@ describe('n8n integration client', () => {
 
   it('returns false (never throws) when the webhook is unreachable', async () => {
     env.N8N_API_URL = 'http://localhost:5678';
-
-    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
-
-    const ok = await dispatchToN8n({
-      path: '/wh',
-      event: 'sc.order.analysed',
-      payload: {},
-    });
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
+    const ok = await dispatchToN8n({ path: '/wh', event: 'sc.order.analysed', payload: {} });
     expect(ok).toBe(false);
   });
 });
