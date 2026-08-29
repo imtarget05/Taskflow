@@ -1,10 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+const activityCreate = jest.fn().mockResolvedValue({ id: 'act1' });
+const inventoryUpdate = jest.fn().mockResolvedValue({ id: 'i1', quantity: 10 });
+const inventoryFind = jest.fn();
 
-const activityCreate = vi.fn().mockResolvedValue({ id: 'act1' });
-const inventoryUpdate = vi.fn().mockResolvedValue({ id: 'i1', quantity: 10 });
-const inventoryFind = vi.fn();
-
-vi.mock('../../../lib/prisma', () => ({
+jest.mock('../../../lib/prisma', () => ({
   prisma: {
     inventoryItem: {
       findUnique: (...a: unknown[]) => inventoryFind(...a),
@@ -14,21 +12,15 @@ vi.mock('../../../lib/prisma', () => ({
   },
 }));
 
-vi.mock('../../integrations/n8n', () => ({
-  dispatchToN8n: vi.fn().mockResolvedValue(false),
+jest.mock('../../integrations/n8n', () => ({
+  dispatchToN8n: jest.fn().mockResolvedValue(false),
 }));
 
 import { adjustInventoryQuantity } from '../supplychain.service';
-import { prisma } from '../../../lib/prisma';
-
-const mockedPrisma = prisma as unknown as {
-  inventoryItem: { findUnique: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
-  activity: { create: ReturnType<typeof vi.fn> };
-};
 
 describe('adjustInventoryQuantity', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     inventoryFind.mockResolvedValue({
       id: 'i1',
       projectId: 'p1',
@@ -40,7 +32,7 @@ describe('adjustInventoryQuantity', () => {
   it('clamps quantity to a minimum of 0', async () => {
     inventoryUpdate.mockResolvedValue({ id: 'i1', quantity: 0 });
     await adjustInventoryQuantity('i1', -100, 'u1', 'stocktake');
-    expect(mockedPrisma.inventoryItem.update).toHaveBeenCalledWith({
+    expect(inventoryUpdate).toHaveBeenCalledWith({
       where: { id: 'i1' },
       data: { quantity: 0 },
     });
@@ -50,7 +42,7 @@ describe('adjustInventoryQuantity', () => {
     inventoryUpdate.mockResolvedValue({ id: 'i1', quantity: 8 });
     await adjustInventoryQuantity('i1', 3, 'u1', 'nhập thêm');
 
-    expect(mockedPrisma.activity.create).toHaveBeenCalledWith({
+    expect(activityCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         projectId: 'p1',
         userId: 'u1',

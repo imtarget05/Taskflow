@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { canTransitionOrderStatus } from '../supplychain.service';
 
 describe('order status state machine', () => {
