@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import { RequestHandler } from 'express';
 import * as supplychainService from './supplychain.service';
 import { createSupplierSchema, createOrderSchema, updateOrderStatusSchema, createLineItemSchema, adjustInventorySchema } from './supplychain.schema';
@@ -80,7 +80,8 @@ export const createOrder: RequestHandler = async (req, res) => {
 export const updateOrderStatus: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const { status } = updateOrderStatusSchema.parse(req.body);
-  const order = await supplychainService.updateOrderStatus(id as string, status);
+  // Enforce the order status state machine (rejects illegal jumps).
+  const order = await supplychainService.transitionOrderStatus(id as string, status as OrderStatus);
   res.json({ data: order });
 };
 
@@ -181,7 +182,12 @@ export const updateInventoryItem: RequestHandler = async (req, res) => {
 export const adjustInventory: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const { quantity, reason } = adjustInventorySchema.parse(req.body);
-  const item = await supplychainService.adjustInventoryQuantity(id as string, quantity, reason);
+  const item = await supplychainService.adjustInventoryQuantity(
+    id as string,
+    quantity,
+    req.user!.id,
+    reason
+  );
   res.json({ data: item });
 };
 

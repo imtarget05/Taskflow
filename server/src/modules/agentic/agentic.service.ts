@@ -49,9 +49,10 @@ export function evaluateDecision(
   classification: string,
   confidence: number,
   suggestedAction: string,
-  workflowTrigger: string
+  workflowTrigger: string,
+  orderId?: string
 ): AgenticDecision {
-  const action = buildActionFromSuggestion(suggestedAction, workflowTrigger);
+  const action = buildActionFromSuggestion(suggestedAction, workflowTrigger, orderId);
 
   if (isHighRiskAction(action)) {
     return {
@@ -94,7 +95,8 @@ export function evaluateDecision(
 
 function buildActionFromSuggestion(
   suggestedAction: string,
-  workflowTrigger: string
+  workflowTrigger: string,
+  orderId?: string
 ): AgenticAction {
   switch (workflowTrigger) {
     case 'approve_po':
@@ -102,8 +104,9 @@ function buildActionFromSuggestion(
     case 'update_po':
       return { type: 'create_task', taskTitle: `Xác nhận điều chỉnh PO: ${suggestedAction}` };
     case 'invoice_verify':
-      // Thanh toán hóa đơn là high-risk → luôn đi qua human approval
-      return { type: 'approve_payment', orderId: '' };
+      // Thanh toán hóa đơn là high-risk → luôn đi qua human approval.
+      // Truyền orderId thực tế để task có thể link về đơn hàng gốc.
+      return { type: 'approve_payment', orderId: orderId ?? '' };
     case 'asn_check':
       return { type: 'create_task', taskTitle: `Kiểm tra hàng nhập (ASN): ${suggestedAction}` };
     default:

@@ -1,7 +1,8 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
+import { dispatchToN8n } from '../integrations/n8n';
 
 // ---------------------------------------------------------------------------
 // Supplier CRUD
@@ -103,6 +104,71 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Order status state machine
+// ---------------------------------------------------------------------------
+
+/**
+ * Allowed forward (and limited backward) transitions for OrderStatus.
+ * Guards against illegal jumps (e.g. PENDING_APPROVAL -> CLOSED) so the
+ * supply-chain workflow stays consistent.
+ */
+const ORDER_TRANSITIONS: Record<string, string[]> = {
+  PENDING_APPROVAL: ['APPROVED', 'CANCELLED'],
+  APPROVED: ['IN_FULFILLMENT', 'CANCELLED'],
+  IN_FULFILLMENT: ['SHIPPED', 'CANCELLED'],
+  SHIPPED: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: ['CLOSED'],
+  CANCELLED: [],
+  CLOSED: [],
+};
+
+export function canTransitionOrderStatus(from: string, to: string): boolean {
+  if (from === to) return true; // idempotent
+  return (ORDER_TRANSITIONS[from] ?? []).includes(to);
+}
+
+export async function transitionOrderStatus(
+  id: string,
+  to: OrderStatus
+) {
+  const order = await prisma.order.findUnique({ where: { id } });
+  if (!order) throw new AppError('Order not found', StatusCodes.NOT_FOUND);
+  if (!canTransitionOrderStatus(order.status, to)) {
+    throw new AppError(
+      `Không thể chuyển trạng thái đơn hàng từ ${order.status} sang ${to}`,
+      StatusCodes.BAD_REQUEST
+    );
+  }
+  const updated = await prisma.order.update({
+    where: { id },
+    data: { status: to },
+    include: { supplier: true, lineItems: true },
+  });
+
+  // Best-effort integration hook (n8n) — does not block or fail the transition.
+  void notifyOrderTransition(id, order.status, to);
+
+  return updated;
+}
+
+// Dispatch a best-effort n8n webhook on a successful status transition.
+async function notifyOrderTransition(
+  orderId: string,
+  from: string,
+  to: OrderStatus
+): Promise<void> {
+  const ok = await dispatchToN8n({
+    path: process.env.N8N_WEBHOOK_PATH ?? '/webhook/taskflow-order',
+    event: 'order.transition',
+    eventId: `${orderId}:${from}->${to}`,
+    payload: { orderId, from, to },
+  });
+  if (!ok) {
+    // best effort — already logged inside dispatchToN8n
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Line Item CRUD
 // ---------------------------------------------------------------------------
 
@@ -165,26 +231,75 @@ export async function createInventoryItem(data: Prisma.InventoryItemCreateInput)
   return prisma.inventoryItem.create({ data });
 }
 
+
 export async function updateInventoryItem(id: string, data: Prisma.InventoryItemUpdateInput) {
   const item = await prisma.inventoryItem.findUnique({ where: { id } });
   if (!item) throw new AppError('Inventory item not found', StatusCodes.NOT_FOUND);
   return prisma.inventoryItem.update({ where: { id }, data });
 }
 
-export async function adjustInventoryQuantity(id: string, quantity: number, reason?: string) {
+// Best-effort n8n hook for inventory adjustments.
+async function notifyInventoryAdjust(
+  itemId: string,
+  sku: string,
+  delta: number,
+  to: number,
+  reason?: string
+): Promise<void> {
+  await dispatchToN8n({
+    path: process.env.N8N_WEBHOOK_PATH ?? '/webhook/taskflow-inventory',
+    event: 'inventory.adjust',
+    eventId: `${itemId}:${delta}:${Date.now()}`,
+    payload: { inventoryItemId: itemId, sku, delta, to, reason: reason ?? null },
+  });
+}
+
+export async function adjustInventoryQuantity(
+  id: string,
+  quantity: number,
+  userId: string,
+  reason?: string
+) {
   const item = await prisma.inventoryItem.findUnique({ where: { id } });
   if (!item) throw new AppError('Inventory item not found', StatusCodes.NOT_FOUND);
 
   // Ensure quantity doesn't go below 0
   const newQuantity = Math.max(0, item.quantity + quantity);
+  const direction = quantity >= 0 ? 'INCREASE' : 'DECREASE';
 
-  return prisma.inventoryItem.update({
+  const updated = await prisma.inventoryItem.update({
     where: { id },
-    data: {
-      quantity: newQuantity,
-      ...(reason && { /* note metadata if needed */ }),
-    },
+    data: { quantity: newQuantity },
   });
+
+  // Audit trail: every inventory adjustment is recorded as an Activity so the
+  // reason + actor + delta are traceable (inventory has no metadata column of
+  // its own, so we reuse the existing Activity feed scoped to the project).
+  await prisma.activity
+    .create({
+      data: {
+        projectId: item.projectId,
+        userId,
+        action: 'INVENTORY_ADJUSTED',
+        metadata: {
+          inventoryItemId: id,
+          sku: item.sku,
+          delta: quantity,
+          from: item.quantity,
+          to: newQuantity,
+          direction,
+          reason: reason ?? null,
+        },
+      },
+    })
+    .catch(() => {
+      // Best-effort: a failed audit write must not roll back the adjustment.
+    });
+
+  // Best-effort n8n hook for inventory adjustments (does not block the response).
+  void notifyInventoryAdjust(id, item.sku, quantity, newQuantity, reason);
+
+  return updated;
 }
 
 export async function deleteInventoryItem(id: string): Promise<void> {
