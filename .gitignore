@@ -57,3 +57,7 @@ supply-chain-automation/mlops/mlflow.db
 supply-chain-automation/mlops/artifacts/
 supply-chain-automation/mlops/mlruns/
 supply-chain-automation/apis/__pycache__/
+
+# Misc agent tooling artifacts
+.superpowers/
+supply-chain-automation/mlruns/
