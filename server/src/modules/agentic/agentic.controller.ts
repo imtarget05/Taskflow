@@ -4,6 +4,7 @@ import { asyncHandler, AppError } from '../../utils/errors';
 import { prisma } from '../../lib/prisma';
 import * as agenticService from './agentic.service';
 import { AnalyseOrderResult } from '../supplychain/sc-nlp.service';
+import { dispatchToN8n } from '../integrations/n8n';
 
 // POST /api/sc/agentic/process-order
 // Input: { orderId: string, projectId: string }
@@ -40,7 +41,8 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
     analysis.classification,
     analysis.confidence,
     analysis.suggestedAction,
-    analysis.workflowTrigger
+    analysis.workflowTrigger,
+    orderId
   );
 
   // 4. Execute decision
@@ -82,6 +84,23 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
       humanTaskId: result.humanTaskId ?? null,
       agenticDecisionId: agenticDecision.id,
       llmUsed: analysis.llmUsed,
+    },
+  });
+
+  // 7. Fire-and-forget n8n webhook (best effort, never blocks the response).
+  void dispatchToN8n({
+    path: process.env.N8N_WEBHOOK_PATH ?? '/webhook/taskflow-agentic',
+    event: 'agentic.decision',
+    eventId: agenticDecision.id,
+    payload: {
+      agenticDecisionId: agenticDecision.id,
+      orderId,
+      projectId,
+      userId,
+      classification: analysis.classification,
+      confidence: analysis.confidence,
+      decision: decision.decision,
+      action: decision.action,
     },
   });
 });

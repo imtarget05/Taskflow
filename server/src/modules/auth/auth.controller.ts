@@ -4,6 +4,14 @@ import { z } from 'zod';
 import { asyncHandler, AppError, validationError } from '../../utils/errors';
 import { CSRF_COOKIE, generateCsrfToken } from '../../middlewares/csrf';
 import * as authService from './auth.service';
+import { recordSecurityEvent } from './security.service';
+
+/** Best-effort client IP (app sets trust proxy = 1). */
+function clientIp(req: Request): string | null {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();
+  return (req.ip as string | undefined) ?? null;
+}
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -79,9 +87,30 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw validationError(body.error, 'Invalid login data');
   }
 
-  const result = await authService.login(body.data);
-  const csrfToken = setAuthCookies(res, result.accessToken, result.refreshToken);
-  res.status(StatusCodes.OK).json({ success: true, user: result.user, csrfToken });
+  const email = body.data.email.toLowerCase().trim();
+  try {
+    const result = await authService.login(body.data);
+    void recordSecurityEvent({
+      action: 'AUTH_LOGIN_SUCCESS',
+      userId: result.user.id,
+      email,
+      ip: clientIp(req),
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+    const csrfToken = setAuthCookies(res, result.accessToken, result.refreshToken);
+    res.status(StatusCodes.OK).json({ success: true, user: result.user, csrfToken });
+  } catch (err) {
+    // Record the failed attempt (credential guessing / brute force visibility)
+    // then re-throw so the standard error handler still returns 401.
+    void recordSecurityEvent({
+      action: 'AUTH_LOGIN_FAILED',
+      email,
+      ip: clientIp(req),
+      userAgent: req.headers['user-agent'] ?? null,
+      metadata: { reason: err instanceof AppError ? err.message : 'unknown' },
+    });
+    throw err;
+  }
 });
 
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
@@ -113,9 +142,16 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const token = (req.body?.refreshToken as string | undefined) ?? req.cookies?.refresh_token;
+  const userId = (req.user as { id?: string } | undefined)?.id ?? null;
   if (token) {
     await authService.logout(token);
   }
+  void recordSecurityEvent({
+    action: 'AUTH_LOGOUT',
+    userId,
+    ip: clientIp(req),
+    userAgent: req.headers['user-agent'] ?? null,
+  });
   clearAuthCookies(res);
   res.status(StatusCodes.OK).json({ success: true, message: 'Logged out' });
 });

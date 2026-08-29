@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { emitToProject } from '../../lib/socket';
 import { chatCompletion, isLLMConfigured } from '../agent/llm';
+import { dispatchToN8n } from '../integrations/n8n';
 import { z } from 'zod';
 
 export const analyseOrderSchema = z.object({
@@ -134,5 +135,26 @@ export async function analyseOrder(
     // Socket may not be connected — ignore
   }
 
+  // Best-effort n8n webhook (does not block the response).
+  void notifyScAnalysed(record.id, result, input.projectId ?? null);
+
   return result;
+}
+
+// Best-effort n8n hook on a completed SC order analysis.
+async function notifyScAnalysed(recordId: string, analysis: AnalyseOrderResult, projectId?: string | null): Promise<void> {
+  await dispatchToN8n({
+    path: process.env.N8N_WEBHOOK_PATH ?? '/webhook/taskflow-sc',
+    event: 'sc.order.analysed',
+    eventId: recordId,
+    payload: {
+      analysisId: recordId,
+      projectId: projectId ?? null,
+      classification: analysis.classification,
+      confidence: analysis.confidence,
+      suggestedAction: analysis.suggestedAction,
+      workflowTrigger: analysis.workflowTrigger,
+      llmUsed: analysis.llmUsed,
+    },
+  });
 }

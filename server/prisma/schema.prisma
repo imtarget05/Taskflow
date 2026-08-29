@@ -53,6 +53,7 @@ model User {
   nlpFeedbacks  NlpFeedback[]
   scOrderAnalyses   SCOrderAnalysis[]
   agenticDecisions  AgenticDecision[]
+  securityAudits    SecurityAudit[]
 
   @@map("users")
 }
@@ -548,4 +549,29 @@ model AgenticDecision {
   @@index([orderId])
   @@index([projectId, decision])
   @@map("agentic_decisions")
+}
+
+// ---------------------------------------------------------------------------
+// Security audit trail
+// Independent of the Activity feed (which is project-scoped). Captures auth &
+// authorization events (login success/failure, forbidden access, token issues)
+// so they are durable and queryable even when no project context exists yet.
+// ---------------------------------------------------------------------------
+
+model SecurityAudit {
+  id        String   @id @default(cuid())
+  action    String // e.g. AUTH_LOGIN_SUCCESS, AUTH_LOGIN_FAILED, AUTH_FORBIDDEN
+  userId    String? // set when the actor is known (authenticated or identified)
+  email     String? // set for login attempts (success or fail) for traceability
+  ip        String? // best-effort client IP (trust proxy = 1 in app.ts)
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([userId])
+  @@index([email])
+  @@map("security_audits")
 }
