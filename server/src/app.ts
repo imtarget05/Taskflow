@@ -95,7 +95,7 @@ export function createApp(): Express {
   app.use('/api/agent/legal', legalRoutes);
   app.use('/api/nlp', nlpRoutes);
   app.use('/api/sc', supplychainRoutes);
-  app.use('/api/sc', scNlpRoutes);
+  app.use('/api/sc/nlp', scNlpRoutes);
   app.use('/api/sc', scDashboardRoutes);
   app.use('/api/sc/agentic', agenticRoutes);
   app.use('/api/projects', exportRoutes);
