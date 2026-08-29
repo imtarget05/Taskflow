@@ -140,9 +140,16 @@ def _get_cached(kind: str):
         "risk":    ("supplier_risk", mlflow.sklearn.load_model),
     }
     name, loader = mapping[kind]
-    model = loader(f"models:/{name}@challenger")
-    _CACHE[kind] = {"model": model, "ts": now}
-    return model
+    # Serve the production alias (source of truth); gracefully fall back to the
+    # challenger alias so the API works even before a model is promoted.
+    for alias in ("production", "challenger"):
+        try:
+            model = loader(f"models:/{name}@{alias}")
+            _CACHE[kind] = {"model": model, "ts": now}
+            return model
+        except Exception as exc:  # noqa: BLE001 — alias or model unavailable, try next
+            _CACHE[kind] = {"error": str(exc), "ts": now}
+    raise RuntimeError(f"{name}: no production/challenger model available")
 
 @app.get("/metrics")
 async def metrics():
