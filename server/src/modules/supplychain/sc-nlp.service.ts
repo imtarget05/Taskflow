@@ -2,6 +2,9 @@ import { prisma } from '../../lib/prisma';
 import { emitToProject } from '../../lib/socket';
 import { chatCompletion, isLLMConfigured } from '../agent/llm';
 import { dispatchToN8n } from '../integrations/n8n';
+import { AppError } from '../../utils/errors';
+import { StatusCodes } from 'http-status-codes';
+import { ScOrderType } from '@prisma/client';
 import { z } from 'zod';
 
 export const analyseOrderSchema = z.object({
@@ -108,13 +111,28 @@ export async function analyseOrder(
     ? await classifyWithLLM(input.text).catch(() => ruleBasedFallback(input.text))
     : ruleBasedFallback(input.text);
 
+  // Validate referenced entities exist BEFORE writing, so a bad projectId/orderId
+  // returns a clean 400 (AppError) instead of a Prisma FK crash → 500.
+  if (input.projectId) {
+    const project = await prisma.project.findUnique({ where: { id: input.projectId } });
+    if (!project) {
+      throw new AppError(`Project ${input.projectId} not found`, StatusCodes.BAD_REQUEST);
+    }
+  }
+  if (input.orderId) {
+    const order = await prisma.order.findUnique({ where: { id: input.orderId } });
+    if (!order) {
+      throw new AppError(`Order ${input.orderId} not found`, StatusCodes.BAD_REQUEST);
+    }
+  }
+
   const record = await prisma.sCOrderAnalysis.create({
     data: {
       userId,
       projectId: input.projectId ?? undefined,
       orderId: input.orderId ?? undefined,
       sourceText: input.text,
-      classification: result.classification as any,
+      classification: result.classification as ScOrderType,
       confidence: result.confidence,
       suggestedAction: result.suggestedAction,
       workflowTrigger: result.workflowTrigger,

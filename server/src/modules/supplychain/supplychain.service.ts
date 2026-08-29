@@ -83,8 +83,35 @@ export async function getOrderById(id: string) {
 }
 
 export async function createOrder(data: Prisma.OrderCreateInput) {
-  const order = await prisma.order.create({ data });
-  return order;
+  // Resolve the referenced project/supplier ids (nested connect shape) so we can
+  // return a clean 400 instead of letting Prisma throw P2025 → 500.
+  const projectId =
+    typeof data.project === 'object' && data.project && 'connect' in data.project
+      ? (data.project.connect as { id?: string })?.id
+      : undefined;
+  const supplierId =
+    typeof data.supplier === 'object' && data.supplier && 'connect' in data.supplier
+      ? (data.supplier.connect as { id?: string })?.id
+      : undefined;
+
+  if (projectId) {
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new AppError(`Project ${projectId} not found`, StatusCodes.BAD_REQUEST);
+  }
+  if (supplierId) {
+    const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
+    if (!supplier) throw new AppError(`Supplier ${supplierId} not found`, StatusCodes.BAD_REQUEST);
+  }
+
+  try {
+    return await prisma.order.create({ data });
+  } catch (err) {
+    // Foreign-key / required-record errors → 400 instead of 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new AppError('Referenced project or supplier not found', StatusCodes.BAD_REQUEST);
+    }
+    throw err;
+  }
 }
 
 export async function updateOrderStatus(id: string, status: Prisma.EnumOrderStatusFilter['equals']) {
