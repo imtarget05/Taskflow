@@ -28,8 +28,16 @@ export async function getSupplierById(id: string) {
 }
 
 export async function createSupplier(data: Prisma.SupplierCreateInput) {
-  const supplier = await prisma.supplier.create({ data });
-  return supplier;
+  try {
+    return await prisma.supplier.create({ data });
+  } catch (err) {
+    // Unique constraint (e.g. duplicate supplier code) → 409 instead of 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const target = (err.meta?.target as string[] | undefined)?.join(', ') ?? 'field';
+      throw new AppError(`Supplier đã tồn tại (trùng ${target})`, StatusCodes.CONFLICT);
+    }
+    throw err;
+  }
 }
 
 export async function updateSupplier(id: string, data: Prisma.SupplierUpdateInput) {
@@ -255,7 +263,15 @@ export async function getInventoryItemById(id: string) {
 }
 
 export async function createInventoryItem(data: Prisma.InventoryItemCreateInput) {
-  return prisma.inventoryItem.create({ data });
+  try {
+    return await prisma.inventoryItem.create({ data });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const target = (err.meta?.target as string[] | undefined)?.join(', ') ?? 'field';
+      throw new AppError(`Inventory item đã tồn tại (trùng ${target})`, StatusCodes.CONFLICT);
+    }
+    throw err;
+  }
 }
 
 
