@@ -71,7 +71,22 @@ describe('SC Dashboard frontend hook integration', () => {
       expect(projectRes.status).toBe(201);
       const projectId = projectRes.body.data.id;
 
-      const res = await authed().get(`/api/sc/dashboard/${projectId}`);
+      // A second, freshly-registered user (not a member of the project) must be
+      // denied. The project creator is auto-added as OWNER member, so we can't
+      // use the same agent here.
+      const outsider = request.agent(app);
+      const reg = await outsider.post('/api/auth/register').send({
+        email: 'outsider@test.dev',
+        password: 'password123',
+        name: 'Outsider',
+      });
+      expect(reg.status).toBe(201);
+      const rawCsrf = reg.headers['set-cookie'];
+      const setCookie = Array.isArray(rawCsrf) ? rawCsrf : rawCsrf ? [String(rawCsrf)] : [];
+      const csrfEntry = setCookie.find((e) => e.startsWith('csrf_token='));
+      const outsiderCsrf = csrfEntry?.split(';')[0].split('=')[1] ?? '';
+
+      const res = await outsider.get(`/api/sc/dashboard/${projectId}`).set('X-CSRF-Token', outsiderCsrf);
       expect(res.status).toBe(403);
     });
 

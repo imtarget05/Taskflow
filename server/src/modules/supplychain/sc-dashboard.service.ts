@@ -135,6 +135,22 @@ export function scDashboardToCsv(metrics: SCDashboardMetrics): { filename: strin
     rows.push([item.sku, item.name, String(item.quantity), String(item.minStock)]);
   }
 
+  // Add order detail rows (mirrors TXT export's "PO gốc" section)
+  rows.push([]);
+  rows.push(['Chi tiết đơn hàng']);
+  rows.push(['Mã PO', 'Trạng thái', 'Nhà cung cấp', 'Ngày tạo']);
+  if (metrics.recentOrders.length === 0) {
+    rows.push(['(chưa có PO nào)', '', '', '']);
+  }
+  for (const order of metrics.recentOrders) {
+    rows.push([
+      order.orderNumber ?? order.id,
+      order.status,
+      order.supplier?.name ?? '—',
+      new Date(order.createdAt).toLocaleDateString('vi-VN'),
+    ]);
+  }
+
   const csv = rows.map(row => row.map(cell => {
     const text = cell == null ? '' : String(cell);
     if (/[",\n\r]/.test(text)) {
