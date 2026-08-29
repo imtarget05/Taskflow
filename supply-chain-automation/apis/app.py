@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 import numpy as np
+import pandas as pd
 
 app = FastAPI(
     title="Supply Chain Analytics API",
@@ -47,19 +48,16 @@ async def health():
 async def forecast(request: ForecastRequest):
     """Real Prophet forecast from the MLflow registry, with synthetic fallback."""
     try:
-        import mlflow
         import pandas as pd
-        from datetime import datetime, timedelta
-        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
-        model = _get_cached_prophet()
+        from datetime import datetime
+        model = _get_cached("prophet")
         future = pd.DataFrame({"ds": pd.date_range(datetime.utcnow(), periods=request.days, freq="D")})
         fc = model.predict(future)
-        return ForecastResponse(
-            product_id=request.product_id,
-            forecast=[round(float(v), 2) for v in fc["yhat"].tolist()],
-            model="prophet",
-        )
-    except Exception as exc:  # noqa: BLE001 — registry/server unavailable → fallback
+        vals = fc["yhat"].tolist() if hasattr(fc, "__getitem__") and "yhat" in fc else fc.tolist()
+        return ForecastResponse(product_id=request.product_id,
+                                forecast=[round(float(v), 2) for v in vals],
+                                model="prophet")
+    except Exception as exc:  # noqa: BLE001 — registry/server unavailable -> fallback
         print(f"[forecast] Prophet unavailable ({exc}); using synthetic baseline")
     np.random.seed(request.product_id)
     base = 100 + np.random.randn() * 20
@@ -67,33 +65,84 @@ async def forecast(request: ForecastRequest):
     return ForecastResponse(product_id=request.product_id, forecast=forecast_vals, model="prophet-fallback")
 
 
-_PROPHET_CACHE: dict = {}
-
-
-def _get_cached_prophet():
-    """Cache the registry-loaded Prophet model for 10 minutes."""
-    import mlflow
-    import time as _time
-    cached = _PROPHET_CACHE.get("model")
-    if cached and _time.time() - _PROPHET_CACHE.get("ts", 0) < 600:
-        return cached
-    model = mlflow.prophet.load_model("models:/prophet_forecasting@challenger")
-    _PROPHET_CACHE["model"] = model
-    _PROPHET_CACHE["ts"] = _time.time()
-    return model
+# ---------------------------------------------------------------------------
+# Model loaders (cached) — serve registered MLflow models instead of mocks
+# ---------------------------------------------------------------------------
 
 @app.post("/inventory/recommended-order", response_model=InventoryResponse)
 async def recommended_order(request: InventoryRequest):
-    eoq_val = np.sqrt(2 * request.demand * request.order_cost / request.holding_cost)
-    ss_val = request.z_score * 10 * np.sqrt(request.lead_time)
-    rop_val = (request.demand / 365) * request.lead_time + ss_val
-    return InventoryResponse(eoq=round(eoq_val, 2), safety_stock=round(ss_val, 2), reorder_point=round(rop_val, 2))
+    """EOQ/order recommendation: real mlflow model + formula fallback."""
+    try:
+        import mlflow
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
+        model = _get_cached("eoq")
+        inp = pd.DataFrame([{
+            "annual_demand": request.demand,
+            "order_cost": request.order_cost,
+            "holding_cost": request.holding_cost,
+        }])
+        eoq_val = float(model.predict(inp)[0])
+    except Exception as exc:  # noqa: BLE001 - fallback to closed-form
+        print(f"[inventory] model unavailable ({exc}); formula fallback")
+        eoq_val = float(np.sqrt(2 * request.demand * request.order_cost / request.holding_cost))
+    daily = request.demand / 365.0
+    ss_val = request.z_score * daily * (request.lead_time ** 0.5)
+    rop_val = daily * request.lead_time + ss_val
+    return InventoryResponse(eoq=round(eoq_val, 2),
+                             safety_stock=round(float(ss_val), 2),
+                             reorder_point=round(float(rop_val), 2))
+
 
 @app.post("/supplier/risk-score", response_model=SupplierRiskResponse)
 async def supplier_risk(request: SupplierRiskRequest):
-    score = min(1.0, (request.lead_time_std / 10) * 0.3 + request.defect_rate * 0.5 + (1 - request.on_time_rate) * 0.2)
-    level = "low" if score < 0.3 else "medium" if score < 0.6 else "high"
-    return SupplierRiskResponse(risk_score=round(score, 3), risk_level=level)
+    """Supplier risk via registered LogisticRegression; score in [0,1]."""
+    try:
+        import mlflow
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
+        model = _get_cached("risk")
+        inp = pd.DataFrame([{
+            "lead_time_std": request.lead_time_std,
+            "defect_rate": request.defect_rate,
+            "on_time_rate": request.on_time_rate,
+        }])
+        score = float(model.predict_proba(inp)[0][1])  # P(risk=high)
+        level = "low" if score < 0.3 else "medium" if score < 0.6 else "high"
+        return SupplierRiskResponse(risk_score=round(score, 3), risk_level=level)
+    except Exception as exc:  # noqa: BLE001 — formula fallback
+        print(f"[supplier/risk] model unavailable ({exc}); formula fallback")
+        score = min(1.0, (request.lead_time_std / 10) * 0.3
+                    + request.defect_rate * 0.5 + (1 - request.on_time_rate) * 0.2)
+        level = "low" if score < 0.3 else "medium" if score < 0.6 else "high"
+        return SupplierRiskResponse(risk_score=round(score, 3), risk_level=level)
+
+
+# ---------------------------------------------------------------------------
+# Model loaders (cached) — serve registered MLflow models instead of mocks
+# ---------------------------------------------------------------------------
+_CACHE: dict = {}
+
+
+def _get_cached(kind: str):
+    """Load (and cache 10 min) the requested registered model.
+
+    kind: 'prophet' | 'eoq' | 'risk'  -> models:/<name>@challenger
+    """
+    import mlflow
+    import time as _t
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
+    now = _t.time()
+    entry = _CACHE.get(kind)
+    if entry and now - entry["ts"] < 600:
+        return entry["model"]
+    mapping = {
+        "prophet": ("prophet_forecasting", mlflow.prophet.load_model),
+        "eoq":     ("eoq_inventory", mlflow.sklearn.load_model),
+        "risk":    ("supplier_risk", mlflow.sklearn.load_model),
+    }
+    name, loader = mapping[kind]
+    model = loader(f"models:/{name}@challenger")
+    _CACHE[kind] = {"model": model, "ts": now}
+    return model
 
 @app.get("/metrics")
 async def metrics():
