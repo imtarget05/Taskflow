@@ -51,6 +51,16 @@ export const createLineItemSchema = z.object({
   amount: z.number().min(0).optional(),
 });
 
+export const createInventoryItemSchema = z.object({
+  projectId: z.string().min(1),
+  sku: z.string().min(1).max(100),
+  name: z.string().min(1).max(200),
+  quantity: z.number().int().min(0),
+  unit: z.string().max(20).optional(),
+  location: z.string().max(200).optional(),
+  minStock: z.number().int().min(0).optional(),
+});
+
 export const adjustInventorySchema = z.object({
   quantity: z.number().int(),
   reason: z.string().max(200).optional(),
