@@ -1,7 +1,9 @@
 import { Prisma, OrderStatus } from '@prisma/client';
 import { RequestHandler } from 'express';
+import { StatusCodes } from 'http-status-codes';
 import * as supplychainService from './supplychain.service';
-import { createSupplierSchema, createOrderSchema, updateOrderStatusSchema, createLineItemSchema, adjustInventorySchema } from './supplychain.schema';
+import { createSupplierSchema, createOrderSchema, updateOrderStatusSchema, createLineItemSchema, adjustInventorySchema, createInventoryItemSchema } from './supplychain.schema';
+import { AppError } from '../../utils/errors';
 
 // ---------------------------------------------------------------------------
 // Supplier handlers
@@ -96,8 +98,10 @@ export const deleteOrder: RequestHandler = async (req, res) => {
 
 export const getLineItems: RequestHandler = async (req, res) => {
   const { orderId } = req.query;
-  if (!orderId) throw new Error('orderId query parameter is required');
-  const lineItems = await supplychainService.getLineItemsByOrder(orderId as string);
+  if (!orderId || typeof orderId !== 'string') {
+    throw new AppError('orderId query parameter is required', StatusCodes.BAD_REQUEST);
+  }
+  const lineItems = await supplychainService.getLineItemsByOrder(orderId);
   res.json({ data: lineItems, count: lineItems.length });
 };
 
@@ -147,19 +151,15 @@ export const getInventoryItem: RequestHandler = async (req, res) => {
 };
 
 export const createInventoryItem: RequestHandler = async (req, res) => {
-  // Note: full create needs more fields — for now require projectId, sku, name, quantity
-  const { projectId, sku, name, quantity, unit, location, minStock } = req.body;
-  if (!projectId || !sku || !name || quantity === undefined) {
-    throw new Error('projectId, sku, name, and quantity are required');
-  }
+  const data = createInventoryItemSchema.parse(req.body);
   const item = await supplychainService.createInventoryItem({
-    project: { connect: { id: projectId } },
-    sku,
-    name,
-    quantity: quantity as number,
-    unit: unit || 'Cái',
-    location: location || null,
-    minStock: minStock ?? 0,
+    project: { connect: { id: data.projectId } },
+    sku: data.sku,
+    name: data.name,
+    quantity: data.quantity,
+    unit: data.unit || 'Cái',
+    location: data.location || null,
+    minStock: data.minStock ?? 0,
   });
   res.status(201).json({ data: item });
 };

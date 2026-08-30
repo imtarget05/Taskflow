@@ -1,6 +1,7 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ReasonPhrases, StatusCodes } from 'http-status-codes';
 import { ZodError } from 'zod';
+import { Prisma } from '@prisma/client';
 import { logger } from '../lib/logger';
 import { recordSecurityEvent } from '../modules/auth/security.service';
 
@@ -86,6 +87,16 @@ export function errorHandler(
       success: false,
       message: 'Validation failed',
       details: err.flatten(),
+    });
+    return;
+  }
+
+  // Prisma validation errors (e.g. wrong type supplied) → 400, not 500.
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    logger.warn({ err, path: req.originalUrl }, 'Prisma validation error');
+    res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: 'Invalid input data',
     });
     return;
   }

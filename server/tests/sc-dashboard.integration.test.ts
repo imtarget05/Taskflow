@@ -100,44 +100,45 @@ describe('SC Dashboard frontend hook integration', () => {
       expect(projectRes.status).toBe(201);
       const projectId = projectRes.body.data.id;
 
-      // Create supplier
+      // Create supplier (unique code to avoid cross-run collisions)
       const supplierRes = await authed().post('/api/sc/suppliers').send({
         name: 'Supplier ABC',
-        code: 'SUP-001',
+        code: `SUP-${Date.now()}`,
         email: 'supplier@test.dev',
       });
       expect(supplierRes.status).toBe(201);
       const supplierId = supplierRes.body.data.id;
 
-      // Create 5 orders with various statuses
+      // Create 5 orders with various statuses (unique orderNumbers)
+      const ts = Date.now();
       const order1 = await authed().post('/api/sc/orders').send({
         supplierId,
         projectId,
-        orderNumber: 'PO-001',
+        orderNumber: `PO-${ts}-001`,
         status: 'PENDING_APPROVAL',
       });
       const order2 = await authed().post('/api/sc/orders').send({
         supplierId,
         projectId,
-        orderNumber: 'PO-002',
+        orderNumber: `PO-${ts}-002`,
         status: 'PENDING_APPROVAL',
       });
       const order3 = await authed().post('/api/sc/orders').send({
         supplierId,
         projectId,
-        orderNumber: 'PO-003',
+        orderNumber: `PO-${ts}-003`,
         status: 'APPROVED',
       });
       const order4 = await authed().post('/api/sc/orders').send({
         supplierId,
         projectId,
-        orderNumber: 'PO-004',
+        orderNumber: `PO-${ts}-004`,
         status: 'SHIPPED',
       });
       const order5 = await authed().post('/api/sc/orders').send({
         supplierId,
         projectId,
-        orderNumber: 'PO-005',
+        orderNumber: `PO-${ts}-005`,
         status: 'IN_FULFILLMENT',
       });
       expect(order1.status).toBe(201);

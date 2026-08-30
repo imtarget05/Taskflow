@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
+import { StatusCodes } from 'http-status-codes';
 import { env } from './config/env';
 import { csrfProtection } from './middlewares/csrf';
 import { authenticate } from './middlewares/auth';
@@ -58,6 +59,18 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '1mb' }));
+  // Malformed JSON bodies must return 400, not 500.
+  app.use((err: any, _req: any, res: any, next: any) => {
+    if (err && err.type === 'entity.parse.failed') {
+      res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Invalid JSON body' });
+      return;
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+      res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Invalid JSON body' });
+      return;
+    }
+    next(err);
+  });
   app.use(cookieParser());
   app.use(csrfProtection);
   app.use(pinoHttp({ redact: ['req.headers.authorization', 'req.headers.cookie'] }));
