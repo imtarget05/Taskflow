@@ -174,11 +174,21 @@ export async function transitionOrderStatus(
       StatusCodes.BAD_REQUEST
     );
   }
+  // Atomic guard: the update only succeeds if the row's status is still
+  // what we read. If another caller already moved it (e.g. a parallel
+  // PENDING→APPROVED vs PENDING→CANCELLED race), update returns null and we
+  // surface 409 so the client can refetch.
   const updated = await prisma.order.update({
-    where: { id },
+    where: { id, status: order.status },
     data: { status: to },
     include: { supplier: true, lineItems: true },
   });
+  if (!updated) {
+    throw new AppError(
+      `Order status changed concurrently; please retry`,
+      StatusCodes.CONFLICT
+    );
+  }
 
   // Best-effort integration hook (n8n) — does not block or fail the transition.
   void notifyOrderTransition(id, order.status, to);

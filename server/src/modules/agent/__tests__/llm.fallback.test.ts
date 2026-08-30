@@ -6,7 +6,10 @@
  */
 import { StatusCodes } from 'http-status-codes';
 
-const env = require('../../../config/env');
+import { chatCompletion, chatCompletionWithTools } from '../llm';
+import * as envModule from '../../../config/env';
+
+const env: any = envModule;
 
 const callLog: Array<{ url: string; body: any }> = [];
 let nextResponse: { status: number; body: any } = { status: 200, body: { choices: [{ message: { content: 'ok' } }] } };
@@ -24,8 +27,6 @@ let nextResponseIdx = 0;
     json: async () => resp.body,
   };
 });
-
-import { chatCompletion, chatCompletionWithTools } from '../llm';
 
 beforeEach(() => {
   callLog.length = 0;
