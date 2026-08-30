@@ -206,6 +206,8 @@ interface ChatAttempt {
   durationMs?: number;
 }
 
+export const PROVIDER_EMPTY_RESPONSE = 469; // non-standard sentinel: provider ok but returned no usable content
+
 async function chatWithModel(
   model: string,
   messages: LLMMessage[],
@@ -244,8 +246,11 @@ async function chatWithModel(
   };
   const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
   const content = choice?.message?.content;
-  if (typeof content !== 'string') {
-    return { ok: false, status: 200, durationMs };
+  // Treat BOTH missing and whitespace-only content as "empty" — the caller
+  // gets a sentinel status so the fallback model gets a chance instead of
+  // seeing the router short-circuit to a 200 with an unusable string.
+  if (typeof content !== 'string' || content.trim() === '') {
+    return { ok: false, status: PROVIDER_EMPTY_RESPONSE, durationMs };
   }
   return { ok: true, content, status: 200, durationMs };
 }
@@ -264,16 +269,18 @@ export async function chatCompletion(
   // Primary succeeded → return immediately.
   if (first.ok && typeof first.content === 'string') return first.content;
 
-  // Fallback is only eligible when the provider returned a transient,
-  // retryable failure (e.g. 429 quota / 5xx) AND a fallback model is configured.
-  // Client errors (400/401/403/404) never trigger a fallback.
+  // Fallback is eligible when the provider returned a transient, retryable
+  // failure (e.g. 429 quota / 5xx), or when the provider returned 200 with
+  // no usable content (e.g. empty / malformed envelope). Client errors
+  // (400/401/403/404) never trigger a fallback.
+  const FALLBACK_ELIGIBLE_STATUS = new Set([...RETRYABLE_STATUS, PROVIDER_EMPTY_RESPONSE]);
   const fallbackModel = env.LLM_FALLBACK_MODEL;
   const primaryStatus = first.status;
   if (
     fallbackModel &&
     fallbackModel !== primaryModel &&
     primaryStatus != null &&
-    RETRYABLE_STATUS.has(primaryStatus)
+    FALLBACK_ELIGIBLE_STATUS.has(primaryStatus)
   ) {
     llmLog('warn', 'provider_fallback_attempt', {
       primaryModel,
@@ -293,11 +300,17 @@ export async function chatCompletion(
     });
   }
 
-  // Exhausted 429 → safe 503 user message; other provider failures → generic 502.
+  // Exhausted 429 → safe 503 user message; empty-response / 5xx → generic 502.
   if (primaryStatus === 429) {
     throw new AppError(
       'AI service is temporarily unavailable. Please try again shortly.',
       StatusCodes.SERVICE_UNAVAILABLE
+    );
+  }
+  if (primaryStatus === PROVIDER_EMPTY_RESPONSE) {
+    throw new AppError(
+      'AI service returned an empty response. Please try again shortly.',
+      StatusCodes.BAD_GATEWAY
     );
   }
   throw new AppError(`LLM request failed (HTTP ${primaryStatus ?? 'unknown'})`, StatusCodes.BAD_GATEWAY);
@@ -374,8 +387,9 @@ export async function chatCompletionWithTools(
   const first = await attempt(primaryModel);
   if (first.ok) return { content: first.content, toolCalls: first.toolCalls };
 
+  const FALLBACK_ELIGIBLE_STATUS = new Set([...RETRYABLE_STATUS, PROVIDER_EMPTY_RESPONSE]);
   const fallbackModel = env.LLM_FALLBACK_MODEL;
-  if (fallbackModel && fallbackModel !== primaryModel && RETRYABLE_STATUS.has(first.status)) {
+  if (fallbackModel && fallbackModel !== primaryModel && FALLBACK_ELIGIBLE_STATUS.has(first.status)) {
     const fb = await attempt(fallbackModel);
     if (fb.ok) return { content: fb.content, toolCalls: fb.toolCalls };
   }
@@ -384,6 +398,12 @@ export async function chatCompletionWithTools(
     throw new AppError(
       'AI service is temporarily unavailable. Please try again shortly.',
       StatusCodes.SERVICE_UNAVAILABLE
+    );
+  }
+  if (first.status === PROVIDER_EMPTY_RESPONSE) {
+    throw new AppError(
+      'AI service returned an empty response. Please try again shortly.',
+      StatusCodes.BAD_GATEWAY
     );
   }
   throw new AppError(`LLM request failed (HTTP ${first.status ?? 'unknown'})`, StatusCodes.BAD_GATEWAY);
