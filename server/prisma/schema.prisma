@@ -448,7 +448,7 @@ model Order {
   updatedAt    DateTime    @updatedAt
 
   project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: RESTRICT)
+  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: NoAction)
   lineItems    LineItem[]
   scAnalyses        SCOrderAnalysis[]
   agenticDecisions  AgenticDecision[]
