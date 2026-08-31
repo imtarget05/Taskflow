@@ -28,6 +28,7 @@ export interface LegalStatus {
   indexedChunks: number;
   neuronBudgetDaily: number;
   usageToday: { requests: number; inputTokens: number; outputTokens: number };
+  rag: typeof LEGAL_RAG_PARAMS;
 }
 
 export const DISCLAIMER =
@@ -35,12 +36,25 @@ export const DISCLAIMER =
   'Hãy đối chiếu với văn bản gốc tại nguồn được trích dẫn.';
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // deterministic cache: 7 days
-const TOP_K_RETRIEVE = 20;
-const RERANK_CANDIDATES = 15;
-const TOP_K_RERANK = 6;
-const MIN_SIMILARITY = 0.3; // cosine; below this treat as "not found"
+// RAG retrieval params are env-tunable (see env.ts). Env vars let operators
+// trade recall vs. cost without a code deploy: a bigger vector window + smaller
+// rerank depth is the common "more candidates, cheaper validation" combo.
+const TOP_K_RETRIEVE = env.LEGAL_TOP_K_RETRIEVE;
+const RERANK_CANDIDATES = env.LEGAL_RERANK_CANDIDATES;
+const TOP_K_RERANK = env.LEGAL_TOP_K_RERANK;
+const MIN_SIMILARITY = env.LEGAL_MIN_SIMILARITY; // cosine; below this treat as "not found"
+const CHUNK_SIZE = env.LEGAL_CHUNK_SIZE; // index-time chunk budget (chars)
 const MAX_QUESTION_LENGTH = 2000;
 const MAX_ANSWER_LENGTH = 4000;
+
+/** Snapshot of the live RAG tuning — handy for /api/legal/status and tests. */
+export const LEGAL_RAG_PARAMS = {
+  topKRetrieve: TOP_K_RETRIEVE,
+  rerankCandidates: RERANK_CANDIDATES,
+  topKRerank: TOP_K_RERANK,
+  minSimilarity: MIN_SIMILARITY,
+  chunkSize: CHUNK_SIZE,
+};
 
 // ---------------------------------------------------------------------------
 // LangChain: legal answer template. Citations are mandatory — the model is
@@ -97,6 +111,61 @@ interface LegalChunkRow {
 
 function vectorLiteral(embedding: number[]): string {
   return `'[${embedding.join(',')}]'::vector`;
+}
+
+/**
+ * Split a raw legal-document body into text chunks for the RAG index. `size`
+ * is the character budget per chunk (defaults to env LEGAL_CHUNK_SIZE; floored
+ * at 200 so a tiny config value cannot produce unusable micro-chunks). Packing
+ * happens on paragraph boundaries to keep semantics intact; an oversized
+ * paragraph is hard-split on sentence whitespace so no content is ever dropped.
+ * This is the counterpart to the retrieval tuning: a smaller chunk size raises
+ * precision of the pgvector topK window, a larger one keeps more context per hit.
+ */
+export function chunkText(text: string, size: number = CHUNK_SIZE): string[] {
+  const body = String(text ?? '').trim();
+  if (!body) return [];
+  const budget = Math.max(Math.floor(size) || CHUNK_SIZE, 200);
+
+  const groups = body.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = '';
+
+  const flush = () => {
+    if (current.trim()) chunks.push(current.trim());
+    current = '';
+  };
+
+  for (const group of groups) {
+    if (group.length > budget) {
+      flush();
+      // Oversized group: split on sentence/whitespace boundaries first, then
+      // hard-slice any single token that still exceeds the budget.
+      const pieces = group.split(/(?<=\.|。)\s+|\n+/);
+      let buf = '';
+      for (const piece of pieces) {
+        const p = piece.trim();
+        if (!p) continue;
+        if (p.length > budget) {
+          if (buf) { chunks.push(buf.trim()); buf = ''; }
+          for (const hard of p.match(new RegExp(`[^\\n]{1,${budget}}`, 'g')) ?? [p.slice(0, budget)]) {
+            chunks.push(hard.trim());
+          }
+        } else if (buf && buf.length + p.length + 1 > budget) {
+          chunks.push(buf.trim());
+          buf = p;
+        } else {
+          buf = buf ? `${buf} ${p}` : p;
+        }
+      }
+      if (buf.trim()) chunks.push(buf.trim());
+      continue;
+    }
+    if (current && current.length + group.length + 2 > budget) flush();
+    current = current ? `${current}\n\n${group}` : group;
+  }
+  flush();
+  return chunks;
 }
 
 async function retrieveNode(state: LegalGraphState) {
@@ -291,5 +360,6 @@ export async function legalStatus(): Promise<LegalStatus> {
       inputTokens: usageAgg._sum.inputTokens ?? 0,
       outputTokens: usageAgg._sum.outputTokens ?? 0,
     },
+    rag: LEGAL_RAG_PARAMS,
   };
 }

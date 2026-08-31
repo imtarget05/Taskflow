@@ -27,6 +27,8 @@ import supplychainRoutes from './modules/supplychain/supplychain.routes';
 import scNlpRoutes from './modules/supplychain/sc-nlp.routes';
 import scDashboardRoutes from './modules/supplychain/sc-dashboard.routes';
 import agenticRoutes from './modules/agentic/agentic.routes';
+import { healthRouter } from './modules/health/health.controller';
+import { initLangfuse } from './lib/langfuse';
 
 function isAllowedOrigin(origin: string): boolean {
   if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
@@ -75,11 +77,9 @@ export function createApp(): Express {
   app.use(csrfProtection);
   app.use(pinoHttp({ redact: ['req.headers.authorization', 'req.headers.cookie'] }));
 
-  // Health check lives before rate limiting so load balancer / container
-  // health checks never consume the request budget.
-  app.get('/api/health', (_req, res) => {
-    res.json({ success: true, status: 'ok', uptime: process.uptime() });
-  });
+  // Public health probe (no auth, no rate limit) + best-effort Langfuse init.
+  app.use('/api/health', healthRouter);
+  initLangfuse();
 
   // Global rate limiting.
   app.use(

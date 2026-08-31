@@ -1,6 +1,7 @@
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
+import { observeLLMCall } from '../../lib/langfuse';
 
 export type LLMRole = 'system' | 'user' | 'assistant';
 
@@ -30,6 +31,13 @@ export interface LLMMessage {
 export interface ChatCompletionOptions {
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Nucleus (top_p) sampling, 0 < topP <= 1. When set it is sent to the
+   * provider; otherwise falls back to env.LLM_TOP_P and, if that is unset too,
+   * the provider's own default (OpenAI-compatible endpoints typically default
+   * to 1 = no nucleus truncation).
+   */
+  topP?: number;
   /** Explicit model override. Defaults to env.LLM_MODEL (the default tier). */
   model?: string;
 }
@@ -87,6 +95,18 @@ const MAX_ATTEMPTS = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Resolve the nucleus-sampling value to send to the provider. Precedence:
+ * per-call option > env LLM_TOP_P > undefined (= provider default). Returning
+ * undefined lets us omit `top_p` entirely so providers that reject unknown/no
+ * noisy params stay happy.
+ */
+function resolveTopP(opts: ChatCompletionOptions): number | undefined {
+  if (opts.topP !== undefined) return opts.topP;
+  if (env.LLM_TOP_P !== undefined) return env.LLM_TOP_P;
+  return undefined;
 }
 
 async function requestWithRetry(
@@ -214,15 +234,18 @@ async function chatWithModel(
   opts: ChatCompletionOptions
 ): Promise<ChatAttempt> {
   const startedAt = Date.now();
+  const topP = resolveTopP(opts);
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
+  };
+  if (topP !== undefined) body.top_p = topP;
   const res = await requestWithRetry(`${env.LLM_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: aiHeaders(),
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 2048,
-    }),
+    body: JSON.stringify(body),
   });
   const durationMs = Date.now() - startedAt;
 
@@ -267,7 +290,10 @@ export async function chatCompletion(
   const first = await chatWithModel(primaryModel, messages, opts);
 
   // Primary succeeded → return immediately.
-  if (first.ok && typeof first.content === 'string') return first.content;
+  if (first.ok && typeof first.content === 'string') {
+    observeLLMCall(primaryModel, first.durationMs ?? 0, first.status ?? 0);
+    return first.content;
+  }
 
   // Fallback is eligible when the provider returned a transient, retryable
   // failure (e.g. 429 quota / 5xx), or when the provider returned 200 with
@@ -340,16 +366,19 @@ export async function chatCompletionWithTools(
 
   const attempt = async (model: string): Promise<ChatCompletionWithToolsResultInternal> => {
     const startedAt = Date.now();
+    const topP = resolveTopP(opts);
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      tools,
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens ?? 2048,
+    };
+    if (topP !== undefined) body.top_p = topP;
     const res = await requestWithRetry(`${env.LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: aiHeaders(),
-      body: JSON.stringify({
-        model,
-        messages,
-        tools,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
-      }),
+      body: JSON.stringify(body),
     });
     const durationMs = Date.now() - startedAt;
 
@@ -385,7 +414,10 @@ export async function chatCompletionWithTools(
   };
 
   const first = await attempt(primaryModel);
-  if (first.ok) return { content: first.content, toolCalls: first.toolCalls };
+  if (first.ok) {
+    observeLLMCall(primaryModel, first.durationMs ?? 0, first.status ?? 0);
+    return { content: first.content, toolCalls: first.toolCalls };
+  }
 
   const FALLBACK_ELIGIBLE_STATUS = new Set([...RETRYABLE_STATUS, PROVIDER_EMPTY_RESPONSE]);
   const fallbackModel = env.LLM_FALLBACK_MODEL;
