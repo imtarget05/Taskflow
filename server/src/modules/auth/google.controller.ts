@@ -6,6 +6,7 @@ import { CSRF_COOKIE, generateCsrfToken } from '../../middlewares/csrf';
 import { env } from '../../config/env';
 import * as googleService from './google.service';
 import { tokenExpiryMs } from './auth.service';
+import { isDevGoogleEnabled, devRedirectToGoogle, devGoogleCallback } from './google.dev';
 
 const STATE_COOKIE = 'google_oauth_state';
 
@@ -39,6 +40,10 @@ function redirectWithError(res: Response, message: string, origin?: string): voi
 }
 
 export const redirectToGoogle = asyncHandler(async (req: Request, res: Response) => {
+  if (isDevGoogleEnabled()) {
+    devRedirectToGoogle(req, res);
+    return;
+  }
   if (!googleService.isGoogleConfigured()) {
     throw new AppError('Google sign-in is not configured', StatusCodes.SERVICE_UNAVAILABLE);
   }
@@ -72,11 +77,18 @@ export const redirectToGoogle = asyncHandler(async (req: Request, res: Response)
 export const googleStatus = asyncHandler(async (_req: Request, res: Response) => {
   res.status(StatusCodes.OK).json({
     success: true,
-    configured: googleService.isGoogleConfigured(),
+    data: {
+      configured: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) || isDevGoogleEnabled(),
+      devMode: isDevGoogleEnabled(),
+    },
   });
 });
 
 export const googleCallback = asyncHandler(async (req: Request, res: Response) => {
+  if (isDevGoogleEnabled()) {
+    await devGoogleCallback(req, res);
+    return;
+  }
   const rawCookie = req.cookies?.[STATE_COOKIE];
   const stateFromQuery = req.query.state as string | undefined;
   const code = req.query.code as string | undefined;

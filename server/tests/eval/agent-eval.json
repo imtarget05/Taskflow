@@ -158,5 +158,35 @@
     "id": "mix4",
     "utterance": "Trong Marketing Q3 tạo task Chạy ads Facebook ưu tiên cao",
     "expect": { "tool": "create_task", "params": { "projectName": "Marketing Q3", "title": "Chạy ads Facebook", "priority": "HIGH" } }
+  },
+  {
+    "id": "p4",
+    "utterance": "Tạo board Sprint 13",
+    "expect": { "tool": "create_project", "params": { "name": "Sprint 13" } }
+  },
+  {
+    "id": "t11",
+    "utterance": "Trong board Dự án Website, thêm task Cập nhật roadmap",
+    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Cập nhật roadmap" } }
+  },
+  {
+    "id": "t12",
+    "utterance": "Thêm task Fix bug vào board học tập, ưu tiên cao",
+    "expect": { "tool": "create_task", "params": { "projectName": "học tập", "title": "Fix bug", "priority": "HIGH" } }
+  },
+  {
+    "id": "amb8",
+    "utterance": "Dự án này đang tiến triển thế nào?",
+    "expect": { "tool": null }
+  },
+  {
+    "id": "amb9",
+    "utterance": "Ai là người quản lý board này?",
+    "expect": { "tool": null }
+  },
+  {
+    "id": "amb10",
+    "utterance": "Tôi cần báo cáo tiến độ tuần này",
+    "expect": { "tool": null }
   }
 ]

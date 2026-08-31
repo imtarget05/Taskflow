@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const googleError = searchParams.get('google_error');
@@ -40,11 +41,14 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
     try {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(ERROR_BY_VARIANT[classifyApiError(err)] ?? 'Invalid email or password');
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -75,7 +79,9 @@ export default function LoginPage() {
           </div>
         </div>
         {error && <p role="alert" className="type-caption text-danger">{error}</p>}
-        <Button type="submit" className="w-full" size="md">Sign in</Button>
+        <Button type="submit" className="w-full" size="md" disabled={isLoading}>
+          {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+        </Button>
       </form>
 
       <div className="relative my-6">

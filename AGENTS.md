@@ -28,7 +28,8 @@ The channel session has cwd=None — an unqualified `npm`/`git` fails with "not 
 - Agent chat: POST /api/agent/chat, GET /api/agent/status. Lưu ý: process-order nằm ở /api/sc/agentic, KHÔNG phải /api/agent.
 - Socket event: sc:order:analysed.
 - LLM via Cloudflare Workers AI (LLM_BASE_URL + LLM_MODEL env); rule-based fallback keyword matching tiếng Việt when AI unavailable.
-- Test status: server 373/373 pass (41 suites), client 29/29 pass. Build + typecheck + lint sạch (0 errors, 16 warnings). Localhost boot verified: endpoints sống, không 5xx.
+- Task Recommendation System: DONE —  với scoring.ts (pure algorithm), recommendation.service.ts (DB layer), recommendation.controller.ts, recommendation.routes.ts, recommendation.schema.ts (Zod). Models: UserSkill, UserAvailability, TaskRecommendation, RecommendationConfig. Endpoints: GET/POST /api/recommendations/*, GET/PUT /api/users/me/skills, GET/PUT /api/users/me/availability. 56 unit tests pass (3 suites).
+- Test status: server 429/429 pass (44 suites), client 29/29 pass. Build + typecheck + lint sạch (0 errors, 44 warnings). Localhost boot verified: endpoints sống, không 5xx.
 - Chạy local: docker compose up -d db (pg16, port 5432) → npm run prisma:deploy → npm run prisma:seed → npm run dev:server (port 4000). Demo acc: alice@taskflow.dev / bob@taskflow.dev (password123).
 
 ## Conventions

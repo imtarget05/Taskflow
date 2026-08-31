@@ -7,9 +7,7 @@
 import { StatusCodes } from 'http-status-codes';
 
 import { chatCompletion, chatCompletionWithTools } from '../llm';
-import * as envModule from '../../../config/env';
-
-const env: any = envModule;
+import { env } from '../../../config/env';
 
 const callLog: Array<{ url: string; body: any }> = [];
 let nextResponse: { status: number; body: any } = { status: 200, body: { choices: [{ message: { content: 'ok' } }] } };
@@ -33,11 +31,11 @@ beforeEach(() => {
   nextResponses = [];
   nextResponseIdx = 0;
   nextResponse = { status: 200, body: { choices: [{ message: { content: 'ok' } }] } };
-  (env as any).LLM_BASE_URL = 'http://fake-llm';
-  (env as any).LLM_MODEL = 'primary-model';
-  (env as any).LLM_FALLBACK_MODEL = 'fallback-model';
-  (env as any).LLM_API_KEY = 'test-key';
-  (env as any).LLM_TIMEOUT_MS = 1000;
+  env.LLM_BASE_URL = 'http://fake-llm';
+  env.LLM_MODEL = 'primary-model';
+  env.LLM_FALLBACK_MODEL = 'fallback-model';
+  env.LLM_API_KEY = 'test-key';
+  env.LLM_TIMEOUT_MS = 1000;
 });
 
 describe('chatCompletion fallback — empty 200 must trigger fallback', () => {

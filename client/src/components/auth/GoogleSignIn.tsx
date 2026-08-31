@@ -7,19 +7,32 @@ interface GoogleSignInProps {
   className?: string;
 }
 
+interface GoogleStatusResponse {
+  success: boolean;
+  data: {
+    configured: boolean;
+    devMode?: boolean;
+  };
+}
+
 export function GoogleSignIn({ className }: GoogleSignInProps) {
   const { toast } = useToast();
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<{ configured: boolean; devMode: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_URL}/auth/google/status`)
       .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) setConfigured(Boolean(d.configured));
+      .then((d: GoogleStatusResponse) => {
+        if (!cancelled) {
+          setStatus({
+            configured: Boolean(d.data?.configured),
+            devMode: Boolean(d.data?.devMode),
+          });
+        }
       })
       .catch(() => {
-        if (!cancelled) setConfigured(false);
+        if (!cancelled) setStatus({ configured: false, devMode: false });
       });
     return () => {
       cancelled = true;
@@ -27,14 +40,14 @@ export function GoogleSignIn({ className }: GoogleSignInProps) {
   }, []);
 
   async function handleClick() {
-    if (configured === false) {
+    if (status === null || !status.configured) {
       toast('error', 'Google sign-in unavailable', 'Google sign-in is not configured on the server yet.');
       return;
     }
     window.location.href = `${API_URL}/auth/google`;
   }
 
-  if (configured === null) return null;
+  if (status === null) return null;
 
   return (
     <Button
@@ -42,7 +55,7 @@ export function GoogleSignIn({ className }: GoogleSignInProps) {
       variant="secondary"
       className={`w-full flex items-center justify-center gap-2 ${className}`}
       onClick={handleClick}
-      title={configured ? undefined : 'Google sign-in is not configured on the server'}
+      title={status.configured ? undefined : 'Google sign-in is not configured on the server'}
     >
       <svg
         className="w-5 h-5"
@@ -69,6 +82,11 @@ export function GoogleSignIn({ className }: GoogleSignInProps) {
         />
       </svg>
       Continue with Google
+      {status.devMode && (
+        <span className="ml-1 rounded bg-warning px-1.5 py-0.5 text-[10px] font-semibold text-warning-ink">
+          DEV
+        </span>
+      )}
     </Button>
   );
 }

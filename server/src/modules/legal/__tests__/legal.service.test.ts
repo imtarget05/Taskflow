@@ -1,4 +1,4 @@
-import { searchLegal, legalStatus, DISCLAIMER, chunkText, LEGAL_RAG_PARAMS } from '../legal.service';
+import { searchLegal, legalStatus, DISCLAIMER, chunkText, LEGAL_RAG_PARAMS, estimateTokens, compressContext } from '../legal.service';
 import { env } from '../../../config/env';
 
 jest.mock('../../../lib/prisma', () => ({
@@ -232,5 +232,62 @@ describe('legal.service', () => {
         chunkSize: 1000,
       });
     });
+  });
+  describe('compressContext (prompt compression to token budget)', () => {
+      it('estimateTokens: ~4 chars per token', () => {
+        expect(estimateTokens('')).toBe(0);
+        expect(estimateTokens('abcd')).toBe(1);
+        expect(estimateTokens('abcdefghijkl')).toBe(3);
+      });
+
+      it('keeps all chunks when the full context fits the budget', () => {
+        const chunks = [chunkRow(), chunkRow({ id: 'c2', articleRef: 'Điều 10', content: 'Nội dung ngắn.' })];
+        const res = compressContext(chunks, 1000, chunks.length);
+        expect(res.keptCount).toBe(2);
+        expect(res.droppedCount).toBe(0);
+        expect(res.truncatedLast).toBe(false);
+        expect(res.savedTokens).toBe(0);
+        expect(res.compressedTokens).toBe(res.originalTokens);
+      });
+
+      it('drops the low-priority tail when it exceeds the budget', () => {
+        const chunks = [
+          chunkRow({ content: 'A'.repeat(100) }),
+          chunkRow({ id: 'c2', articleRef: 'Điều 10', content: 'B'.repeat(100) }),
+          chunkRow({ id: 'c3', articleRef: 'Điều 20', content: 'C'.repeat(100) }),
+        ];
+        const res = compressContext(chunks, 32, chunks.length);
+        expect(res.keptCount).toBe(1);
+        expect(res.droppedCount).toBe(2);
+        expect(res.compressedTokens).toBeLessThanOrEqual(32);
+        expect(res.context).toContain('Điều 5'); // best (first) chunk survives
+      });
+
+      it('hard-truncates a single dominating chunk to fit the budget', () => {
+        const chunks = [chunkRow({ content: 'X'.repeat(500) })];
+        const budget = 10;
+        const res = compressContext(chunks, budget, chunks.length);
+        expect(res.keptCount).toBe(1);
+        expect(res.truncatedLast).toBe(true);
+        expect(res.compressedTokens).toBeLessThanOrEqual(budget);
+      });
+
+      it('honours an explicit topK window', () => {
+        const chunks = [
+          chunkRow({ content: 'A'.repeat(100) }),
+          chunkRow({ id: 'c2', articleRef: 'Điều 10', content: 'B'.repeat(100) }),
+        ];
+        const res = compressContext(chunks, 1000, 1);
+        expect(res.keptCount).toBe(1);
+        expect(res.droppedCount).toBe(0);
+        expect(res.context).toContain('Điều 5');
+        expect(res.context).not.toContain('Điều 10');
+      });
+
+      it('returns empty when there are no chunks', () => {
+        const res = compressContext([], 100);
+        expect(res.context).toBe('');
+        expect(res.compressedTokens).toBe(0);
+      });
   });
 });

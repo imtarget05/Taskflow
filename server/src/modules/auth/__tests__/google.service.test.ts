@@ -82,6 +82,14 @@ describe('google.service', () => {
   });
 
   describe('clientRedirectUri', () => {
+    const originalRedirectOrigin = env.GOOGLE_REDIRECT_ORIGIN;
+    beforeEach(() => {
+      env.GOOGLE_REDIRECT_ORIGIN = undefined;
+    });
+    afterAll(() => {
+      env.GOOGLE_REDIRECT_ORIGIN = originalRedirectOrigin;
+    });
+
     it('derives the callback URL from the forwarded Pages proxy headers', () => {
       const req = {
         headers: {

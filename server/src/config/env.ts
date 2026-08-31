@@ -62,6 +62,10 @@ const envSchema = z.object({
   LEGAL_MIN_SIMILARITY: z.coerce.number().default(0.3),
   // Index-time chunking budget for the legal corpus (characters per chunk).
   LEGAL_CHUNK_SIZE: z.coerce.number().default(1000),
+  // Prompt-compression budget for the legal RAG generate step (tokens). The
+  // retrieved/reranked context is packed up to this budget before being sent
+  // to the LLM — a bigger window = richer context, a smaller one = cheaper calls.
+  LEGAL_CONTEXT_MAX_TOKENS: z.coerce.number().default(3200),
   // Google Sheets export — service account credentials (optional).
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
@@ -150,6 +154,7 @@ export const env = {
   LEGAL_TOP_K_RERANK: parsed.success ? parsed.data.LEGAL_TOP_K_RERANK : 6,
   LEGAL_MIN_SIMILARITY: parsed.success ? parsed.data.LEGAL_MIN_SIMILARITY : 0.3,
   LEGAL_CHUNK_SIZE: parsed.success ? parsed.data.LEGAL_CHUNK_SIZE : 1000,
+  LEGAL_CONTEXT_MAX_TOKENS: parsed.success ? parsed.data.LEGAL_CONTEXT_MAX_TOKENS : 3200,
   GOOGLE_SERVICE_ACCOUNT_EMAIL: parsed.success ? parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL : undefined,
   GOOGLE_PRIVATE_KEY: parsed.success ? parsed.data.GOOGLE_PRIVATE_KEY : undefined,
   GOOGLE_SHEETS_DELEGATED_USER: parsed.success ? parsed.data.GOOGLE_SHEETS_DELEGATED_USER : undefined,

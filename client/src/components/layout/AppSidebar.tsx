@@ -4,6 +4,7 @@ import {
   ChevronsRight,
   LayoutDashboard,
   Settings,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui';
@@ -83,6 +84,13 @@ export default function AppSidebar({
               <ActiveRail />
               <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
               {!collapsed && <span>Dashboard</span>}
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/recommendations" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Đề xuất' : undefined}>
+              <ActiveRail />
+              <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {!collapsed && <span>Đề xuất</span>}
             </NavLink>
           </li>
         </ul>

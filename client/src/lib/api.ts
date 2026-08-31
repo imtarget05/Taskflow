@@ -73,6 +73,9 @@ api.interceptors.response.use(
       } catch (refreshError) {
         refreshPromise = null;
         clearAuth();
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login?reason=session_expired';
+        }
         return Promise.reject(refreshError);
       }
     }

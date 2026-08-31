@@ -132,7 +132,7 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
 
     const handleConnectError = () => {
       setStatus('offline');
-      socket.connect();
+      // socket.io handles reconnection automatically with exponential backoff
       const now = Date.now();
       if (now - lastRefresh.current > 10_000) {
         lastRefresh.current = now;

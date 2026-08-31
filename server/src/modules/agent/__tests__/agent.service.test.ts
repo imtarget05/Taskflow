@@ -184,7 +184,7 @@ describe('agent.service', () => {
     expect(messages[0].role).toBe('system');
     expect(messages[0].content).toMatch(/EARLIER CONVERSATION SUMMARY/);
     expect(messages[0].content).toMatch(/summary of m0\.\.m4/);
-    expect(messages[20]).toEqual({ role: 'user', content: 'm24' });
+    expect(messages[20]).toEqual({ role: 'user', content: '<user_message>\nm24\n</user_message>' });
     // The regenerated summary is persisted on the conversation row.
     expect(mockedPrisma.agentConversation.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ summary: 'summary of m0..m4' }) })
@@ -205,7 +205,7 @@ describe('agent.service', () => {
     expect(mockedChatCompletion).toHaveBeenCalledTimes(1); // summary
     const replyMessages = mockedChatCompletionWithTools.mock.calls[0][0].slice(1);
     expect(replyMessages.length).toBeGreaterThanOrEqual(2);
-    expect(replyMessages[replyMessages.length - 1]).toEqual({ role: 'user', content: 'final question' });
+    expect(replyMessages[replyMessages.length - 1]).toEqual({ role: 'user', content: '<user_message>\nfinal question\n</user_message>' });
     // The verbatim window fits the character budget.
     const windowChars = replyMessages.reduce(
       (n: number, m: { content: string }) => n + m.content.length,
@@ -273,7 +273,7 @@ describe('agent.service', () => {
 
     const messages = mockedChatCompletionWithTools.mock.calls[0][0];
     const history = messages.slice(1);
-    expect(history).toEqual([{ role: 'assistant', content: 'a'.repeat(4000) }, { role: 'user', content: 'valid' }]);
+    expect(history).toEqual([{ role: 'assistant', content: 'a'.repeat(4000) }, { role: 'user', content: '<user_message>\nvalid\n</user_message>' }]);
   });
 
   it('persists image attachments as placeholders, never data URIs', async () => {

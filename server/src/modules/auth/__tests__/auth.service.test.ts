@@ -4,6 +4,13 @@ import { register, login, refresh, logout, cleanupExpiredRefreshTokens, tokenExp
 import { AppError } from '../../../utils/errors';
 import { env } from '../../../config/env';
 
+
+// Mock isEmailConfigured to return false so forgotPassword returns the dev-mode token.
+jest.mock('../../../config/env', () => {
+  const actual = jest.requireActual('../../../config/env');
+  return { ...actual, isEmailConfigured: () => false };
+});
+
 // Mock the prisma client entirely.
 jest.mock('../../../lib/prisma', () => ({
   prisma: {

@@ -34,7 +34,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /đăng nhập/i })).toBeInTheDocument();
   });
 
   it('submits the form with provided credentials', async () => {
@@ -43,7 +43,7 @@ describe('LoginPage', () => {
 
     await user.type(screen.getByLabelText(/^email$/i), 'alice@taskflow.dev');
     await user.type(screen.getByLabelText(/^password$/i), 'password123');
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    await user.click(screen.getByRole('button', { name: /đăng nhập/i }));
 
     // The mocked login resolves; no error is shown.
     expect(screen.queryByText(/invalid email or password/i)).not.toBeInTheDocument();

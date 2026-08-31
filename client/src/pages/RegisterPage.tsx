@@ -21,6 +21,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const googleError = searchParams.get('google_error');
@@ -36,6 +37,7 @@ export default function RegisterPage() {
       setError('Password must be at least 8 characters');
       return;
     }
+    setIsLoading(true);
     try {
       await register(name, email, password);
       navigate('/dashboard');
@@ -54,6 +56,8 @@ export default function RegisterPage() {
         }
       }
       setError(message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -86,7 +90,9 @@ export default function RegisterPage() {
           required
         />
         {error && <p role="alert" className="type-caption text-danger">{error}</p>}
-        <Button type="submit" className="w-full" size="md">Create account</Button>
+        <Button type="submit" className="w-full" size="md" disabled={isLoading}>
+          {isLoading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
+        </Button>
       </form>
 
       <div className="relative my-6">
