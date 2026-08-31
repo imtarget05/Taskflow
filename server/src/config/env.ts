@@ -49,9 +49,19 @@ const envSchema = z.object({
   LLM_RERANK_MODEL: z.string().optional(),
   LLM_API_KEY: z.string().optional(),
   LLM_TIMEOUT_MS: z.coerce.number().default(120_000),
+  // Nucleus (top_p) sampling, 0 < topP <= 1. Optional; unset → provider default.
+  LLM_TOP_P: z.coerce.number().min(0.01).max(1).optional(),
   // Legal research (tra cứu pháp luật) — RAG over Vietnamese legislation.
   LEGAL_ENABLED: z.enum(['true', 'false']).default('false'),
   RATE_LIMIT_LEGAL: z.coerce.number().default(10),
+  // RAG retrieval tuning: candidate window from pgvector, cross-encoder rerank
+  // depth, and the cosine threshold below which nothing counts as "found".
+  LEGAL_TOP_K_RETRIEVE: z.coerce.number().default(20),
+  LEGAL_RERANK_CANDIDATES: z.coerce.number().default(15),
+  LEGAL_TOP_K_RERANK: z.coerce.number().default(6),
+  LEGAL_MIN_SIMILARITY: z.coerce.number().default(0.3),
+  // Index-time chunking budget for the legal corpus (characters per chunk).
+  LEGAL_CHUNK_SIZE: z.coerce.number().default(1000),
   // Google Sheets export — service account credentials (optional).
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_PRIVATE_KEY: z.string().optional(),
@@ -132,8 +142,14 @@ export const env = {
   LLM_RERANK_MODEL: parsed.success ? parsed.data.LLM_RERANK_MODEL : undefined,
   LLM_API_KEY: parsed.success ? parsed.data.LLM_API_KEY : undefined,
   LLM_TIMEOUT_MS: parsed.success ? parsed.data.LLM_TIMEOUT_MS : 120_000,
+  LLM_TOP_P: parsed.success ? parsed.data.LLM_TOP_P : undefined,
   LEGAL_ENABLED: parsed.success ? parsed.data.LEGAL_ENABLED === 'true' : false,
   RATE_LIMIT_LEGAL: parsed.success ? parsed.data.RATE_LIMIT_LEGAL : 10,
+  LEGAL_TOP_K_RETRIEVE: parsed.success ? parsed.data.LEGAL_TOP_K_RETRIEVE : 20,
+  LEGAL_RERANK_CANDIDATES: parsed.success ? parsed.data.LEGAL_RERANK_CANDIDATES : 15,
+  LEGAL_TOP_K_RERANK: parsed.success ? parsed.data.LEGAL_TOP_K_RERANK : 6,
+  LEGAL_MIN_SIMILARITY: parsed.success ? parsed.data.LEGAL_MIN_SIMILARITY : 0.3,
+  LEGAL_CHUNK_SIZE: parsed.success ? parsed.data.LEGAL_CHUNK_SIZE : 1000,
   GOOGLE_SERVICE_ACCOUNT_EMAIL: parsed.success ? parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL : undefined,
   GOOGLE_PRIVATE_KEY: parsed.success ? parsed.data.GOOGLE_PRIVATE_KEY : undefined,
   GOOGLE_SHEETS_DELEGATED_USER: parsed.success ? parsed.data.GOOGLE_SHEETS_DELEGATED_USER : undefined,

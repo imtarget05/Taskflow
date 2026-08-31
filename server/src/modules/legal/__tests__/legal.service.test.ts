@@ -1,4 +1,4 @@
-import { searchLegal, legalStatus, DISCLAIMER } from '../legal.service';
+import { searchLegal, legalStatus, DISCLAIMER, chunkText, LEGAL_RAG_PARAMS } from '../legal.service';
 import { env } from '../../../config/env';
 
 jest.mock('../../../lib/prisma', () => ({
@@ -177,6 +177,60 @@ describe('legal.service', () => {
       indexedChunks: 1337,
       neuronBudgetDaily: 10000,
       usageToday: { requests: 7, inputTokens: 1000, outputTokens: 500 },
+    });
+    // Live RAG tuning snapshot is exposed for the ops surface.
+    expect(status.rag).toEqual(LEGAL_RAG_PARAMS);
+  });
+
+  describe('chunkText (index-time chunking budget)', () => {
+    it('returns [] for empty or whitespace input', () => {
+      expect(chunkText('')).toEqual([]);
+      expect(chunkText('   \n\n  ')).toEqual([]);
+      expect(chunkText(null as unknown as string)).toEqual([]);
+    });
+
+    it('packs paragraphs that fit within the budget into one chunk', () => {
+      const paras = ['Điều 1. Nội dung A.', 'Điều 2. Nội dung B.'];
+      expect(chunkText(paras.join('\n\n'), 1000)).toEqual([paras.join('\n\n')]);
+    });
+
+    it('splits into multiple chunks once paragraphs exceed the budget', () => {
+      const result = chunkText('A'.repeat(300) + '\n\n' + 'B'.repeat(300), 500);
+      expect(result.length).toBe(2);
+      expect(result[0].length).toBeLessThanOrEqual(500);
+    });
+
+    it('hard-splits an oversized single paragraph so nothing is dropped', () => {
+      const long = 'Số: 01/2024/QH15. Một văn bản rất dài. ' + 'x'.repeat(2000);
+      const result = chunkText(long, 200);
+      // Floored budget floor = 200 → the 2000-char sentence must be split.
+      expect(result.length).toBeGreaterThan(1);
+      expect(result.every((c) => c.length <= 200)).toBe(true);
+      // No content lost: concatenating the whitespace-trimmed pieces ≈ input.
+      expect(result.join('').replace(/\s+/g, '')).toContain('x'.repeat(1800));
+    });
+
+    it('applies the env-chunk-size floor (min 200) even for a tiny size arg', () => {
+      const result = chunkText('A'.repeat(250), 10);
+      expect(result[0].length).toBeGreaterThanOrEqual(200);
+    });
+
+    it('default param reflects the configured LEGAL_CHUNK_SIZE', () => {
+      expect(chunkText.length).toBe(1); // size param has a default
+      const budget = LEGAL_RAG_PARAMS.chunkSize;
+      expect(budget).toBeGreaterThan(0);
+    });
+  });
+
+  describe('LEGAL_RAG_PARAMS (env-tunable topK + chunk size)', () => {
+    it('reflects env defaults: retrieve=20, rerank=15/6, sim=0.3, chunk=1000', () => {
+      expect(LEGAL_RAG_PARAMS).toEqual({
+        topKRetrieve: 20,
+        rerankCandidates: 15,
+        topKRerank: 6,
+        minSimilarity: 0.3,
+        chunkSize: 1000,
+      });
     });
   });
 });

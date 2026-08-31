@@ -7,6 +7,8 @@ export type SecurityAction =
   | 'AUTH_LOGOUT'
   | 'AUTH_FORBIDDEN'
   | 'AUTH_TOKEN_INVALID'
+  | 'ROUTE_400_PROBE'
+  | 'ROUTE_404_PROBE'
   | 'SECURITY_EVENT';
 
 export interface SecurityAuditInput {
@@ -37,5 +39,31 @@ export async function recordSecurityEvent(input: SecurityAuditInput): Promise<vo
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, action: input.action }, 'Failed to write security audit');
+  }
+}
+
+/**
+ * Record a route-level audit event (400 / 404 probes) — best-effort.
+ */
+export async function recordRouteAudit(input: {
+  action: string;
+  statusCode: number;
+  path: string;
+  ip?: string;
+  userId?: string;
+}): Promise<void> {
+  try {
+    await prisma.securityAudit.create({
+      data: {
+        action: input.action,
+        userId: input.userId ?? null,
+        ip: input.ip ?? null,
+        userAgent: null,
+        metadata: { route: input.path, status: input.statusCode },
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err: msg, action: input.action }, 'Failed to write route audit');
   }
 }

@@ -3,12 +3,12 @@ import { ReasonPhrases, StatusCodes } from 'http-status-codes';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { logger } from '../lib/logger';
-import { recordSecurityEvent } from '../modules/auth/security.service';
+import { recordSecurityEvent, recordRouteAudit } from '../modules/auth/security.service';
 
-function clientIp(req: Request): string | null {
+function clientIp(req: Request): string | undefined {
   const fwd = req.headers['x-forwarded-for'];
   if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();
-  return (req.ip as string | undefined) ?? null;
+  return req.ip as string | undefined;
 }
 
 /**
@@ -35,6 +35,12 @@ export const asyncHandler = (fn: RequestHandler): RequestHandler => {
 
 /** 404 handler for unmatched routes. */
 export function notFoundHandler(req: Request, res: Response): void {
+  void recordRouteAudit({
+    action: 'ROUTE_404_PROBE',
+    statusCode: StatusCodes.NOT_FOUND,
+    path: req.originalUrl,
+    ip: clientIp(req),
+  });
   res.status(StatusCodes.NOT_FOUND).json({
     success: false,
     message: `Route ${req.method} ${req.originalUrl} not found`,

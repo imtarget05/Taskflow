@@ -8,6 +8,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     model: env.LLM_MODEL,
     key: env.LLM_API_KEY,
     fallback: env.LLM_FALLBACK_MODEL,
+    topP: env.LLM_TOP_P,
   };
   const fetchMock = jest.fn();
 
@@ -23,6 +24,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     env.LLM_MODEL = original.model;
     env.LLM_API_KEY = original.key;
     env.LLM_FALLBACK_MODEL = original.fallback;
+    env.LLM_TOP_P = original.topP;
   });
 
   beforeEach(() => {
@@ -31,6 +33,7 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     env.LLM_MODEL = 'test-model';
     env.LLM_API_KEY = 'secret';
     env.LLM_FALLBACK_MODEL = undefined;
+    env.LLM_TOP_P = undefined;
   });
 
   it('reports configured state', () => {
@@ -71,6 +74,43 @@ describe('llm chatCompletion (OpenAI-compatible)', () => {
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.model).toBe('premium-model');
+  });
+
+  it('sends top_p when provided and omits it when unset', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'with top_p' } }] }),
+    });
+
+    await chatCompletion([{ role: 'user', content: 'x' }], { topP: 0.9 });
+    const bodyWith = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(bodyWith.top_p).toBe(0.9);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'without top_p' } }] }),
+    });
+    await chatCompletion([{ role: 'user', content: 'x' }]);
+    const bodyWithout = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(bodyWithout).not.toHaveProperty('top_p');
+  });
+
+  it('falls back to env LLM_TOP_P when no per-call topP is given', async () => {
+    env.LLM_TOP_P = 0.8;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: 'env top_p' } }] }),
+    });
+
+    await chatCompletion([{ role: 'user', content: 'x' }]);
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.top_p).toBe(0.8);
+
+    env.LLM_TOP_P = undefined;
   });
 
   it('retries on retryable status codes then succeeds', async () => {
@@ -276,6 +316,7 @@ describe('llm chatCompletionWithTools (function calling)', () => {
     model: env.LLM_MODEL,
     key: env.LLM_API_KEY,
     fallback: env.LLM_FALLBACK_MODEL,
+    topP: env.LLM_TOP_P,
   };
   const fetchMock = jest.fn();
 
@@ -288,6 +329,7 @@ describe('llm chatCompletionWithTools (function calling)', () => {
     env.LLM_MODEL = original.model;
     env.LLM_API_KEY = original.key;
     env.LLM_FALLBACK_MODEL = original.fallback;
+    env.LLM_TOP_P = original.topP;
   });
 
   beforeEach(() => {
@@ -296,6 +338,7 @@ describe('llm chatCompletionWithTools (function calling)', () => {
     env.LLM_MODEL = 'tool-model';
     env.LLM_API_KEY = 'secret';
     env.LLM_FALLBACK_MODEL = undefined;
+    env.LLM_TOP_P = undefined;
   });
 
   const TOOLS = [
@@ -333,6 +376,20 @@ describe('llm chatCompletionWithTools (function calling)', () => {
     expect(body.model).toBe('tool-model');
     expect(body.tools).toEqual(TOOLS);
     expect(body.messages).toEqual([{ role: 'user', content: 'tao board Marketing' }]);
+  });
+
+  it('sends top_p alongside the tools when provided', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: '', tool_calls: [] } }] }),
+    });
+
+    const out = await chatCompletionWithTools([{ role: 'user', content: 'x' }], TOOLS, { topP: 0.85 });
+    expect(out.toolCalls).toEqual([]);
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.top_p).toBe(0.85);
+    expect(body.tools).toEqual(TOOLS);
   });
 
   it('parses tool_calls from the Cloudflare result.choices envelope', async () => {
