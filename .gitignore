@@ -62,3 +62,14 @@ supply-chain-automation/mlops/__pycache__/
 # Misc agent tooling artifacts
 .superpowers/
 supply-chain-automation/mlruns/
+
+# Production env (may contain secrets)
+.env.production
+.env.production.local
+
+# Service account keys
+*.pem
+*service-account*.json
+
+# Local development
+*.local

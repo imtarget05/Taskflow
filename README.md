@@ -1,224 +1,229 @@
-# TaskFlow — Nền tảng Quản lý Dự án Nhóm
+# TaskFlow — Real-time Collaborative Kanban with AI Agent
 
-> Ứng dụng quản lý công việc nhóm kiểu Trello/Kanban với cộng tác **real-time** qua WebSocket.
-> Dự án full-stack hướng tới chất lượng production: bảo mật, kiểm thử, CI/CD, observability và khả năng mở rộng ngang.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-429%2F%20429%20passing-brightgreen)](https://github.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> Real-time Trello-style Kanban platform with embedded Generative AI agent (Vietnamese-first NLP), legal RAG research, and supply chain automation.
+
+---
 
 ## Tech Stack
 
-| Layer        | Công nghệ |
-| ------------ | --------- |
-| Frontend     | React 18, TypeScript, TailwindCSS, React Query, dnd-kit, Socket.io-client |
-| Backend      | Node.js, Express.js, REST API |
-| Realtime     | Socket.io |
-| Database     | PostgreSQL + Prisma ORM |
-| Auth         | JWT trong httpOnly cookie, refresh rotation (token được lưu dạng hash), RBAC (Owner / Member / Viewer) |
-| Security     | Helmet, CORS whitelist, rate limiting (global + per-endpoint), field-level validation (Zod), CSRF-aware cookie flags |
-| Observability | pino-http request logging (redact cookies/authorization), health check trước rate limiter, graceful shutdown |
-| Testing      | Jest + Supertest (backend, coverage thresholds ≥ 70% stmts), Vitest + React Testing Library (frontend) |
-| CI/CD        | GitHub Actions → Lint → Typecheck → Test + Coverage → Audit → Build → Docker → GHCR |
-| Deployment   | Docker Compose (production-style stack) · platform deploy: TBD |
+| Layer | Technology | Version |
+| --- | --- | --- |
+| Frontend | React + TypeScript + Vite | 18.3 / 5.7 / 6.0 |
+| Styling | TailwindCSS + Framer Motion + dnd-kit | 3.4 / 13.x / 6.x |
+| State / Data Fetch | TanStack React Query + Axios | 5.62 / 1.7 |
+| Backend | Node.js + Express + TypeScript | 18+ / 4.21 / 5.7 |
+| Realtime | Socket.io | 4.8 |
+| ORM / Database | Prisma + PostgreSQL (+ pgvector) | 5.22 / 16 |
+| Auth | JWT (httpOnly cookie) + refresh rotation | — |
+| Validation | Zod (field-level, env-driven) | 3.23 |
+| Security | Helmet, CORS, rate limiting, CSRF double-submit | 8.x |
+| AI / LLM | OpenAI-compatible API (Ollama / Cloudflare / vLLM) | — |
+| Agent Framework | LangChain + LangGraph (tool calling, RAG graph) | 1.x |
+| Testing | Jest + Supertest (backend), Vitest + RTL (frontend) | 29.x / 2.x |
+| Logging | pino + pino-http (redacted) | 9.x |
+| CI/CD | GitHub Actions → GHCR | — |
+| Observability | Langfuse tracing (optional) | 3.x |
 
-## Problem / Giá trị
+---
 
-- Nhóm cần một công cụ Kanban cộng tác real-time: nhiều người kéo-thả task, cập nhật trực tiếp không cần refresh.
-- TaskFlow giải quyết: quản lý project, cột/task Kanban, drag-and-drop, comment, phân quyền, audit log, realtime qua Socket.io.
+## Architecture
 
-## Tính năng chính
-
-- **Kanban board realtime** — drag-drop (dnd-kit), inline sửa tiêu đề task, optimistic updates, live status pill.
-- **Task detail slide-over** với 3 tabs: Chi tiết / Bình luận / Hoạt động; auto-save debounce 700ms.
-- **AI Agent chat** — tạo project/task bằng hội thoại (function calling), rolling-summary memory, tự động trả lời tiếng Việt.
-- **NLP ticket analysis** — nút "Phân tích AI" gợi ý phân loại + mức ưu tiên cho task, áp dụng 1-click (`POST /api/nlp/analyse`).
-- **Xuất dữ liệu** — CSV, TXT tóm tắt, **Báo cáo tiến độ tiếng Việt** (% hoàn thành, task quá hạn), Google Sheets (kèm tab Progress).
-- **Dashboard** — thống kê thật từ analytics API, feed hoạt động liên project, onboarding 3 bước cho user mới.
-- **Wizard tạo project** 4 bước (thông tin → cột mặc định → thành viên → xác nhận).
-- Bảo mật production-grade: JWT httpOnly + refresh rotation, CSRF, rate limit, Zod validation, RBAC.
-
-## Cấu trúc dự án
+TaskFlow is an **npm-workspaces monorepo** with a modular-monolith backend and a SPA frontend.
 
 ```
 TaskFlow/
-├── server/                  # Backend Express + Socket.io + Prisma
+├── server/                       # Express + Socket.io + Prisma
 │   ├── prisma/
-│   │   ├── schema.prisma    # Data model (User, Project, Column, Task, Comment, Activity)
-│   │   └── seed.ts          # Dữ liệu demo — CHỈ chạy tay, không bao giờ tự chạy ở production
-│   ├── src/
-│   │   ├── app.ts           # Express app (middleware, routes)
-│   │   ├── index.ts         # Server entrypoint + Socket.io + graceful shutdown
-│   │   ├── config/env.ts    # Zod-validated environment
-│   │   ├── lib/             # prisma client, socket wrapper
-│   │   ├── middlewares/     # authenticate
-│   │   ├── modules/         # auth, project, column, task, comment, activity (controller + service + routes)
-│   │   └── utils/           # token, errors, roles
-│   └── tests/               # Integration tests (Supertest)
-├── client/                  # Frontend React + Vite
-│   ├── src/
-│   │   ├── components/      # board (Kanban, Column), task (Card, Detail), ErrorBoundary
-│   │   ├── hooks/           # React Query hooks + useRealtime (Socket.io)
-│   │   ├── pages/           # Login, Register, Dashboard, Board
-│   │   ├── store/auth.tsx   # Auth context
-│   │   └── lib/api.ts       # Axios instance + refresh-token interceptor
-├── .github/workflows/       # CI/CD pipeline
-├── docker-compose.yml       # Postgres 16 + server + client (nginx) — production-style stack
-└── package.json             # npm workspaces
+│   │   ├── schema.prisma         # User, Project, Column, Task, Activity, SC*, Legal*, AIUsage…
+│   │   └── seed.ts               # Dev-only seed (manual run)
+│   └── src/
+│       ├── app.ts                # Express middleware stack
+│       ├── index.ts              # HTTP + WebSocket bootstrap, graceful shutdown
+│       ├── config/env.ts         # Zod-validated environment
+│       ├── lib/                  # Prisma client, Langfuse, logger
+│       └── modules/
+│           ├── auth/             # JWT, refresh rotation, RBAC, Google OAuth, security audit
+│           ├── project/          # Projects + members
+│           ├── task/             # Kanban CRUD + drag-and-drop
+│           ├── comment/          # Threaded comments
+│           ├── activity/         # Audit feed
+│           ├── agent/            # AI chat, LLM router, tool calling, eval runner
+│           ├── legal/            # LangGraph RAG (retrieve → rerank → generate → validate)
+│           ├── nlp/              # NLP ticket analysis (Vietnamese)
+│           ├── recommendation/   # Task recommendation scoring engine
+│           ├── supplychain/      # SC orders, inventory, NLP, agentic decisions, state machine
+│           ├── analytics/        # Dashboard analytics
+│           ├── export/           # CSV / TXT / Google Sheets
+│           ├── chat/             # Agent chat
+│           ├── integrations/     # n8n signed webhooks
+│           └── health/           # Health endpoint (pre-rate-limiter)
+├── client/                       # React + Vite SPA
+│   └── src/
+│       ├── components/           # Kanban board, columns, task cards, slide-over detail
+│       ├── hooks/                # React Query + useRealtime (Socket.io)
+│       ├── pages/                # Login, Register, Dashboard, Board
+│       └── lib/                  # Axios instance with refresh-token interceptor
+├── .github/workflows/            # CI + nightly eval
+└── docker-compose.yml            # Postgres 16 + server + nginx (non-root)
 ```
 
-## Yêu cầu
+---
 
-- Node.js >= 18
-- Docker (để chạy Postgres **hoặc** toàn bộ stack)
-- npm >= 9
+## Features
 
-## Cài đặt & Chạy local (development)
+- **Realtime Kanban** — drag-and-drop (dnd-kit), inline edit, optimistic updates, live status pill.
+- **Task Detail Slide-over** — 3 tabs (Details / Comments / Activity), debounced auto-save.
+- **AI Agent Chat** — create projects/tasks via conversation (function calling), rolling-summary memory, automatic Vietnamese replies.
+- **NLP Ticket Analysis** — "Analyze with AI" suggests classification + priority, 1-click apply (`POST /api/nlp/analyze`).
+- **Legal RAG Research** — retrieve-rerank-generate LangGraph pipeline over Vietnamese law docs, citation-guaranteed answers.
+- **Supply Chain Automation** — order state machine, inventory audit trail, agentic decision engine with high-risk guardrails.
+- **Task Recommendation** — skill + availability scoring engine, personalized task suggestions.
+- **Exports** — CSV, TXT, Vietnamese progress reports, Google Sheets (incl. Progress tab).
+- **Dashboard** — real analytics, cross-project activity feed, 3-step onboarding.
+- **Security** — JWT httpOnly + refresh rotation, CSRF double-submit, rate limiting (global + per-endpoint), RBAC.
+- **Integrations** — n8n signed webhooks (HMAC-SHA256), Google OAuth, SMTP email, Langfuse tracing.
+
+---
+
+## AI / ML
+
+### LLM Integration (Provider-Agnostic)
+TaskFlow communicates with any **OpenAI-compatible** endpoint via `LLM_BASE_URL` + `LLM_MODEL`. Tested providers:
+- **Ollama** (local, no-cost dev)
+- **Cloudflare Workers AI** (bge-m3 embeddings + rerank)
+- **vLLM** (self-hosted, GPU)
+
+A **3-tier router** (`default → premium → reasoning`) classifies each question by length and Vietnamese legal vocabulary, then maps the tier to a concrete model via env vars. Transient failures fall back to `LLM_FALLBACK_MODEL` automatically.
+
+### RAG Pipeline (Legal Research)
+Built with **LangChain LangGraph** as a 4-node state graph: `retrieve → rerank → generate → validate`.
+- **Embedding**: bge-m3 (multilingual, Vietnamese support) → pgvector cosine search
+- **Retrieval**: top-K from `legal_chunks` via pgvector `<=>` operator
+- **Rerank**: bge-reranker cross-encoder re-scores candidates
+- **Generation**: citation-mandatory prompt; hallucinated statutes are filtered against retrieved URLs
+- **Compression**: deterministic prompt compression packs context into token budget before LLM call
+- **Cache**: SHA-256 question hash → 7-day `legalCache` table
+
+All RAG parameters (`topK`, `rerankDepth`, `minSimilarity`, `chunkSize`, `contextBudget`) are **env-tunable** — no code deploy needed to trade recall vs. cost.
+
+### Agent Capabilities
+- **Function calling**: OpenAI-compatible `tools` array → structured `tool_calls` (projects, tasks, analysis).
+- **Vietnamese-first**: prompts, system messages, and NLP heuristics are written for Vietnamese users.
+- **Memory**: rolling-summary conversation memory.
+- **Supply Chain Agentic Engine**: rule-based + LLM hybrid decisions; high-risk actions (`approve_payment`, `ship_order`) always require human approval.
+
+### Evaluation Framework
+- **32-case Vietnamese eval set** in `server/tests/eval/agent-eval.json`.
+- Runner: `npm run eval:agent` (Jest, stubbed LLM heuristic) — CI nightly via `.github/workflows/eval-nightly.yml`.
+- Implicit feedback: NLP panel records `applied`/`ignored`; `GET /nlp/stats` measures apply rate.
+- Coverage thresholds enforced: ≥ 70% statements / 60% branches / 70% functions.
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js ≥ 18
+- Docker (for PostgreSQL) or a Postgres 16 instance with pgvector
+- npm ≥ 9
+
+### Install & Run (Development)
 
 ```bash
-# 1. Cài dependencies cho cả workspace
+# 1. Install dependencies (workspaces)
 npm install
 
-# 2. Khởi động PostgreSQL (Docker)
+# 2. Start PostgreSQL
 docker compose up -d db
-# Hoặc tự cấu hình DATABASE_URL trong server/.env
+# Or set DATABASE_URL in server/.env
 
-# 3. Cấu hình env
+# 3. Configure env
 cp server/.env.example server/.env
 cp client/.env.example client/.env
 
-# 4. Migrate + seed database (seed là dev-only)
+# 4. Migrate + seed (seed is dev-only)
 npm run prisma:migrate -w server
 npm run prisma:seed -w server
 
-# 5. Chạy cả server + client (hot reload)
+# 5. Run both server + client (hot reload)
 npm run dev
 ```
 
 - Backend: `http://localhost:4000` (health: `/api/health`)
 - Frontend: `http://localhost:5173`
-- Demo accounts (sau khi seed): `alice@taskflow.dev` / `bob@taskflow.dev` — password `password123`
+- Demo accounts (after seed): `alice@taskflow.dev` / `bob@taskflow.dev` — password `password123`
 
-## Chạy production-style stack (Docker Compose)
+### Production-style Stack (Docker Compose)
 
 ```bash
-# Build & chạy db + server + client (nginx, non-root, healthcheck)
-JWT_SECRET=<mạnh> JWT_REFRESH_SECRET=<mạnh> docker compose up -d --build
+JWT_SECRET=<strong> JWT_REFRESH_SECRET=<strong> docker compose up -d --build
 ```
 
-- Client được phục vụ bởi **nginx** (non-root, unprivileged) tại `http://localhost:5173`
-- nginx proxy `/api/*` và `/socket.io/*` đến backend (migrate deploy chạy tự động ở container start)
-- Container server chạy non-root (`node`), có HEALTHCHECK qua `/api/health`
-- `prisma migrate deploy` chạy khi container khởi động; **seed không bao giờ chạy ở production** (chỉ khi gọi tay `npm run prisma:seed`)
+Client served by **nginx** (non-root, unprivileged) at `http://localhost:5173`; API + WebSocket proxied to backend.
 
-## API Endpoints
+---
 
-> **Validation:** mọi lỗi validation trả về `400` kèm `details.fieldErrors` (thông tin lỗi theo từng field).
-> **Rate limiting:** toàn bộ API giới hạn chung; riêng `/auth/login` (10 req/15 phút), `/auth/register` (20/15 phút) và `/auth/refresh` (30/15 phút) có limiter riêng — tất cả cấu hình qua env.
+## API Reference
 
-| Method | Endpoint | Mô tả |
-| ------ | -------- | ----- |
-| POST | `/api/auth/register` | Đăng ký |
-| POST | `/api/auth/login` | Đăng nhập |
-| POST | `/api/auth/refresh` | Refresh token (rotation + revoke token cũ) |
-| POST | `/api/auth/logout` | Đăng xuất |
-| GET | `/api/auth/me` | Thông tin người dùng |
-| POST / GET | `/api/projects` | Tạo / danh sách project |
-| GET / PATCH / DELETE | `/api/projects/:projectId` | Chi tiết / sửa / xóa project |
-| POST / GET / DELETE | `/api/projects/:projectId/members` | Quản lý thành viên |
-| POST / PATCH / DELETE | `/api/projects/:projectId/columns` | Quản lý cột Kanban |
-| POST | `/api/projects/:projectId/columns/:columnId/move` | Kéo-thả task (drag-and-drop) |
-| POST / GET / PATCH / DELETE | `/api/projects/:projectId/tasks` | Quản lý task |
-| POST / DELETE | `/api/projects/:projectId/tasks/:taskId/comments` | Bình luận |
-| GET | `/api/projects/:projectId/activities` | Activity log |
+> **Validation**: all validation errors return `400` with `details.fieldErrors`.
+> **Rate limiting**: global + per-endpoint (login/register/refresh have dedicated limits, all env-driven).
 
-## Bảo mật & Vận hành
+| Module | Endpoints |
+| --- | --- |
+| Auth | `POST /api/auth/{register,login,refresh,logout}` · `GET /api/auth/me` |
+| Projects | `POST/GET /api/projects` · `GET/PATCH/DELETE /api/projects/:id` · members sub-resource |
+| Columns | `POST/PATCH/DELETE /api/projects/:projectId/columns` · `POST …/move` (drag-drop) |
+| Tasks | `POST/GET/PATCH/DELETE /api/projects/:projectId/tasks` · comments sub-resource |
+| Activity | `GET /api/projects/:projectId/activities` |
+| AI Agent | `POST /api/agent/chat` · `GET /api/agent/status` |
+| NLP | `POST /api/nlp/analyze` · `GET /api/nlp/stats` |
+| Legal RAG | `POST /api/legal/search` · `GET /api/legal/status` |
+| Recommendations | `GET/POST /api/recommendations/*` · `GET/PUT /api/users/me/{skills,availability}` |
+| Supply Chain | `POST /api/sc/nlp/analyse-order` · `POST /api/sc/agentic/process-order` · `GET /api/sc/dashboard/:projectId` |
+| Analytics | `GET /api/analytics/*` |
+| Export | `GET /api/export/{csv,txt}` |
+| Health | `GET /api/health` (pre-rate-limiter) |
 
-- **Refresh token hash:** token refresh không lưu dạng plaintext; lưu SHA-256 hash, tự động rotate khi refresh và cleanup token hết hạn (chạy 24h/lần).
-- **Rate limiting env-driven:** global + per-endpoint (login/register/refresh) cấu hình qua biến môi trường (`RATE_LIMIT_*`).
-- **Production guard:** `NODE_ENV=production` sẽ từ chối khởi động nếu JWT secret là giá trị mặc định/dev.
-- **Cookie:** httpOnly, `Secure` ở production (HTTPS), `sameSite: 'lax'`.
-- **Request logging:** pino-http log mọi request (`req`, `res`, `responseTime`), ẩn cookie + authorization header.
-- **Health check:** `/api/health` nằm **trước** rate limiter để LB/container health check không tiêu thụ request budget.
-- **Graceful shutdown:** server xử lý SIGINT/SIGTERM — đóng HTTP server, đóng Socket.io và ngắt Prisma trước khi thoát (timeout 10s).
-- **Service layer:** mỗi module tách controller (HTTP + validation) / service (logic + Prisma) để dễ unit test.
-
-## Realtime (Socket.io)
-
-Client kết nối bằng httpOnly cookie, sau đó emit `board:join { projectId }` để join room
-`project:${projectId}`. Server đẩy các sự kiện:
-
-`task:created`, `task:updated`, `task:moved`, `task:deleted`, `comment:added`,
-`column:created`, `column:updated`, `column:deleted`, `member:added`, `member:removed`.
-
-> Lưu ý: hiện tại Socket.io room lưu trong bộ nhớ tiến trình — phù hợp single-instance. Multi-instance cần Redis adapter (xem Roadmap).
+---
 
 ## Testing
 
-Coverage thresholds backend được enforce bởi Jest — CI fail nếu dưới ngưỡng 70% stmts / 60% branches / 70% functions.
-
 ```bash
-# Backend: Jest + Supertest — unit (service/controller) + integration (full API, PostgreSQL thật)
+# Backend: Jest + Supertest (unit + integration, real PostgreSQL)
 npm test -w server
 npm run test:coverage -w server
 
-# Frontend: Vitest + RTL (hiện tại mới có 1 suite — mở rộng đang trong lộ trình)
+# Frontend: Vitest + React Testing Library
 npm test -w client
 npm run test:coverage -w client
 ```
 
-> Trung thực: hiện coverage frontend mới đo `LoginPage.tsx`; backend đã enforce đầy đủ. Xem Roadmap để biết kế hoạch mở rộng.
+**Current coverage**: server 429 / 429 passing (44 suites) · client 29 / 29 passing. Build, typecheck, and lint clean (0 errors).
 
-## CI/CD (GitHub Actions)
+Eval suite: `npm run eval:agent` (32-case Vietnamese regression).
 
-`.github/workflows/ci-cd.yml` tự động chạy trên mỗi push/PR vào `main` / `develop`:
-
-1. **CI (lint-test-build):** `npm ci` → prisma generate + migrate trên Postgres service container → lint → typecheck → `npm audit` → backend test + coverage → frontend test → build cả hai workspace.
-2. **Docker (chỉ push vào `main`):** build cả 2 image (server, client) và **push lên GitHub Container Registry (ghcr.io)** — tag `latest` + `${{ github.sha }}`.
+---
 
 ## Deployment
 
 ```
 Browser → Cloudflare (TLS, CDN, WAF)
-  ├── /  → Cloudflare Pages (pages.dev)  → static client SPA
-  └── /api + wss → Render (free web service, image từ GHCR) → Neon PostgreSQL
+  ├── /      → Cloudflare Pages (pages.dev)     → static SPA
+  └── /api + wss → Render (GHCR image)          → Neon PostgreSQL
 ```
 
-- **Frontend — Cloudflare Pages:** build `VITE_API_URL=https://<api>.onrender.com/api`, `VITE_SOCKET_URL=https://<api>.onrender.com` (cross-origin).
-- **Backend — Render:** `render.yaml` (blueprint) deploy image `ghcr.io/.../taskflow-server` — healthcheck `/api/health`, `prisma migrate deploy` tự động khi container khởi động, secrets (JWT, DATABASE_URL Neon) đặt trong dashboard.
-- **CI:** push `main` → lint/typecheck/test/audit/build → push GHCR (tag `latest` + SHA) → trigger Render deploy hook (`RENDER_DEPLOY_HOOK_URL` secret).
-- **Cross-origin security đã xử lý:** cookie `SameSite=None; Secure` (production) + **CSRF double-submit** (`csrf_token` cookie ↔ `X-CSRF-Token` header, enforced cho mọi mutation ngoài `/api/auth/*`) + CORS whitelist đa origin (`ALLOWED_ORIGINS`) cho cả Express và Socket.io.
-- **Giới hạn free tier:** Render free sleep ~15 phút không có traffic — lần truy cập đầu có cold start ~30-60s (wake trước khi demo).
-- **Sau này có domain/VPS:** chỉ cần đổi DNS + `ALLOWED_ORIGINS`, không đổi code.
+- **Frontend**: Cloudflare Pages — set `VITE_API_URL` / `VITE_SOCKET_URL` to Render origin.
+- **Backend**: Render blueprint (`render.yaml`) — healthcheck `/api/health`, auto `prisma migrate deploy` on boot, secrets via dashboard.
+- **CI**: push `main` → lint/typecheck/test/audit/build → push GHCR (`latest` + SHA) → trigger Render deploy hook.
+- **Cross-origin**: cookie `SameSite=None; Secure` (prod) + CSRF double-submit (`csrf_token` cookie ↔ `X-CSRF-Token` header) + `ALLOWED_ORIGINS` whitelist for Express and Socket.io.
+- **Free tier note**: Render free sleeps after 15 min idle — first hit has ~30-60s cold start. With a domain/VPS: only update DNS + `ALLOWED_ORIGINS`, no code changes.
 
-## Observability
+---
 
-- Logs: pino-http (structured JSON) — redact cookie/auth header.
-- Health: `/api/health` (liveness-style, không qua rate limiter).
-- Langfuse agent tracing (optional, env-gated): `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASEURL` — tracing no-op khi không set. Xem `docs/OBSERVABILITY.md`.
-- NLP implicit feedback: panel "Phân tích AI" trong TaskDetail ghi `applied`/`ignored` vào DB, endpoint `GET /nlp/stats` để đo apply rate. Xem `docs/OBSERVABILITY.md`.
-- **Agent eval set**: 32 câu tiếng Việt trong `server/tests/eval/agent-eval.json`, runner `npm run eval:agent` (Jest, stub LLM heuristic), hourly CI nightly `.github/workflows/eval-nightly.yml`. Xem `docs/OBSERVABILITY.md`.
+## License
 
-## Scalability
-
-- Kiến trúc **modular monolith** — trạng thái quan trọng trong PostgreSQL, container stateless, có thể chạy nhiều instance sau khi bổ sung Redis adapter cho Socket.io.
-- Refresh-token cleanup hiện dùng `setInterval` trong tiến trình — cần cơ chế shared khi chạy multi-instance (xem Roadmap).
-
-## Docker
-
-- **Reproducible:** build từ root workspace, dùng `npm ci` (lockfile); runtime chỉ cài production deps (`--omit=dev -w server`).
-- **Non-root:** server chạy user `node`; client chạy nginx unprivileged (`nginxinc/nginx-unprivileged`).
-- **HEALTHCHECK:** cả 2 container (server qua `/api/health`, client qua `/`).
-- **Client runtime:** nginx (thay vì dev server / static Node server) — SPA fallback, gzip, security headers, proxy `/api` + `/socket.io` (có WebSocket upgrade) tới backend.
-
-## Roadmap
-
-- [x] Docker hardening (npm ci, non-root, HEALTHCHECK, nginx)
-- [x] Rate limiting env-driven (global + auth endpoints)
-- [x] Health check trước rate limiter
-- [x] CI: lint, typecheck, test + coverage, `npm audit`, build, push GHCR
-- [x] Sửa layout build backend (tsconfig rootDir) — Dockerfile cũ từng chạy sai entry point
-- [x] Cross-origin deploy support: cookie `SameSite=None` (prod) + CSRF double-submit + `ALLOWED_ORIGINS`
-- [ ] Deploy thật lên Render + Neon + Cloudflare Pages + smoke test
-- [ ] Redis adapter cho Socket.io + refresh-token cleanup distributed
-- [ ] Frontend coverage mở rộng (useProjects, useRealtime, api interceptor, BoardPage) + Playwright E2E
-- [ ] Prometheus metrics + Grafana dashboard + OpenTelemetry
-- [ ] Pagination cho tasks/activities
-- [ ] Error boundary + lazy-load routes (ErrorBoundary đã có, đang mở rộng)
-- [ ] ADRs (docs/adr/) cho các quyết định kiến trúc
+MIT — see [LICENSE](LICENSE) for details.
