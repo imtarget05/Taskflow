@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { FolderKanban, Plus, TriangleAlert } from 'lucide-react';
+import { FolderKanban, Plus, Sparkles, TriangleAlert } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useProjects, useUpdateProject, useRecentActivities } from '@/hooks/useProjects';
+import { useRecommendations } from '@/hooks/useRecommendations';
 import { useAnalyticsOverview } from '@/hooks/useAnalytics';
 import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
@@ -23,6 +25,7 @@ export default function DashboardPage() {
   const { data: projects, isLoading, error, refetch } = useProjects();
   const { data: stats } = useAnalyticsOverview();
   const { data: recentActivities } = useRecentActivities(12);
+  const { data: topRecommendations } = useRecommendations();
   const updateProject = useUpdateProject();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -119,6 +122,48 @@ export default function DashboardPage() {
         </div>
       </section>
 
+
+      {/* Top recommendations widget */}
+      {topRecommendations && topRecommendations.length > 0 && (
+        <section aria-labelledby="recommendations-title" className="mt-10">
+          <SectionHeading
+            id="recommendations-title"
+            title="Đề xuất task"
+            description="Task phù hợp với bạn dựa trên kỹ năng và lịch rảnh."
+            action={
+              <Link
+                to="/recommendations"
+                className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Xem tất cả
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            }
+          />
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {topRecommendations.slice(0, 3).map((rec) => (
+              <Link
+                key={rec.id}
+                to={`/projects/${rec.projectId}`}
+                className="rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="line-clamp-1 text-sm font-semibold text-ink">{rec.task?.title ?? 'Task'}</h4>
+                  <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent-ink">
+                    {Math.round(rec.score * 100)}%
+                  </span>
+                </div>
+                {rec.task?.projectName && (
+                  <p className="mt-0.5 truncate text-xs text-ink-muted">{rec.task.projectName}</p>
+                )}
+                {rec.reason && (
+                  <p className="mt-2 line-clamp-2 text-xs text-ink-secondary">{rec.reason}</p>
+                )}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       {/* New project wizard (4 steps: basics → columns → members → review) */}
       {open && <CreateProjectWizard onClose={() => setOpen(false)} />}
 

@@ -54,6 +54,9 @@ model User {
   scOrderAnalyses   SCOrderAnalysis[]
   agenticDecisions  AgenticDecision[]
   securityAudits    SecurityAudit[]
+  skills          UserSkill[]
+  availabilities  UserAvailability[]
+  recommendations TaskRecommendation[]
 
   @@map("users")
 }
@@ -289,6 +292,7 @@ model Project {
   inventoryItems InventoryItem[]
   scOrderAnalyses   SCOrderAnalysis[]
   agenticDecisions  AgenticDecision[]
+  recommendations TaskRecommendation[]
 
   @@map("projects")
 }
@@ -346,6 +350,7 @@ model Task {
   comments     Comment[]
   activities   Activity[]
   analyses     TicketAnalysis[]
+  recommendations TaskRecommendation[]
 
   @@index([columnId, position])
   @@index([projectId])
@@ -443,7 +448,7 @@ model Order {
   updatedAt    DateTime    @updatedAt
 
   project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: RESTRICT)
   lineItems    LineItem[]
   scAnalyses        SCOrderAnalysis[]
   agenticDecisions  AgenticDecision[]
@@ -574,4 +579,67 @@ model SecurityAudit {
   @@index([userId])
   @@index([email])
   @@map("security_audits")
+}
+
+// ---------------------------------------------------------------------------
+// Task Recommendation Engine — đề xuất task nội bộ dựa trên kỹ năng,
+// availability, workload, lịch sử hoàn thành, và priority.
+// ---------------------------------------------------------------------------
+
+model UserSkill {
+  id        String   @id @default(cuid())
+  userId    String
+  skill     String   // e.g. "react", "nodejs", "design"
+  level     Int      @default(1) // 1-5
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, skill])
+  @@index([userId])
+  @@map("user_skills")
+}
+
+model UserAvailability {
+  id        String   @id @default(cuid())
+  userId    String
+  dayOfWeek Int      // 0-6 (Sunday-Saturday)
+  morning   Boolean  @default(true)
+  afternoon Boolean  @default(true)
+  evening   Boolean  @default(false)
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, dayOfWeek])
+  @@index([userId])
+  @@map("user_availability")
+}
+
+model TaskRecommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String
+  taskId      String
+  score       Float    // 0.0-1.0
+  reason      String   // Lý do đề xuất (Vietnamese)
+  factors     Json     // { skillMatch, availability, workload, history, priority }
+  status      String   @default("pending") // pending | accepted | dismissed | expired
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, score])
+  @@index([projectId])
+  @@map("task_recommendations")
+}
+
+model RecommendationConfig {
+  id    String @id @default(cuid())
+  key   String @unique // "weights", "thresholds"
+  value Json
+  
+  @@map("recommendation_configs")
 }

@@ -11,9 +11,7 @@
 import { StatusCodes } from 'http-status-codes';
 
 import { chatCompletion } from '../llm';
-import * as envModule from '../../../config/env';
-
-const env: any = envModule;
+import { env } from '../../../config/env';
 
 const callLog = [];
 let nextResponse = { status: 200, body: { choices: [{ message: { content: 'ok' } }] } };

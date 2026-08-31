@@ -27,6 +27,7 @@ import supplychainRoutes from './modules/supplychain/supplychain.routes';
 import scNlpRoutes from './modules/supplychain/sc-nlp.routes';
 import scDashboardRoutes from './modules/supplychain/sc-dashboard.routes';
 import agenticRoutes from './modules/agentic/agentic.routes';
+import recommendationRoutes from './modules/recommendation/recommendation.routes';
 import { healthRouter } from './modules/health/health.controller';
 import { initLangfuse } from './lib/langfuse';
 
@@ -112,6 +113,7 @@ export function createApp(): Express {
   app.use('/api/sc', scDashboardRoutes);
   app.use('/api/sc/agentic', agenticRoutes);
   app.use('/api/projects', exportRoutes);
+  app.use('/api/recommendations', recommendationRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

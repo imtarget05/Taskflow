@@ -12,6 +12,7 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const BoardPage = lazy(() => import('./pages/BoardPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const RecommendationsPage = lazy(() => import('./pages/RecommendationsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function pageFallback() {
@@ -116,6 +117,14 @@ export default function App() {
             element={
               <Suspense fallback={pageFallback()}>
                 <BoardPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/recommendations"
+            element={
+              <Suspense fallback={pageFallback()}>
+                <RecommendationsPage />
               </Suspense>
             }
           />

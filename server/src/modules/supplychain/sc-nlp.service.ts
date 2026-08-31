@@ -25,25 +25,25 @@ export type AnalyseOrderResult = {
 const RULES = [
   {
     type: 'PO_NEW',
-    patterns: /\b(po\s*số|po\s*number|purchase\s*order|đặt\s*hàng|yêu\s*cầu\s*mua|new\s*po|po\s*new)\b/i,
+    patterns: /(?:^|\s)(po\s*số|po\s*number|purchase\s*order|đặt\s*hàng|yêu\s*cầu\s*mua|new\s*po|po\s*new)(?!\w)/i,
     action: 'phê duyệt PO',
     trigger: 'approve_po',
   },
   {
     type: 'PO_UPDATE',
-    patterns: /\b(cập\s*nất\s*po|update\s*po|điều\s*chỉnh\s*po|po\s*cập\s*nất|tăng\s*giảm\s*quantity|quantity\s*change|po\s*update)\b/i,
+    patterns: /(?:^|\s)(cập\s*nhật\s*po|update\s*po|điều\s*chỉnh\s*po|po\s*cập\s*nhật|tăng\s*giảm\s*quantity|quantity\s*change|po\s*update)(?!\w)/i,
     action: 'xác nhận điều chỉnh PO',
     trigger: 'update_po',
   },
   {
     type: 'INVOICE',
-    patterns: /\b(hóa\s*đơn|invoice|inv\s*-?\s*\d|thanh\s*toán|giá\s*tổng|vat)\b/i,
+    patterns: /(?:^|\s)(hóa\s*đơn|invoice|inv\s*-?\s*\d|thanh\s*toán|giá\s*tổng|vat)(?!\w)/i,
     action: 'gửi cho bộ phận kế toán',
     trigger: 'invoice_verify',
   },
   {
     type: 'ASN',
-    patterns: /\b(asn|advanced\s*shipping\s*notice|shipment|eta\s*\d|gửi\s*hàng|đang\s*shipping|shipping\s*notice)\b/i,
+    patterns: /(?:^|\s)(asn|advanced\s*shipping\s*notice|shipment|eta\s*\d|gửi\s*hàng|đang\s*shipping|shipping\s*notice)(?!\w)/i,
     action: 'kiểm tra hàng nhập',
     trigger: 'asn_check',
   },

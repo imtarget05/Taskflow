@@ -168,6 +168,93 @@ export function chunkText(text: string, size: number = CHUNK_SIZE): string[] {
   return chunks;
 }
 
+/**
+ * chars→token heuristic. Aligned with the inputTokens estimate used for the
+ * AIUsage ledger (Math.ceil(len / 4)), so compression and usage accounting use
+ * the same scale.
+ */
+export function estimateTokens(text: string): number {
+  return Math.ceil(String(text ?? '').trim().length / 4);
+}
+
+/** One context line for a chunk, matching the format the LLM is prompted with. */
+function buildChunkLine(c: LegalChunkRow): string {
+  return `[${c.articleRef}] (${c.documentNumber ?? c.title}) ${c.content}`;
+}
+
+export interface CompressResult {
+  /** The packed context string handed to the LLM. */
+  context: string;
+  originalTokens: number;
+  compressedTokens: number;
+  savedTokens: number;
+  keptCount: number;
+  droppedCount: number;
+  /** Whether the last kept chunk had to be tail-truncated to fit the budget. */
+  truncatedLast: boolean;
+}
+
+/**
+ * Prompt compression: pack the retrieved (already re-ranked best-first) chunks
+ * into a token budget. Fills higher-ranked chunks in order, drops the tail that
+ * does not fit, and hard-truncates a single dominating chunk so the caller
+ * ALWAYS stays at or under `budgetTokens`. Deterministic → unit-testable without
+ * an embedding service (this is the "Prompt Compression" gap from the risk talk).
+ */
+export function compressContext(chunks: LegalChunkRow[], budgetTokens?: number, topK?: number): CompressResult {
+  const budget = Math.max(1, Math.floor(Number(budgetTokens ?? env.LEGAL_CONTEXT_MAX_TOKENS)) || 1);
+  const count = topK === undefined ? chunks.length : Math.max(0, Math.min(chunks.length, Math.floor(topK)));
+  if (chunks.length === 0 || budget <= 0) {
+    return { context: '', originalTokens: 0, compressedTokens: 0, savedTokens: 0, keptCount: 0, droppedCount: 0, truncatedLast: false };
+  }
+
+  // Cheap token estimate for EVERY line up-front. Lines are already ranked
+  // best-first by the rerank step, so greedy fill = keep the most relevant.
+  let total = 0;
+  let truncatedLast = false;
+  const lines: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const line = buildChunkLine(chunks[i]);
+    const t = estimateTokens(line);
+    if (total + t <= budget) {
+      lines.push(line);
+      total += t;
+      continue;
+    }
+    // This line exceeds the remaining budget. If it is the FIRST kept line and
+    // it is alone too big, hard-truncate it to a full budget. Otherwise keep a
+    // tail slice only when there is meaningful room left, then stop.
+    const remaining = budget - total;
+    if (lines.length === 0 && t > budget) {
+      const kept = line.slice(0, budget * 4);
+      lines.push(kept);
+      total = estimateTokens(kept);
+      truncatedLast = true;
+      break;
+    }
+    if (remaining >= 4) {
+      const kept = line.slice(0, remaining * 4);
+      lines.push(kept);
+      total += estimateTokens(kept);
+      truncatedLast = true;
+    }
+    break; // rest of the ranked tail is dropped
+  }
+
+  const allLines = chunks.slice(0, count).map(buildChunkLine).join('\n\n');
+  const originalTokens = estimateTokens(allLines);
+  const context = lines.join('\n\n');
+  return {
+    context,
+    originalTokens,
+    compressedTokens: total,
+    savedTokens: Math.max(0, originalTokens - total),
+    keptCount: lines.length,
+    droppedCount: Math.max(0, count - lines.length),
+    truncatedLast,
+  };
+}
+
 async function retrieveNode(state: LegalGraphState) {
   const [vector] = await embed([state.question]);
   const rows = await prisma.$queryRaw<LegalChunkRow[]>(Prisma.sql`
@@ -232,10 +319,10 @@ function extractCitations(reply: string, chunks: LegalChunkRow[]): LegalCitation
 }
 
 async function generateNode(state: LegalGraphState) {
-  const context = state.chunks
-    .map((c) => `[${c.articleRef}] (${c.documentNumber ?? c.title}) ${c.content}`)
-    .join('\n\n');
-  const prompt = await LEGAL_PROMPT.format({ question: state.question, context });
+  // Prompt compression: pack the reranked context into the token budget before
+  // sending it to the LLM (drops the least-relevant tail / truncates oversize).
+  const compressed = compressContext(state.chunks, env.LEGAL_CONTEXT_MAX_TOKENS, state.chunks.length);
+  const prompt = await LEGAL_PROMPT.format({ question: state.question, context: compressed.context });
 
   const tier = routeModel(state.question);
   const model = modelForTier(tier);

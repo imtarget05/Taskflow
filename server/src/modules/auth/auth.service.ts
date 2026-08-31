@@ -5,6 +5,8 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../uti
 import { env, isEmailConfigured } from '../../config/env';
 import { createHash, randomBytes } from 'crypto';
 
+import { sendPasswordResetEmail } from './email.service';
+
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
@@ -137,13 +139,13 @@ export async function forgotPassword(email: string): Promise<ForgotPasswordResul
     },
   });
 
-  // When an email provider is configured we would send the reset link here
-  // and NOT return the token. Until then, surface the token so the flow can
-  // be completed without a mail server. This is safe because the link only
-  // works for a registered, password-bearing account and expires in 15 min.
+  // When SMTP is configured, send email and don't return the token
   if (isEmailConfigured()) {
+    await sendPasswordResetEmail(normalized, token, user.name);
     return {};
   }
+
+  // Dev mode: return token so the flow can be completed without email
   return { resetToken: token };
 }
 

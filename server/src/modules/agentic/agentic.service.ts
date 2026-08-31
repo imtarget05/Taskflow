@@ -309,6 +309,104 @@ async function createManualReviewTask(
   return { humanTaskId: task.id };
 }
 
+// ---------------------------------------------------------------------------
+// Approval escalation — xử lý khi human KHÔNG THỂ duyệt bằng tay
+// ---------------------------------------------------------------------------
+// SLA: 24h không duyệt → nhắc lại; 48h → nâng độ ưu tiên; 72h → chặn order.
+// GUARDRAIL: escalation KHÔNG BAO GIỜ tự động phê duyệt thay human.
+
+export const APPROVAL_SLA_STEPS_MS = [
+  24 * 60 * 60 * 1000, // 24h → notify_again
+  48 * 60 * 60 * 1000, // 48h → escalate_priority
+  72 * 60 * 60 * 1000, // 72h → block_order
+] as const;
+
+export type ApprovalEscalationAction = 'wait' | 'notify_again' | 'escalate_priority' | 'block_order';
+
+export type ApprovalEscalation = {
+  level: 0 | 1 | 2 | 3;
+  action: ApprovalEscalationAction;
+  message: string;
+};
+
+export function computeApprovalEscalation(createdAt: Date, now: Date = new Date()): ApprovalEscalation {
+  const ageMs = now.getTime() - createdAt.getTime();
+  const [s1, s2, s3] = APPROVAL_SLA_STEPS_MS;
+
+  if (ageMs >= s3) {
+    return {
+      level: 3,
+      action: 'block_order',
+      message: `Yêu cầu duyệt đã quá hạn 72h — order bị chặn chờ human xử lý, KHÔNG tự động phê duyệt`,
+    };
+  }
+  if (ageMs >= s2) {
+    return {
+      level: 2,
+      action: 'escalate_priority',
+      message: `Yêu cầu duyệt quá hạn 48h — nâng độ ưu tiên và nhắc lại người phụ trách`,
+    };
+  }
+  if (ageMs >= s1) {
+    return {
+      level: 1,
+      action: 'notify_again',
+      message: `Yêu cầu duyệt quá hạn 24h — nhắc lại người phụ trách`,
+    };
+  }
+  return { level: 0, action: 'wait', message: 'Còn trong hạn SLA duyệt' };
+}
+
+export type StaleApprovalTask = {
+  id: string;
+  projectId: string;
+  metadata: { [key: string]: unknown } | null;
+  createdAt: Date;
+};
+
+export type EscalationSummary = { checked: number; escalated: number; blocked: number };
+
+export async function escalateStaleHumanTasks(
+  projectId: string,
+  _actorId: string,
+  now: Date = new Date()
+): Promise<EscalationSummary> {
+  const pending = await prisma.task.findMany({
+    where: {
+      projectId,
+      completed: false,
+      metadata: { path: ['requiresHumanApproval'], equals: true },
+    },
+    select: { id: true, projectId: true, metadata: true, createdAt: true },
+  });
+
+  const summary: EscalationSummary = { checked: pending.length, escalated: 0, blocked: 0 };
+
+  for (const task of pending) {
+    const escalation = computeApprovalEscalation(task.createdAt, now);
+    if (escalation.level === 0) continue;
+
+    const metadata = {
+      ...((task.metadata as Record<string, unknown> | null) ?? {}),
+      escalationLevel: escalation.level,
+      escalationAction: escalation.action,
+      escalationMessage: escalation.message,
+      escalatedAt: now.toISOString(),
+    };
+
+    await prisma.task.update({ where: { id: task.id }, data: { metadata } });
+    emitToProject(task.projectId, SOCKET_EVENTS.TASK_UPDATED, {
+      id: task.id,
+      escalation,
+    });
+
+    summary.escalated += 1;
+    if (escalation.action === 'block_order') summary.blocked += 1;
+  }
+
+  return summary;
+}
+
 export function ruleBasedFallbackForAgent(text: string): AnalyseOrderResult {
   // Lưu ý: không dùng \b cuối pattern vì \b của JS là ASCII-based — sẽ fail
   // khi đứng ngay sau ký tự tiếng Việt có dấu (vd: "số", "hàng").

@@ -269,7 +269,8 @@ export async function chat(
     },
     async (trace) => {
       const llmStart = Date.now();
-      const completion = await chatCompletionWithTools([system, ...kept], AGENT_TOOLS);
+      const sanitized = sanitizeForLLM([system, ...kept]);
+      const completion = await chatCompletionWithTools(sanitized, AGENT_TOOLS);
       const llmMs = Date.now() - llmStart;
       if (trace) {
         const span = trace.span({ name: 'llm' });
@@ -329,6 +330,13 @@ export async function chat(
         );
 
   return { reply, conversationId, language, ...(actionResult ? { action: actionResult } : {}) };
+}
+
+function sanitizeForLLM(messages: LLMMessage[]): LLMMessage[] {
+  return messages.map((m) => ({
+    ...m,
+    content: m.role === 'user' && typeof m.content === 'string' ? `<user_message>\n${m.content}\n</user_message>` : m.content,
+  }));
 }
 
 /** Plain text of the LATEST user message — the detection scope for one turn. */

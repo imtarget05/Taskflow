@@ -108,3 +108,59 @@ export interface ChatGroup {
   members: ChatMember[];
   messages: ChatMessage[];
 }
+
+export interface TaskRecommendation {
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId: string;
+  score: number;
+  reason: string;
+  factors: {
+    skillMatch: number;
+    availability: number;
+    priority: number;
+    history: number;
+    workloadBalance: number;
+  };
+  status: 'pending' | 'accepted' | 'dismissed' | 'expired';
+  createdAt: string;
+  expiresAt?: string | null;
+  task?: {
+    id: string;
+    title: string;
+    description?: string | null;
+    priority: TaskPriority;
+    projectName?: string;
+  };
+}
+
+export interface UserSkill {
+  id: string;
+  skill: string;
+  level: number;
+}
+
+export interface UserAvailability {
+  id: string;
+  dayOfWeek: number;
+  morning: boolean;
+  afternoon: boolean;
+  evening: boolean;
+}
+
+export interface RecommendationWeights {
+  skillMatch: number;
+  availability: number;
+  priority: number;
+  history: number;
+  workloadBalance: number;
+}
+
+export interface RecommendationStats {
+  total: number;
+  pending: number;
+  accepted: number;
+  dismissed: number;
+  acceptRate: number;
+}
