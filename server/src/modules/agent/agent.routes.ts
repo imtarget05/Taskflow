@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticate } from '../../middlewares/auth';
+import { asyncHandler } from '../../utils/errors';
 import { env } from '../../config/env';
 import * as agentController from './agent.controller';
 
@@ -24,6 +25,7 @@ const router = Router();
 
 router.get('/status', agentController.status);
 router.post('/chat', authenticate, chatLimiter, agentController.chat);
+router.post('/chat/stream', authenticate, chatLimiter, asyncHandler(agentController.chatStream));
 router.post('/upload', authenticate, uploadLimiter, agentController.upload.single('file'), agentController.uploadFile);
 router.get('/conversations', authenticate, agentController.listConversations);
 router.get('/conversations/:conversationId', authenticate, agentController.getConversation);

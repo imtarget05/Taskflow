@@ -20,7 +20,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "legal:index": "tsx scripts/index-legal.ts",
-    "db:up": "docker-compose up -d db"
+    "db:up": "docker-compose up -d db",
+    "eval:report": "jest --config jest.config.js --runInBand tests/eval/accuracy-report.test.ts",
+    "eval:benchmark": "npx ts-node tests/eval/benchmark-report.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.9",

@@ -20,6 +20,7 @@ import searchRoutes from './modules/search/search.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import { recent as activityRecentHandler } from './modules/activity/activity.controller.recent';
 import agentRoutes from './modules/agent/agent.routes';
+import memoryRoutes from './modules/agent/memory.routes';
 import legalRoutes from './modules/legal/legal.routes';
 import exportRoutes from './modules/export/export.routes';
 import nlpRoutes from './modules/nlp/nlp.routes';
@@ -28,6 +29,10 @@ import scNlpRoutes from './modules/supplychain/sc-nlp.routes';
 import scDashboardRoutes from './modules/supplychain/sc-dashboard.routes';
 import agenticRoutes from './modules/agentic/agentic.routes';
 import recommendationRoutes from './modules/recommendation/recommendation.routes';
+import promptRoutes from './modules/prompt/prompt.routes';
+import evaluationRoutes from './modules/evaluation/evaluation.routes';
+import modelRoutes from './modules/model/model.routes';
+import mlopsRoutes from './modules/mlops/mlops.routes';
 import { healthRouter } from './modules/health/health.controller';
 import { initLangfuse } from './lib/langfuse';
 
@@ -106,7 +111,8 @@ export function createApp(): Express {
   app.use('/api/analytics', analyticsRoutes);
   app.get('/api/activities', authenticate, activityRecentHandler);
   app.use('/api/agent', agentRoutes);
-  app.use('/api/agent/legal', legalRoutes);
+  app.use('/api/agent', memoryRoutes);
+app.use('/api/agent/legal', legalRoutes);
   app.use('/api/nlp', nlpRoutes);
   app.use('/api/sc', supplychainRoutes);
   app.use('/api/sc/nlp', scNlpRoutes);
@@ -114,6 +120,10 @@ export function createApp(): Express {
   app.use('/api/sc/agentic', agenticRoutes);
   app.use('/api/projects', exportRoutes);
   app.use('/api/recommendations', recommendationRoutes);
+  app.use('/api/evaluation', evaluationRoutes);
+  app.use('/api/models', modelRoutes);
+  app.use('/api/prompts', promptRoutes);
+  app.use('/api/mlops', mlopsRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

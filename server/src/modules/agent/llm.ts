@@ -456,6 +456,171 @@ interface ChatCompletionWithToolsResultInternal {
   durationMs?: number;
 }
 
+/**
+ * Stream a chat completion with tool support. Yields content chunks as they
+ * arrive from the provider, then a final result with any tool calls.
+ *
+ * Returns an AsyncIterable of:
+ *   - { type: 'token', data: string } for each content delta
+ *   - { type: 'tool_calls', data: LLMToolCall[] } once at the end if any
+ *   - { type: 'done' } when the stream is complete
+ *   - { type: 'error', data: { message: string } } on failure
+ *
+ * The provider must support streaming (OpenAI-compatible SSE). If the response
+ * has no body (non-streaming provider), falls back to the non-streaming path.
+ */
+export interface StreamChunk {
+  type: 'token' | 'tool_calls' | 'done' | 'error';
+  data?: unknown;
+}
+
+export async function* streamChatCompletionWithTools(
+  messages: LLMMessage[],
+  tools: LLMFunctionTool[],
+  opts: ChatCompletionOptions = {}
+): AsyncIterable<StreamChunk> {
+  if (!isLLMConfigured()) {
+    yield { type: 'error', data: { message: 'AI assistant is not configured' } };
+    return;
+  }
+
+  const model = opts.model ?? env.LLM_MODEL;
+  if (!model) {
+    yield { type: 'error', data: { message: 'AI assistant is not configured' } };
+    return;
+  }
+
+  const topP = resolveTopP(opts);
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    tools,
+    stream: true,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
+  };
+  if (topP !== undefined) body.top_p = topP;
+
+  let res: Response;
+  try {
+    res = await requestWithRetry(`${env.LLM_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: aiHeaders(),
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    const msg = err instanceof AppError ? err.message : 'LLM request failed';
+    yield { type: 'error', data: { message: msg } };
+    return;
+  }
+
+  if (!res.ok) {
+    const status = res.status;
+    if (status === 429) {
+      yield { type: 'error', data: { message: 'AI service is temporarily unavailable. Please try again shortly.' } };
+    } else {
+      yield { type: 'error', data: { message: `LLM request failed (HTTP ${status})` } };
+    }
+    return;
+  }
+
+  if (!res.body) {
+    // Provider does not support streaming; fall back to non-streaming.
+    yield { type: 'error', data: { message: 'Streaming not supported by provider' } };
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const toolCallsAccumulated: LLMToolCall[] = [];
+  let contentAccumulated = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE events from the buffer
+      let sepIndex: number;
+      while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, sepIndex).trim();
+        buffer = buffer.slice(sepIndex + 2);
+
+        if (!raw) continue;
+
+        // SSE event: collect all data: lines
+        let eventData = '';
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('data: ')) {
+            eventData += line.slice(6);
+          }
+        }
+
+        if (!eventData) continue;
+
+        if (eventData === '[DONE]') {
+          // End of stream sentinel
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(eventData) as {
+            choices?: {
+              delta?: {
+                content?: string;
+                tool_calls?: {
+                  index: number;
+                function?: { name?: string; arguments?: string };
+                }[];
+              };
+              finish_reason?: string;
+            }[];
+          };
+
+          const delta = parsed?.choices?.[0]?.delta;
+          if (delta?.content) {
+            contentAccumulated += delta.content;
+            yield { type: 'token', data: delta.content };
+          }
+
+          // Accumulate streamed tool call fragments
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!toolCallsAccumulated[idx]) {
+                toolCallsAccumulated[idx] = { name: '', arguments: '' };
+              }
+              if (tc.function?.name) {
+                toolCallsAccumulated[idx].name += tc.function.name;
+              }
+              if (tc.function?.arguments) {
+                toolCallsAccumulated[idx].arguments += tc.function.arguments;
+              }
+            }
+          }
+        } catch {
+          // Skip malformed JSON chunks
+          continue;
+        }
+      }
+    }
+
+    // Emit accumulated tool calls at the end
+    if (toolCallsAccumulated.length > 0) {
+      yield { type: 'tool_calls', data: toolCallsAccumulated };
+    }
+
+    yield { type: 'done', data: { content: contentAccumulated } };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Stream error';
+    yield { type: 'error', data: { message: msg } };
+  } finally {
+    reader.releaseLock();
+  }
+}
 export interface EmbeddingResult {
   embedding: number[];
 }

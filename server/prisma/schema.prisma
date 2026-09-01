@@ -57,10 +57,10 @@ model User {
   skills          UserSkill[]
   availabilities  UserAvailability[]
   recommendations TaskRecommendation[]
+  memoryNodes      MemoryNode[]
 
   @@map("users")
 }
-
 model ChatGroup {
   id        String   @id @default(cuid())
   projectId String   @unique
@@ -642,4 +642,130 @@ model RecommendationConfig {
   value Json
   
   @@map("recommendation_configs")
+}
+
+// ---------------------------------------------------------------------------
+// GraphRAG / Cross-Session Memory
+// Knowledge graph connecting entities across sessions. MemoryNode stores
+// facts/preferences/decisions with pgvector embeddings for semantic search;
+// MemoryRelation links nodes with typed edges (related_to, causes, precedes,
+// contradicts) to form a traversable memory graph.
+// ---------------------------------------------------------------------------
+
+model MemoryNode {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    String   // The fact/memory content
+  category   String   // 'preference', 'fact', 'decision', 'context'
+  source     String   // 'conversation', 'task', 'manual'
+  confidence Float    @default(1.0)
+  embedding  Unsupported("vector(1024)")?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  outgoingRelations MemoryRelation[] @relation("source")
+  incomingRelations MemoryRelation[] @relation("target")
+
+  @@index([userId])
+  @@index([category])
+  @@map("memory_nodes")
+}
+
+model MemoryRelation {
+  id           String     @id @default(cuid())
+  sourceId     String
+  source       MemoryNode @relation("source", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId     String
+  target       MemoryNode @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
+  relationType String     // 'related_to', 'causes', 'precedes', 'contradicts'
+  strength     Float      @default(1.0)
+
+  @@unique([sourceId, targetId, relationType])
+  @@map("memory_relations")
+}
+
+// ---------------------------------------------------------------------------
+// Prompt Engineering System
+// Quản lý prompt templates, versioning, A/B testing và performance tracking.
+// ---------------------------------------------------------------------------
+
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  name        String   // 'legal_rag', 'agent_system', 'nlp_classifier'
+  version     String   // semantic version: '1.0.0', '1.1.0'
+  content     String   @db.Text // The prompt template text
+  variables   String[] // Variable names: ['question', 'context']
+  isActive    Boolean  @default(false) // Only one active per name
+  metrics     Json?    // { accuracy, latency, usageCount }
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  experiments PromptExperiment[]
+
+  @@unique([name, version])
+  @@index([name, isActive])
+  @@map("prompt_templates")
+}
+
+model PromptExperiment {
+  id            String   @id @default(cuid())
+  name          String   // 'chunk_size_test', 'top_k_comparison'
+  promptName    String   @unique // Which prompt template this tests (1:1 with active version)
+  variantA      String   // Version A
+  variantB      String   // Version B
+  status        String   @default("running")
+  trafficSplit  Float    @default(0.5) // 50/50 split
+  resultsA      Json?    // { accuracy, count, avgLatency }
+  resultsB      Json?    // { accuracy, count, avgLatency }
+  winner       String?  // 'A', 'B', or null
+  startedAt     DateTime @default(now())
+  endedAt       DateTime?
+
+  promptTemplate PromptTemplate @relation(fields: [promptName], references: [id], onDelete: Cascade)
+
+  @@index([promptName, status])
+  @@map("prompt_experiments")
+}
+
+// ---------------------------------------------------------------------------
+// LLM Evaluation Framework (Ragas-like metrics)
+// Stores evaluation run results for comparing prompt/model/config changes.
+// ---------------------------------------------------------------------------
+
+model EvaluationRun {
+  id            String   @id @default(cuid())
+  name          String   // 'legal_rag_v1', 'chunk_size_experiment'
+  promptVersion String?
+  datasetSize   Int
+  metrics       Json     // { faithfulness, answerRelevancy, contextRecall, contextPrecision, accuracy }
+  config        Json?    // { chunkSize, topK, rerankDepth, model }
+  createdAt     DateTime @default(now())
+
+  @@index([name])
+  @@map("evaluation_runs")
+}
+
+// ---------------------------------------------------------------------------
+// MLOps Experiment Tracking
+// Tracks retrieval tuning experiments (chunk size, top-K, rerank depth).
+// ---------------------------------------------------------------------------
+
+model RetrievalExperiment {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  config        Json
+  datasetSize   Int      @default(0)
+  metrics       Json?
+  status        String   @default("running")
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  @@index([name])
+  @@index([status])
+  @@map("retrieval_experiments")
 }

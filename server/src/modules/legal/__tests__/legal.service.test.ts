@@ -25,6 +25,10 @@ jest.mock('../../../modules/agent/llm', () => ({
   modelForTier: jest.fn(() => 'default-model'),
 }));
 
+jest.mock('../../../modules/prompt/prompt.service', () => ({
+  renderPrompt: jest.fn().mockResolvedValue(null),
+}));
+
 import { prisma } from '../../../lib/prisma';
 import { embed, rerank, chatCompletion, routeModel, modelForTier } from '../../../modules/agent/llm';
 

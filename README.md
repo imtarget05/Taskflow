@@ -1,7 +1,7 @@
 # TaskFlow — Real-time Collaborative Kanban with AI Agent
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
-[![Tests](https://img.shields.io/badge/tests-429%2F%20429%20passing-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-540%2F%20540%20passing-brightgreen)](https://github.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > Real-time Trello-style Kanban platform with embedded Generative AI agent (Vietnamese-first NLP), legal RAG research, and supply chain automation.
@@ -70,6 +70,39 @@ TaskFlow/
 ├── .github/workflows/            # CI + nightly eval
 └── docker-compose.yml            # Postgres 16 + server + nginx (non-root)
 ```
+
+### System Architecture
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌─────────────────────┐
+│  Cloudflare     │     │   Cloudflare │     │   Render Singapore  │
+│  Pages (React)  │────▶│   Proxy      │────▶│   (Express+Prisma)  │
+└─────────────────┘     └──────────────┘     └──────────┬──────────┘
+                                                         │
+                    ┌────────────────────────────────────┼────────────────────┐
+                    │                                    │                    │
+              ┌─────▼─────┐  ┌──────────────┐  ┌────────▼────────┐  ┌───────▼──────┐
+              │ PostgreSQL │  │ Ollama /     │  │ n8n (webhook)   │  │ Langfuse     │
+              │ (pgvector) │  │ Workers AI   │  │ (HMAC-SHA256)   │  │ (optional)   │
+              └───────────┘  └──────────────┘  └─────────────────┘  └──────────────┘
+```
+
+### AI Agent Architecture
+
+Single LLM agent with:
+- **Function calling**: create_project, create_task via OpenAI tools schema
+- **Rolling-summary memory**: overflow messages → LLM-generated summary → persisted
+- **Language persistence**: per-conversation language preference (vi/en)
+- **Multi-modal**: text + image input with magic-byte validation
+- **3-tier router**: default → premium → reasoning based on question complexity
+
+### Legal RAG Architecture
+
+LangGraph pipeline:
+1. **Retrieve**: pgvector cosine similarity (top-K candidates)
+2. **Rerank**: cross-encoder scoring (top-N selection)
+3. **Generate**: LLM answer with mandatory citations
+4. **Validate**: citation verification + hallucination guardrails
 
 ---
 
@@ -202,7 +235,7 @@ npm test -w client
 npm run test:coverage -w client
 ```
 
-**Current coverage**: server 429 / 429 passing (44 suites) · client 29 / 29 passing. Build, typecheck, and lint clean (0 errors).
+**Current coverage**: server 540 / 540 passing (57 suites) · client 29 / 29 passing. Build, typecheck, and lint clean (0 errors).
 
 Eval suite: `npm run eval:agent` (32-case Vietnamese regression).
 

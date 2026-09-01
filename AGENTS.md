@@ -29,8 +29,12 @@ The channel session has cwd=None — an unqualified `npm`/`git` fails with "not 
 - Socket event: sc:order:analysed.
 - LLM via Cloudflare Workers AI (LLM_BASE_URL + LLM_MODEL env); rule-based fallback keyword matching tiếng Việt when AI unavailable.
 - Task Recommendation System: DONE —  với scoring.ts (pure algorithm), recommendation.service.ts (DB layer), recommendation.controller.ts, recommendation.routes.ts, recommendation.schema.ts (Zod). Models: UserSkill, UserAvailability, TaskRecommendation, RecommendationConfig. Endpoints: GET/POST /api/recommendations/*, GET/PUT /api/users/me/skills, GET/PUT /api/users/me/availability. 56 unit tests pass (3 suites).
-- Test status: server 429/429 pass (44 suites), client 29/29 pass. Build + typecheck + lint sạch (0 errors, 44 warnings). Localhost boot verified: endpoints sống, không 5xx.
+- Test status: server 540/540 pass (57 suites), client 29/29 pass. Build + typecheck + lint sạch (0 errors, 44 warnings). Localhost boot verified: endpoints sống, không 5xx.
 - Chạy local: docker compose up -d db (pg16, port 5432) → npm run prisma:deploy → npm run prisma:seed → npm run dev:server (port 4000). Demo acc: alice@taskflow.dev / bob@taskflow.dev (password123).
+- Agent memory: Rolling-summary long-term memory — overflow messages folded into summary via LLM side call, persisted to AgentConversation.summary. Language preference persisted per-conversation (AgentConversation.language).
+- Legal RAG: LangGraph pipeline (retrieve → rerank → generate → validate) over Vietnamese law docs with pgvector hybrid search + cross-encoder reranking. NOT streaming — uses request-response pattern.
+- Evaluation: 32-case Vietnamese eval set (agent-eval.json) with deterministic stub LLM. Metrics: accuracy ≥90%, tool recall ≥90%, null-suppression precision ≥90%. Nightly CI run (eval-nightly.yml).
+- n8n workflow: 10-node order automation (Webhook → validate → HTTP → IF → Postgres → Ollama → Email). 4 event types: agentic.decision, order.transition, inventory.adjust, sc.order.analysed.
 
 ## Conventions
 - UI text + commit messages in Vietnamese.

@@ -38,6 +38,12 @@ jest.mock('unpdf', () => ({
   extractText: jest.fn(),
 }));
 
+jest.mock('../memory.service', () => ({
+  buildMemoryContext: jest.fn().mockResolvedValue(''),
+  extractMemories: jest.fn().mockResolvedValue([]),
+  storeMemories: jest.fn().mockResolvedValue([]),
+}));
+
 import { isLLMConfigured, chatCompletion, chatCompletionWithTools } from '../llm';
 import { prisma } from '../../../lib/prisma';
 import { extractText } from 'unpdf';
