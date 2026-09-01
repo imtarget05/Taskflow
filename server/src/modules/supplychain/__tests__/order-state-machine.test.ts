@@ -13,6 +13,7 @@ describe('order status state machine', () => {
     expect(canTransitionOrderStatus('PENDING_APPROVAL', 'CANCELLED')).toBe(true);
     expect(canTransitionOrderStatus('IN_FULFILLMENT', 'CANCELLED')).toBe(true);
     expect(canTransitionOrderStatus('SHIPPED', 'CANCELLED')).toBe(true);
+    expect(canTransitionOrderStatus('DELIVERED', 'CANCELLED')).toBe(true);
   });
 
   it('rejects illegal jumps', () => {
