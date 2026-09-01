@@ -1,0 +1,104 @@
+import { RequestHandler } from 'express';
+import { StatusCodes } from 'http-status-codes';
+import { asyncHandler, AppError } from '../../utils/errors';
+import {
+  listModels as listOllamaModels,
+  pullModel as pullOllamaModel,
+  deleteModel as deleteOllamaModel,
+  showModel,
+  isOllamaRunning,
+} from './ollama.client';
+import {
+  getActiveModel,
+  validateModel,
+  getModelRecommendations,
+} from './model.service';
+
+/**
+ * GET /api/models
+ * List all locally available Ollama models.
+ */
+export const listModels: RequestHandler = asyncHandler(async (_req, res) => {
+  const models = await listOllamaModels();
+  const activeModel = getActiveModel();
+  res.json({
+    success: true,
+    data: {
+      models,
+      activeModel,
+      count: models.length,
+    },
+  });
+});
+
+/**
+ * GET /api/models/status
+ * Check Ollama connectivity.
+ */
+export const getStatus: RequestHandler = asyncHandler(async (_req, res) => {
+  const running = await isOllamaRunning();
+  const activeModel = getActiveModel();
+  const modelValid = activeModel ? await validateModel(activeModel) : false;
+  res.json({
+    success: true,
+    data: {
+      running,
+      activeModel,
+      modelValid,
+    },
+  });
+});
+
+/**
+ * GET /api/models/recommendations
+ * Get recommended models per tier.
+ */
+export const getRecommendations: RequestHandler = asyncHandler(async (_req, res) => {
+  const recommendations = getModelRecommendations();
+  res.json({
+    success: true,
+    data: recommendations,
+  });
+});
+
+/**
+ * GET /api/models/:name
+ * Get detailed info about a specific model.
+ */
+export const getModelDetail: RequestHandler = asyncHandler(async (req, res) => {
+  const name = String(req.params.name);
+  const detail = await showModel(name);
+  res.json({
+    success: true,
+    data: detail,
+  });
+});
+
+/**
+ * POST /api/models/pull
+ * Pull a new model from Ollama library.
+ */
+export const pullModel: RequestHandler = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') {
+    throw new AppError('Model name is required', StatusCodes.BAD_REQUEST);
+  }
+  await pullOllamaModel(name);
+  res.json({
+    success: true,
+    message: `Model '${name}' pulled successfully`,
+  });
+});
+
+/**
+ * DELETE /api/models/:name
+ * Delete a local model.
+ */
+export const deleteModel: RequestHandler = asyncHandler(async (req, res) => {
+  const name = String(req.params.name);
+  await deleteOllamaModel(name);
+  res.json({
+    success: true,
+    message: `Model '${name}' deleted successfully`,
+  });
+});

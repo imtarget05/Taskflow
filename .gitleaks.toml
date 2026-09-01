@@ -1,0 +1,9 @@
+title = "TaskFlow Gitleaks Config"
+
+[allowlist]
+  description = "Approved false positives"
+  paths = [
+    '''node_modules''',
+    '''\.test\.ts$''',
+    '''\.json$''',
+  ]

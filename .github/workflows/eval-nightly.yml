@@ -1,7 +1,8 @@
 name: Agent Eval Nightly
 
-# Chạy bộ eval agent (32 câu tiếng Việt) mỗi ngày lúc midnight UTC để
+# Chạy bộ eval agent (50 câu tiếng Việt) mỗi ngày lúc midnight UTC để
 # đảm bảo stub LLM heuristic không bị phá vỡ bởi thay đổi code.
+# Bao gồm: accuracy, tool recall, null precision, robustness, per-category.
 # Ngoài ra cho phép chạy thủ công qua workflow_dispatch.
 
 on:
@@ -14,7 +15,7 @@ permissions:
 
 jobs:
   eval:
-    name: Agent Eval Set (32/32)
+    name: Agent Eval Set (50/50) + Benchmark Report
     runs-on: ubuntu-latest
 
     steps:
@@ -30,6 +31,47 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run agent eval
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Run agent eval (50 cases)
         working-directory: server
         run: npm run eval:agent
+
+      - name: Run accuracy report
+        working-directory: server
+        run: npm run eval:report
+
+      - name: Run benchmark report
+        working-directory: server
+        run: npm run eval:benchmark
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-benchmark-${{ github.run_number }}
+          path: server/tests/eval/reports/*.md
+          retention-days: 30
+
+      - name: Comment on commit (regression check)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `## ⚠️ Agent Eval Regression Detected
+
+            One or more metrics failed to meet thresholds in the nightly eval run.
+
+            - Workflow: ${context.workflow}
+            - Run: ${context.runId}
+            - Commit: ${context.sha}
+
+            Check the benchmark report artifact for details.`;
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: message
+            });

@@ -16,6 +16,7 @@ import {
   LLMContentPart,
   LLMFunctionTool,
   LLMToolCall,
+  streamChatCompletionWithTools,
 } from './llm';
 import {
   buildSystemPrompt,
@@ -29,6 +30,7 @@ import {
 } from './language';
 import { env } from '../../config/env';
 import { traceAgentTurn } from './tracer';
+import { buildMemoryContext, extractMemories, storeMemories } from './memory.service';
 
 export interface AgentChatMessage {
   role: string;
@@ -252,9 +254,15 @@ export async function chat(
     activeSummary = nextSummary;
   }
 
+  // Cross-session memory: inject relevant memories into the system prompt
+  // so the agent recalls user preferences/facts from prior conversations.
+  // Skip when skipPersist is set (eval/integration mode) to avoid extra LLM calls.
+  const memoryContext = options.skipPersist ? '' : await buildMemoryContext(userId, lastUserTexts(messages).join(' '));
+
   const systemContent =
     buildSystemPrompt(language) +
-    (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '');
+    (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '') +
+    (memoryContext ? `\n\n${memoryContext}` : '');
   const system: LLMMessage = { role: 'system', content: systemContent };
 
   // The whole turn is wrapped in a Langfuse trace (no-op when LANGFUSE_* keys
@@ -316,6 +324,18 @@ export async function chat(
   );
 
   const { reply, actionResult } = result;
+
+  // Extract and store memories from this turn (best-effort, never blocks the response).
+  // Skip when skipPersist is set (eval/integration mode) to avoid extra LLM calls.
+  if (!options.skipPersist) {
+    const conversationText = history.map((m) => `${m.role}: ${textOf(m)}`).join('\n');
+    const fullTurn = `${conversationText}\nassistant: ${reply}`;
+    void (async () => {
+      const extracted = await extractMemories(userId, fullTurn);
+      await storeMemories(userId, extracted, 'conversation');
+    })();
+  }
+
   const conversationId =
     options.skipPersist && !options.conversationId
       ? `eval-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -330,6 +350,169 @@ export async function chat(
         );
 
   return { reply, conversationId, language, ...(actionResult ? { action: actionResult } : {}) };
+}
+
+/** SSE event types for streaming agent responses. */
+export type SSEEventType = 'token' | 'action' | 'done' | 'error';
+
+/** A single SSE event emitted during streaming. */
+export interface SSEEvent {
+  type: SSEEventType;
+  data: unknown;
+}
+
+/**
+ * Streaming version of `chat()`. Yields SSE events as tokens arrive from the
+ * LLM provider. The final `done` event includes the full reply and metadata.
+ * On error, an `error` event is emitted and the stream ends.
+ *
+ * Events emitted:
+ *   - { type: 'token', data: string } — each content chunk
+ *   - { type: 'action', data: AgentActionResult } — when a tool call is executed
+ *   - { type: 'done', data: { reply, conversationId, language } } — completion
+ *   - { type: 'error', data: { message } } — on failure
+ */
+export async function* chatStream(
+  userId: string,
+  messages: AgentChatMessage[],
+  options: ChatOptions = {}
+): AsyncIterable<SSEEvent> {
+  if (!isLLMConfigured()) {
+    yield { type: 'error', data: { message: 'AI assistant is not configured' } };
+    return;
+  }
+
+  // Build history from incoming messages
+  const history: LLMMessage[] = [];
+  for (const m of messages) {
+    const msg = toLLMMessage(m);
+    if (msg) history.push(msg);
+  }
+  if (history.length === 0) {
+    yield { type: 'error', data: { message: 'No message content provided' } };
+    return;
+  }
+
+  // Load conversation preference and rolling summary
+  const existing = options.conversationId
+    ? await prisma.agentConversation.findFirst({
+        where: { id: options.conversationId, userId },
+        select: { id: true, language: true, summary: true },
+      })
+    : null;
+
+  const turn = resolveTurnLanguage({
+    requested: options.language ?? null,
+    conversationPreference: existing?.language ?? null,
+    userTexts: lastUserTexts(messages),
+  });
+  const language = turn.language;
+
+  // Split history and handle rolling summary
+  const { kept, dropped } = splitHistory(history);
+  let activeSummary = existing?.summary ?? null;
+  let nextSummary: string | undefined;
+  if (dropped.length > 0) {
+    try {
+      nextSummary = await rollingSummary(dropped, activeSummary);
+      activeSummary = nextSummary;
+    } catch {
+      // Continue without summary on failure
+    }
+  }
+
+  // Cross-session memory: inject relevant memories into the system prompt
+  // so the agent recalls user preferences/facts from prior conversations.
+  // Skip when skipPersist is set (eval/integration mode) to avoid extra LLM calls.
+  const memoryContext = options.skipPersist ? '' : await buildMemoryContext(userId, lastUserTexts(messages).join(' '));
+
+  const systemContent =
+    buildSystemPrompt(language) +
+    (activeSummary ? `\n\n## EARLIER CONVERSATION SUMMARY\n${activeSummary}` : '') +
+    (memoryContext ? `\n\n${memoryContext}` : '');
+  const system: LLMMessage = { role: 'system', content: systemContent };
+
+  const sanitized = sanitizeForLLM([system, ...kept]);
+
+  // Stream from the LLM provider
+  let fullContent = '';
+  let toolCalls: LLMToolCall[] = [];
+  let streamError: string | null = null;
+
+  try {
+    for await (const chunk of streamChatCompletionWithTools(sanitized, AGENT_TOOLS)) {
+      switch (chunk.type) {
+        case 'token':
+          fullContent += chunk.data as string;
+          yield { type: 'token', data: chunk.data as string };
+          break;
+        case 'tool_calls':
+          toolCalls = chunk.data as LLMToolCall[];
+          break;
+        case 'error':
+          streamError = (chunk.data as { message: string }).message;
+          yield { type: 'error', data: chunk.data };
+          return;
+        case 'done':
+          // Stream complete — process the result
+          break;
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Stream error';
+    yield { type: 'error', data: { message: msg } };
+    return;
+  }
+
+  if (streamError) {
+    yield { type: 'error', data: { message: streamError } };
+    return;
+  }
+
+  // Process action from tool calls or content tag
+  const tagAction = parseAction(fullContent);
+  const action = toolCalls.length ? toolCallToAction(toolCalls[0]) : tagAction;
+
+  let reply = fullContent.replace(ACTION_TAG_RE, '').trim();
+  let actionResult: AgentActionResult | null = null;
+
+  if (action) {
+    const res = await executeAction(action, userId);
+    actionResult = res;
+    yield { type: 'action', data: res };
+    reply = (reply ? `${reply}\n\n` : '') + res.summary;
+    reply = reply.trim();
+  }
+
+  // Persist conversation
+  const conversationId =
+    options.skipPersist && !options.conversationId
+      ? `eval-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : await persistConversation(
+          userId,
+          history,
+          options,
+          reply,
+          existing,
+          turn,
+          nextSummary
+        );
+
+  // Extract and store memories from this turn (best-effort, never blocks the stream).
+  // Skip when skipPersist is set (eval/integration mode) to avoid extra LLM calls.
+  if (!options.skipPersist) {
+    const conversationText = history.map((m) => `${m.role}: ${textOf(m)}`).join('\n');
+    const fullTurn = `${conversationText}\nassistant: ${reply}`;
+    void (async () => {
+      const extracted = await extractMemories(userId, fullTurn);
+      await storeMemories(userId, extracted, 'conversation');
+    })();
+  }
+
+  yield {
+    type: 'done',
+    data: { reply, conversationId, language, ...(actionResult ? { action: actionResult } : {}) },
+  };
 }
 
 function sanitizeForLLM(messages: LLMMessage[]): LLMMessage[] {

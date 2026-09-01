@@ -2,191 +2,477 @@
   {
     "id": "p1",
     "utterance": "Tạo một board mới tên là Dự án Website",
-    "expect": { "tool": "create_project", "params": { "name": "Dự án Website" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Dự án Website"
+      }
+    }
   },
   {
     "id": "p2",
     "utterance": "Làm một workspace tên Marketing Q3 đi",
-    "expect": { "tool": "create_project", "params": { "name": "Marketing Q3" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Marketing Q3"
+      }
+    }
   },
   {
     "id": "p3",
     "utterance": "Tạo board 'Sprint 12' cho team backend",
-    "expect": { "tool": "create_project", "params": { "name": "Sprint 12" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Sprint 12"
+      }
+    }
   },
   {
     "id": "t1",
     "utterance": "Trong board Dự án Website, thêm task Viết trang chủ",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Viết trang chủ" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Viết trang chủ"
+      }
+    }
   },
   {
     "id": "t2",
     "utterance": "Thêm task Sửa lỗi đăng nhập vào board Dự án Website, ưu tiên cao",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Sửa lỗi đăng nhập", "priority": "HIGH" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Sửa lỗi đăng nhập",
+        "priority": "HIGH"
+      }
+    }
   },
   {
     "id": "t3",
     "utterance": "Tạo task 'Gửi báo cáo' trong Marketing Q3, hạn 2026-09-30",
-    "expect": { "tool": "create_task", "params": { "projectName": "Marketing Q3", "title": "Gửi báo cáo", "dueDate": "2026-09-30" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Marketing Q3",
+        "title": "Gửi báo cáo",
+        "dueDate": "2026-09-30"
+      }
+    }
   },
   {
     "id": "t4",
     "utterance": "Board Sprint 12 cần task Review code PR 42",
-    "expect": { "tool": "create_task", "params": { "projectName": "Sprint 12", "title": "Review code PR 42" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Sprint 12",
+        "title": "Review code PR 42"
+      }
+    }
   },
   {
     "id": "t5",
     "utterance": "Cho mình task Viết tài liệu API ở mức khẩn cấp trong Dự án Website",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Viết tài liệu API", "priority": "URGENT" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Viết tài liệu API",
+        "priority": "URGENT"
+      }
+    }
   },
   {
     "id": "t6",
     "utterance": "Thêm task Thiết kế logo, cột Thiết kế, board Marketing Q3",
-    "expect": { "tool": "create_task", "params": { "projectName": "Marketing Q3", "title": "Thiết kế logo", "columnName": "Thiết kế" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Marketing Q3",
+        "title": "Thiết kế logo",
+        "columnName": "Thiết kế"
+      }
+    }
   },
   {
     "id": "t7",
     "utterance": "Task 'Chạy migration' vào board Dự án Website nhé",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Chạy migration" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Chạy migration"
+      }
+    }
   },
   {
     "id": "t8",
     "utterance": "Tạo task Đóng ticket trong Sprint 12",
-    "expect": { "tool": "create_task", "params": { "projectName": "Sprint 12", "title": "Đóng ticket" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Sprint 12",
+        "title": "Đóng ticket"
+      }
+    }
   },
   {
     "id": "t9",
     "utterance": "Board Marketing Q3: task Viết bài blog tháng 9",
-    "expect": { "tool": "create_task", "params": { "projectName": "Marketing Q3", "title": "Viết bài blog tháng 9" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Marketing Q3",
+        "title": "Viết bài blog tháng 9"
+      }
+    }
   },
   {
     "id": "t10",
     "utterance": "Thêm task Kiểm thử E2E, ưu tiên trung bình, board Dự án Website",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Kiểm thử E2E", "priority": "MEDIUM" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Kiểm thử E2E",
+        "priority": "MEDIUM"
+      }
+    }
   },
   {
     "id": "amb1",
     "utterance": "Chào bạn, hôm nay thời tiết thế nào?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb2",
     "utterance": "Bạn có thể giải thích Kanban là gì không?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb3",
     "utterance": "Cảm ơn bạn đã giúp đỡ",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb4",
     "utterance": "TaskFlow khác Trello chỗ nào?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb5",
     "utterance": "Làm sao để đổi mật khẩu tài khoản?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb6",
     "utterance": "Tối nay mình đi ăn phở nhé",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb7",
     "utterance": "Bạn tên gì?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "edge1",
     "utterance": "Tạo board",
-    "expect": { "tool": "create_project", "params": { "name": null } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": null
+      }
+    }
   },
   {
     "id": "edge2",
     "utterance": "Thêm task gì đó vào board không tồn tại",
-    "expect": { "tool": "create_task", "params": { "projectName": "không tồn tại" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "không tồn tại"
+      }
+    }
   },
   {
     "id": "edge3",
     "utterance": "Xóa board Dự án Website đi",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "edge4",
     "utterance": "Sửa task Viết trang chủ thành ưu tiên thấp",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "edge5",
     "utterance": "Gửi email cho khách hàng báo đã xong",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "edge6",
     "utterance": "Mời user nguyen@example.com vào board",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "edge7",
     "utterance": "Tạo task trong board Dự án Website nhưng không nói tên task",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": null } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": null
+      }
+    }
   },
   {
     "id": "edge8",
     "utterance": "Đổi tên workspace Marketing Q3 thành Q4",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "mix1",
     "utterance": "Tạo board App Mobile và thêm task Setup CI trong đó",
-    "expect": { "tool": "create_project", "params": { "name": "App Mobile" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "App Mobile"
+      }
+    }
   },
   {
     "id": "mix2",
     "utterance": "Board Dự án Website ơi, task Deploy staging gấp lên mức khẩn cấp",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Deploy staging", "priority": "URGENT" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Deploy staging",
+        "priority": "URGENT"
+      }
+    }
   },
   {
     "id": "mix3",
     "utterance": "Làm board mới tên HR và task Tuyển dụng intern",
-    "expect": { "tool": "create_project", "params": { "name": "HR" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "HR"
+      }
+    }
   },
   {
     "id": "mix4",
     "utterance": "Trong Marketing Q3 tạo task Chạy ads Facebook ưu tiên cao",
-    "expect": { "tool": "create_task", "params": { "projectName": "Marketing Q3", "title": "Chạy ads Facebook", "priority": "HIGH" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Marketing Q3",
+        "title": "Chạy ads Facebook",
+        "priority": "HIGH"
+      }
+    }
   },
   {
     "id": "p4",
     "utterance": "Tạo board Sprint 13",
-    "expect": { "tool": "create_project", "params": { "name": "Sprint 13" } }
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Sprint 13"
+      }
+    }
   },
   {
     "id": "t11",
     "utterance": "Trong board Dự án Website, thêm task Cập nhật roadmap",
-    "expect": { "tool": "create_task", "params": { "projectName": "Dự án Website", "title": "Cập nhật roadmap" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": "Cập nhật roadmap"
+      }
+    }
   },
   {
     "id": "t12",
     "utterance": "Thêm task Fix bug vào board học tập, ưu tiên cao",
-    "expect": { "tool": "create_task", "params": { "projectName": "học tập", "title": "Fix bug", "priority": "HIGH" } }
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "học tập",
+        "title": "Fix bug",
+        "priority": "HIGH"
+      }
+    }
   },
   {
     "id": "amb8",
     "utterance": "Dự án này đang tiến triển thế nào?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb9",
     "utterance": "Ai là người quản lý board này?",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
   },
   {
     "id": "amb10",
     "utterance": "Tôi cần báo cáo tiến độ tuần này",
-    "expect": { "tool": null }
+    "expect": {
+      "tool": null
+    }
+  },
+  {
+    "id": "edge_long",
+    "utterance": "Chào bạn mình là nhà phát triển đang làm dự án mới và mình muốn tạo một board mới tên là Dự án AI Chatbot rất hay và thú vị này nhằm quản lý công việc nhóm",
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Dự án AI Chatbot"
+      }
+    }
+  },
+  {
+    "id": "edge_ambiguous",
+    "utterance": "Tạo cái gì đó cho team mình đi",
+    "expect": {
+      "tool": null
+    }
+  },
+  {
+    "id": "edge_numbers",
+    "utterance": "Tạo board 123456",
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "123456"
+      }
+    }
+  },
+  {
+    "id": "edge_special_chars",
+    "utterance": "Tạo board Dự-án#1@Test!",
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Dự"
+      }
+    }
+  },
+  {
+    "id": "dialect_south",
+    "utterance": "Làm một cái board Sài Gòn mới cho tui",
+    "expect": {
+      "tool": "create_project",
+      "params": {
+        "name": "Sài Gòn"
+      }
+    }
+  },
+  {
+    "id": "err_missing_title",
+    "utterance": "Thêm task vào board Dự án Website nhưng chưa nghĩ ra tên",
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "Dự án Website",
+        "title": ""
+      }
+    }
+  },
+  {
+    "id": "err_no_project_task",
+    "utterance": "Tạo task Xong rồi",
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "",
+        "title": "Xong"
+      }
+    }
+  },
+  {
+    "id": "err_invalid_board",
+    "utterance": "Thêm task Làm bài tập vào board không_tồn_tại_123",
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "không_tồn_tại_123",
+        "title": "Làm bài tập"
+      }
+    }
+  },
+  {
+    "id": "multi_board_task_priority",
+    "utterance": "Tạo board DevOps và thêm task Setup CI/CD ưu tiên khẩn cấp",
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "",
+        "title": "Setup",
+        "priority": "URGENT"
+      }
+    }
+  },
+  {
+    "id": "multi_board_task_duedate",
+    "utterance": "Tạo board Học Tập rồi thêm task Nộp bài hạn 2026-12-31",
+    "expect": {
+      "tool": "create_task",
+      "params": {
+        "projectName": "",
+        "title": "Nộp",
+        "dueDate": "2026-12-31"
+      }
+    }
+  },
+  {
+    "id": "neg_greeting",
+    "utterance": "Xin chào, mình cần hỗ trợ",
+    "expect": {
+      "tool": null
+    }
+  },
+  {
+    "id": "neg_weather",
+    "utterance": "Hôm nay trời mưa nhỉ",
+    "expect": {
+      "tool": null
+    }
   }
 ]

@@ -7,6 +7,7 @@ import { env } from '../../config/env';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { chatCompletion, embed, modelForTier, rerank, routeModel } from '../agent/llm';
+import { renderPrompt } from '../prompt/prompt.service';
 
 export interface LegalCitation {
   document: string;
@@ -322,7 +323,9 @@ async function generateNode(state: LegalGraphState) {
   // Prompt compression: pack the reranked context into the token budget before
   // sending it to the LLM (drops the least-relevant tail / truncates oversize).
   const compressed = compressContext(state.chunks, env.LEGAL_CONTEXT_MAX_TOKENS, state.chunks.length);
-  const prompt = await LEGAL_PROMPT.format({ question: state.question, context: compressed.context });
+  // Use DB-backed prompt template if available, fallback to hardcoded LEGAL_PROMPT
+  const rendered = await renderPrompt('legal_rag', { question: state.question, context: compressed.context });
+  const prompt = rendered ?? await LEGAL_PROMPT.format({ question: state.question, context: compressed.context });
 
   const tier = routeModel(state.question);
   const model = modelForTier(tier);
