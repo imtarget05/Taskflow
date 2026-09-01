@@ -1,0 +1,187 @@
+{
+  "name": "TaskFlow Order Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taskflow-order",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nif (!data.orderId || !data.event) {\n  throw new Error('Missing required fields: orderId, event');\n}\nreturn [{ json: data }];"
+      },
+      "id": "validate-data",
+      "name": "Validate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.TASKFLOW_API_URL}}/api/sc/orders/{{$json.orderId}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{$env.TASKFLOW_API_TOKEN}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-order-details",
+      "name": "Get Order Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "type": "boolean"
+          },
+          "conditions": [
+            {
+              "id": "check-high-value",
+              "leftValue": "={{($json.data?.totalAmount || 0) > 10000}}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-order-value",
+      "name": "High Value?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.TASKFLOW_API_URL}}/api/sc/agentic/process-order",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "orderId", "value": "={{$json.data.id}}" },
+            { "name": "projectId", "value": "={{$json.data.projectId}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "process-high-value",
+      "name": "Process High-Value Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.TASKFLOW_API_URL}}/api/sc/orders/{{$json.data.id}}/status",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "status", "value": "IN_FULFILLMENT" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "auto-fulfill",
+      "name": "Auto-Fulfill Standard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_order_logs (order_id, event_type, processed_at, workflow_name) VALUES ($1, $2, NOW(), 'taskflow-order')",
+        "additionalFields": {
+          "queryParams": "={{$json.data.id}},{{$json.event}}"
+        }
+      },
+      "id": "log-to-db",
+      "name": "Log to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.OLLAMA_API_URL}}/api/chat",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n{\n  \"model\": \"qwen2.5:7b\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Summarize this order in 2 sentences.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Order {{$json.data.id}}: {{$json.data.totalAmount}} VND from supplier {{$json.data.supplierName}}\"\n    }\n  ],\n  \"stream\": false\n}\n}",
+        "options": {}
+      },
+      "id": "summarize-order",
+      "name": "Summarize with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.SMTP_FROM}}",
+        "toEmail": "={{$env.MANAGER_EMAIL}}",
+        "subject": "Order {{$json.data.id}} Processed",
+        "text": "={{$json.choices[0].message.content}}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n{\n  \"success\": true,\n  \"orderId\": \"{{$json.data.id}}\",\n  \"processed\": true\n}\n}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Validate Data", "type": "main", "index": 0 }]] },
+    "Validate Data": { "main": [[{ "node": "Get Order Details", "type": "main", "index": 0 }]] },
+    "Get Order Details": { "main": [[{ "node": "High Value?", "type": "main", "index": 0 }]] },
+    "High Value?": {
+      "main": [
+        [{ "node": "Process High-Value Order", "type": "main", "index": 0 }],
+        [{ "node": "Auto-Fulfill Standard", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process High-Value Order": { "main": [[{ "node": "Log to Database", "type": "main", "index": 0 }]] },
+    "Auto-Fulfill Standard": { "main": [[{ "node": "Log to Database", "type": "main", "index": 0 }]] },
+    "Log to Database": { "main": [[{ "node": "Summarize with Ollama", "type": "main", "index": 0 }]] },
+    "Summarize with Ollama": { "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]] },
+    "Send Email": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [{ "name": "TaskFlow" }, { "name": "Order Automation" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-09-01T08:00:00.000Z",
+  "versionId": "1"
+}
