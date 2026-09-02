@@ -15,7 +15,7 @@ import { randomUUID } from 'crypto';
 import { resolve } from 'path';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
-import { embed } from '../src/modules/agent/llm';
+import { embedBatched } from '../src/modules/agent/llm';
 import { chunkText } from '../src/modules/legal/legal.service';
 
 const vectorLiteral = (embedding: number[]): string =>
@@ -48,7 +48,7 @@ async function indexFile(filePath?: string): Promise<void> {
   const chunks = chunkText(text);
   console.log(`[legal:index] ${chunks.length} chunks (từ ${text.length} ký tự)`);
 
-  const embeddings = await embed(chunks);
+  const embeddings = await embedBatched(chunks, { batchSize: 32, concurrency: 4 });
   if (embeddings.length !== chunks.length) {
     throw new Error(`Embed đếm không khớp: ${embeddings.length} != ${chunks.length}`);
   }

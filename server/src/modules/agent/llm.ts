@@ -675,3 +675,124 @@ export async function rerank(query: string, documents: string[]): Promise<Rerank
     .filter((row) => row.index >= 0)
     .sort((a, b) => b.relevance_score - a.relevance_score);
 }
+
+// ---------------------------------------------------------------------------
+// Token counting — accurate BPE counts via js-tiktoken (lazy-loaded so the
+// rank data is only paid for when counting is actually needed). Falls back to
+// a chars/4 heuristic if the tokenizer cannot be loaded (defensive only).
+// ---------------------------------------------------------------------------
+
+type TiktokenLike = { encode(text: string): number[] };
+let tokenizerPromise: Promise<TiktokenLike> | null = null;
+
+function getTokenizer(): Promise<TiktokenLike> {
+  if (!tokenizerPromise) {
+    tokenizerPromise = import('js-tiktoken')
+      .then((mod) => mod.getEncoding('o200k_base') as unknown as TiktokenLike)
+      .catch(() => null as unknown as TiktokenLike);
+  }
+  return tokenizerPromise;
+}
+
+/** Fallback heuristic ≈ OpenAI tokenizers for mixed English/Vietnamese text. */
+function estimateTokensHeuristic(text: string): number {
+  return Math.max(1, Math.ceil(text.trim().length / 4));
+}
+
+/**
+ * Count tokens for a text using the real BPE tokenizer (o200k_base).
+ * Falls back to a heuristic if the tokenizer data cannot be loaded.
+ */
+export async function countTokens(text: string): Promise<number> {
+  if (!text) return 0;
+  const enc = await getTokenizer();
+  if (!enc) return estimateTokensHeuristic(text);
+  try {
+    return enc.encode(text).length;
+  } catch {
+    return estimateTokensHeuristic(text);
+  }
+}
+
+/**
+ * Estimate the total prompt tokens of a message list, including the
+ * per-message overhead (≈4 tokens: role, name delimiters) used by
+ * OpenAI-compatible chat APIs. Useful for context-window budgeting.
+ */
+export async function estimateMessagesTokens(messages: LLMMessage[]): Promise<number> {
+  let total = 0;
+  for (const msg of messages) {
+    total += 4; // per-message framing overhead
+    const text =
+      typeof msg.content === 'string'
+        ? msg.content
+        : msg.content.map((p) => (p.type === 'text' ? p.text : '')).join(' ');
+    total += await countTokens(text);
+  }
+  total += 2; // reply priming
+  return total;
+}
+
+/**
+ * Reorder messages so every `system` message forms a stable leading prefix
+ * before the dialogue. Providers key their prompt KV-cache on the longest
+ * shared prefix — a fixed system prefix maximizes cache hits (and cuts both
+ * latency and cost on providers that bill cached tokens at a discount).
+ * The function is idempotent: applying it to its own output is a no-op.
+ */
+export function withStablePrefix(messages: LLMMessage[]): LLMMessage[] {
+  const system = messages.filter((m) => m.role === 'system');
+  const rest = messages.filter((m) => m.role !== 'system');
+  return [...system, ...rest];
+}
+
+// ---------------------------------------------------------------------------
+// Batched embeddings — large bulk operations (e.g. legal corpus indexing with
+// hundreds of chunks) are split into bounded batches executed with limited
+// concurrency so a single embed() call never ships a giant payload (provider
+// request-size limits) and the endpoint is never flooded.
+// ---------------------------------------------------------------------------
+
+export interface EmbedBatchedOptions {
+  /** Max texts per request (default 32). */
+  batchSize?: number;
+  /** Max in-flight requests (default 4). */
+  concurrency?: number;
+}
+
+/**
+ * Embed a (possibly large) list of texts in bounded, concurrent batches.
+ * The returned vectors preserve the input order. Splits work evenly-ish:
+ * `ceil(n / batchSize)` requests, at most `concurrency` in flight.
+ */
+export async function embedBatched(
+  texts: string[],
+  { batchSize = 32, concurrency = 4 }: EmbedBatchedOptions = {}
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const size = Math.max(1, Math.floor(batchSize));
+  const limit = Math.max(1, Math.floor(concurrency));
+
+  const batches: { start: number; items: string[] }[] = [];
+  for (let i = 0; i < texts.length; i += size) {
+    batches.push({ start: i, items: texts.slice(i, i + size) });
+  }
+
+  const out: number[][] = new Array(texts.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, batches.length) }, async () => {
+    while (next < batches.length) {
+      const batch = batches[next++];
+      const vectors = await embed(batch.items);
+      if (vectors.length !== batch.items.length) {
+        throw new AppError(
+          `Embed batch count mismatch: ${vectors.length} != ${batch.items.length}`,
+          StatusCodes.BAD_GATEWAY
+        );
+      }
+      for (let i = 0; i < vectors.length; i++) out[batch.start + i] = vectors[i];
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
