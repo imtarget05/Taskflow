@@ -2,6 +2,7 @@ import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { observeLLMCall } from '../../lib/langfuse';
+import { logger } from '../../lib/logger';
 
 export type LLMRole = 'system' | 'user' | 'assistant';
 
@@ -74,13 +75,15 @@ export interface ChatCompletionWithToolsResult {
  */
 export type LLMModelTier = 'default' | 'premium' | 'reasoning';
 
-// Strong signals that the question needs deep legal reasoning.
+// Strong signals that the question needs deep multi-step reasoning.
 const REASONING_RE =
-  /(phân tích|so sánh|đối chiếu|áp dụng cụ thể|trường hợp|ngoại lệ|điều kiện áp dụng|hậu quả pháp lý|án lệ|tình huống|giải quyết tranh chấp)/i;
+  /(phân tích|so sánh|đối chiếu|áp dụng cụ thể|trường hợp|ngoại lệ|điều kiện áp dụng|đánh đổi|trade-?off|rủi ro|risk|tình huống|xung đột|conflict)/i;
 
-// Legal-domain vocabulary — presence of several terms marks a complex question.
-const LEGAL_DEEP_RE =
-  /(điều|khoản|tội|hình sự|dân sự|bồi thường|tranh chấp|hợp đồng|trách nhiệm|nghị định|thông tư|hiến pháp|luật|vi phạm|phạt)/i;
+// Domain vocabulary that signals a complex, multi-constraint question —
+// presence of several terms marks a question needing richer context.
+// (Scope: project/recommendation planning.)
+const COMPLEX_DOMAIN_RE =
+  /(deadline|priority|urgently|khẩn|gấp|quá tải|overload|phân bổ|workload|skill|kỹ năng|nguồn lực|resource|sprint|milestone|dependency|phụ thuộc)/i;
 
 /** Privacy-safe structured log line for LLM provider events (no prompts/keys/bodies). */
 function llmLog(level: 'info'|'warn'|'error', event: string, data: Record<string, unknown>): void {
@@ -195,7 +198,7 @@ export function modelForTier(tier: LLMModelTier): string {
 }
 
 /**
- * Deterministic, token-free complexity heuristic. Long or legal-vocabulary
+ * Deterministic, token-free complexity heuristic. Long or domain-vocabulary
  * heavy questions escalate; very long + reasoning-trigger questions use the
  * slow reasoning model. Default tier stays cheap (neuron budget).
  */
@@ -206,7 +209,7 @@ export function routeModel(question: string): LLMModelTier {
   if (words > 120 || q.length > 600) {
     return REASONING_RE.test(q) ? 'reasoning' : 'premium';
   }
-  if (words > 40 && LEGAL_DEEP_RE.test(q)) {
+  if (words > 40 && COMPLEX_DOMAIN_RE.test(q)) {
     return 'premium';
   }
   return 'default';
@@ -633,7 +636,13 @@ export async function embed(texts: string[]): Promise<number[][]> {
   const data = await aiPost<{
     result?: { data?: { embedding?: number[] }[] };
     data?: { embedding?: number[] }[];
-  }>('/embeddings', { model: env.LLM_EMBED_MODEL ?? env.LLM_MODEL, text: texts });
+  }>('/embeddings', {
+    model: env.LLM_EMBED_MODEL ?? env.LLM_MODEL,
+    // OpenAI-compatible endpoints (Ollama, OpenAI, vLLM) read `input`;
+    // Cloudflare Workers AI reads `text`. Send both so one code path works.
+    input: texts,
+    text: texts,
+  });
 
   const rows = data?.result?.data ?? data?.data;
   if (!rows || rows.length === 0) {
@@ -658,13 +667,22 @@ export interface RerankResult {
  */
 export async function rerank(query: string, documents: string[]): Promise<RerankResult[]> {
   if (documents.length === 0) return [];
-  const data = await aiPost<{
-    result?: { index?: number; relevance_score?: number }[];
-  }>('/rerank', {
-    model: env.LLM_RERANK_MODEL ?? env.LLM_MODEL,
-    query,
-    documents,
-  });
+  let data: { result?: { index?: number; relevance_score?: number }[] };
+  try {
+    data = await aiPost<{
+      result?: { index?: number; relevance_score?: number }[];
+    }>('/rerank', {
+      model: env.LLM_RERANK_MODEL ?? env.LLM_MODEL,
+      query,
+      documents,
+    });
+  } catch (err) {
+    // `/rerank` is a Cloudflare-specific endpoint. Local OpenAI-compatible
+    // providers (Ollama, vLLM, …) don't expose it — degrade gracefully by
+    // keeping the retrieval order (lexical/vector ranking) instead of failing.
+    logger.warn({ event: 'rerank_unavailable', err: String(err) }, 'rerank endpoint unavailable — falling back to retrieval order');
+    return documents.map((_, index) => ({ index, relevance_score: 1 - index / documents.length }));
+  }
 
   const rows = data?.result;
   if (!Array.isArray(rows)) {
@@ -747,7 +765,7 @@ export function withStablePrefix(messages: LLMMessage[]): LLMMessage[] {
 }
 
 // ---------------------------------------------------------------------------
-// Batched embeddings — large bulk operations (e.g. legal corpus indexing with
+// Batched embeddings — large bulk operations (e.g. recommendation corpus indexing with
 // hundreds of chunks) are split into bounded batches executed with limited
 // concurrency so a single embed() call never ships a giant payload (provider
 // request-size limits) and the endpoint is never flooded.

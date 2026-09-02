@@ -21,7 +21,8 @@ export function dotProduct(a: number[], b: number[]): number {
 
 /**
  * Cosine similarity in [-1, 1]. Zero-vector inputs yield 0 (no measurable
- * overlap rather than an undefined NaN). This is the same metric the legal RAG
+ * overlap rather than an undefined NaN). Shared by evaluation scoring and
+ * recommendation matching.
  * uses with pgvector (`1 - (embedding <=> ...)`), kept here for eval checks.
  */
 export function cosineSimilarity(a: number[], b: number[]): number {

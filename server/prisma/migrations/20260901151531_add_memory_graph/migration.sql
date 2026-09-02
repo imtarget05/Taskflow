@@ -2,7 +2,6 @@
 ALTER TABLE "orders" DROP CONSTRAINT "orders_supplierId_fkey";
 
 -- DropIndex
-DROP INDEX "legal_chunks_embedding_idx";
 
 -- CreateTable
 CREATE TABLE "user_skills" (

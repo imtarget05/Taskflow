@@ -21,7 +21,6 @@ import analyticsRoutes from './modules/analytics/analytics.routes';
 import { recent as activityRecentHandler } from './modules/activity/activity.controller.recent';
 import agentRoutes from './modules/agent/agent.routes';
 import memoryRoutes from './modules/agent/memory.routes';
-import legalRoutes from './modules/legal/legal.routes';
 import exportRoutes from './modules/export/export.routes';
 import nlpRoutes from './modules/nlp/nlp.routes';
 import supplychainRoutes from './modules/supplychain/supplychain.routes';
@@ -112,7 +111,6 @@ export function createApp(): Express {
   app.get('/api/activities', authenticate, activityRecentHandler);
   app.use('/api/agent', agentRoutes);
   app.use('/api/agent', memoryRoutes);
-app.use('/api/agent/legal', legalRoutes);
   app.use('/api/nlp', nlpRoutes);
   app.use('/api/sc', supplychainRoutes);
   app.use('/api/sc/nlp', scNlpRoutes);

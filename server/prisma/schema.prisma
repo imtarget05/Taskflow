@@ -26,41 +26,42 @@ enum ColumnType {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  password  String?
-  googleId  String?   @unique
-  name      String
-  avatarUrl String?
-  passwordResetToken  String?
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  password             String?
+  googleId             String?   @unique
+  name                 String
+  avatarUrl            String?
+  passwordResetToken   String?
   passwordResetExpires DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  refreshTokens  RefreshToken[]
-  projects       Project[]        @relation("OwnerProjects")
-  memberships    ProjectMember[]
-  assignments    TaskAssignment[]
-  tasksCreated   Task[]           @relation("CreatedTasks")
-  comments       Comment[]
-  activities     Activity[]
-  integrations   Integration[]
-  agentConversations AgentConversation[]
-  agentPlans     AgentPlan[]
+  refreshTokens        RefreshToken[]
+  projects             Project[]            @relation("OwnerProjects")
+  memberships          ProjectMember[]
+  assignments          TaskAssignment[]
+  tasksCreated         Task[]               @relation("CreatedTasks")
+  comments             Comment[]
+  activities           Activity[]
+  integrations         Integration[]
+  agentConversations   AgentConversation[]
+  agentPlans           AgentPlan[]
   chatGroupMemberships ChatGroupMember[]
-  chatMessages   ChatMessage[]
-  ticketAnalyses TicketAnalysis[]
-  nlpFeedbacks  NlpFeedback[]
-  scOrderAnalyses   SCOrderAnalysis[]
-  agenticDecisions  AgenticDecision[]
-  securityAudits    SecurityAudit[]
-  skills          UserSkill[]
-  availabilities  UserAvailability[]
-  recommendations TaskRecommendation[]
-  memoryNodes      MemoryNode[]
+  chatMessages         ChatMessage[]
+  ticketAnalyses       TicketAnalysis[]
+  nlpFeedbacks         NlpFeedback[]
+  scOrderAnalyses      SCOrderAnalysis[]
+  agenticDecisions     AgenticDecision[]
+  securityAudits       SecurityAudit[]
+  skills               UserSkill[]
+  availabilities       UserAvailability[]
+  recommendations      TaskRecommendation[]
+  memoryNodes          MemoryNode[]
 
   @@map("users")
 }
+
 model ChatGroup {
   id        String   @id @default(cuid())
   projectId String   @unique
@@ -104,9 +105,9 @@ model ChatMessage {
 model Integration {
   id        String   @id @default(cuid())
   userId    String
-  kind      String   // e.g. "N8N"
+  kind      String // e.g. "N8N"
   name      String
-  config    Json?    // encrypted credential payload (app-level)
+  config    Json? // encrypted credential payload (app-level)
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -123,8 +124,8 @@ model AgentConversation {
   projectId String?
   title     String?
   messages  Json?
-  summary   String?  // Rolling summary of messages trimmed out of the LLM context window
-  language  String?  // Resolved language for this conversation ('vi', 'en', 'zh', or null)
+  summary   String? // Rolling summary of messages trimmed out of the LLM context window
+  language  String? // Resolved language for this conversation ('vi', 'en', 'zh', or null)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -150,55 +151,6 @@ model AgentPlan {
   @@map("agent_plans")
 }
 
-// Legal research (tra cứu pháp luật): Vietnamese legislation corpus.
-model LegalDocument {
-  id             String   @id @default(cuid())
-  sourceUrl      String   @unique
-  title          String
-  documentNumber String?
-  issueDate      DateTime?
-  effectiveDate  DateTime?
-  statusEffect   String? // "Còn hiệu lực" | "Hết hiệu lực" | "Hết hiệu lực một phần" | ...
-  rawText        String?  @db.Text
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  chunks LegalChunk[]
-
-  @@index([title])
-  @@map("legal_documents")
-}
-
-// Chunked by article (điều/khoản) for retrieval; embedding is a pgvector
-// column managed through raw SQL (Prisma Unsupported type).
-model LegalChunk {
-  id         String  @id @default(cuid())
-  documentId String
-  articleRef String // e.g. "Điều 5", "Khoản 2 Điều 10"
-  content    String  @db.Text
-  embedding  Unsupported("vector(1024)")?
-  metadata   Json?
-  createdAt  DateTime @default(now())
-
-  document LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  @@index([documentId])
-  @@map("legal_chunks")
-}
-
-// Deterministic cache for repeated questions — protects the daily neuron budget.
-model LegalCache {
-  id           String   @id @default(cuid())
-  questionHash String   @unique @db.VarChar(64)
-  question     String   @db.Text
-  answer       String   @db.Text
-  citations    Json?
-  modelUsed    String?
-  createdAt    DateTime @default(now())
-
-  @@map("legal_cache")
-}
-
 // Token usage ledger for the AI assistant (neuron-budget observability).
 model AIUsage {
   id           String   @id @default(cuid())
@@ -216,11 +168,11 @@ model AIUsage {
 // and sentiment are produced by the LLM; duplicateOf is the id of a previous
 // analysis judged semantically equivalent (embedding cosine similarity).
 model TicketAnalysis {
-  id                 String   @id @default(cuid())
+  id                 String        @id @default(cuid())
   userId             String
   projectId          String?
   taskId             String?
-  sourceText         String   @db.Text
+  sourceText         String        @db.Text
   category           String
   categoryConfidence Float
   priority           String // LOW | MEDIUM | HIGH | URGENT
@@ -231,8 +183,8 @@ model TicketAnalysis {
   keywords           Json?
   duplicateOf        String?
   duplicateScore     Float?
-  createdAt          DateTime @default(now())
-  feedbacks         NlpFeedback[]
+  createdAt          DateTime      @default(now())
+  feedbacks          NlpFeedback[]
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -251,7 +203,7 @@ model NlpFeedback {
   decision   String // applied | ignored
   createdAt  DateTime @default(now())
 
-  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   analysisRef TicketAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
@@ -281,18 +233,18 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner      User           @relation("OwnerProjects", fields: [ownerId], references: [id], onDelete: Cascade)
-  members    ProjectMember[]
-  columns    Column[]
-  tasks      Task[]
-  activities Activity[]
-  chatGroup  ChatGroup?
-  ticketAnalyses TicketAnalysis[]
-  orders     Order[]
-  inventoryItems InventoryItem[]
-  scOrderAnalyses   SCOrderAnalysis[]
-  agenticDecisions  AgenticDecision[]
-  recommendations TaskRecommendation[]
+  owner            User                 @relation("OwnerProjects", fields: [ownerId], references: [id], onDelete: Cascade)
+  members          ProjectMember[]
+  columns          Column[]
+  tasks            Task[]
+  activities       Activity[]
+  chatGroup        ChatGroup?
+  ticketAnalyses   TicketAnalysis[]
+  orders           Order[]
+  inventoryItems   InventoryItem[]
+  scOrderAnalyses  SCOrderAnalysis[]
+  agenticDecisions AgenticDecision[]
+  recommendations  TaskRecommendation[]
 
   @@map("projects")
 }
@@ -313,13 +265,13 @@ model ProjectMember {
 }
 
 model Column {
-  id        String     @id @default(cuid())
-  projectId String
-  name      String
-  position  Int
+  id         String     @id @default(cuid())
+  projectId  String
+  name       String
+  position   Int
   columnType ColumnType @default(STANDARD)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tasks   Task[]
@@ -343,13 +295,13 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  column       Column          @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  createdBy    User            @relation("CreatedTasks", fields: [createdById], references: [id])
-  assignments  TaskAssignment[]
-  comments     Comment[]
-  activities   Activity[]
-  analyses     TicketAnalysis[]
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  column          Column               @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdBy       User                 @relation("CreatedTasks", fields: [createdById], references: [id])
+  assignments     TaskAssignment[]
+  comments        Comment[]
+  activities      Activity[]
+  analyses        TicketAnalysis[]
   recommendations TaskRecommendation[]
 
   @@index([columnId, position])
@@ -394,9 +346,9 @@ model Activity {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User        @relation(fields: [userId], references: [id])
-  task    Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
   @@map("activities")
@@ -428,7 +380,7 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  orders      Order[]
+  orders Order[]
 
   @@map("suppliers")
 }
@@ -447,15 +399,15 @@ model Order {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  supplier     Supplier    @relation(fields: [supplierId], references: [id], onDelete: NoAction)
-  lineItems    LineItem[]
-  scAnalyses        SCOrderAnalysis[]
-  agenticDecisions  AgenticDecision[]
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier         Supplier          @relation(fields: [supplierId], references: [id], onDelete: NoAction)
+  lineItems        LineItem[]
+  scAnalyses       SCOrderAnalysis[]
+  agenticDecisions AgenticDecision[]
 
-  @@map("orders")
   @@index([projectId, status])
   @@index([supplierId])
+  @@map("orders")
 }
 
 model LineItem {
@@ -469,29 +421,29 @@ model LineItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  @@map("line_items")
   @@index([orderId])
+  @@map("line_items")
 }
 
 model InventoryItem {
-  id          String   @id @default(cuid())
-  projectId   String
-  sku         String
-  name        String
-  quantity    Int      @default(0)
-  unit        String   @default("Cái")
-  location    String?  // e.g. "Kho A - Kệ 3"
-  minStock    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  projectId String
+  sku       String
+  name      String
+  quantity  Int      @default(0)
+  unit      String   @default("Cái")
+  location  String? // e.g. "Kho A - Kệ 3"
+  minStock  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@map("inventory_items")
   @@index([projectId, sku])
   @@index([projectId])
+  @@map("inventory_items")
 }
 
 // ---------------------------------------------------------------------------
@@ -501,28 +453,28 @@ model InventoryItem {
 // ---------------------------------------------------------------------------
 
 enum ScOrderType {
-  PO_NEW          // Purchase Order mới
-  PO_UPDATE       // PO cập nhật / điều chỉnh (annotation, quantity change)
-  INVOICE         // Hóa đơn
-  ASN             // Advanced Shipping Notice
-  UNKNOWN         // Không xác định / fallback
+  PO_NEW // Purchase Order mới
+  PO_UPDATE // PO cập nhật / điều chỉnh (annotation, quantity change)
+  INVOICE // Hóa đơn
+  ASN // Advanced Shipping Notice
+  UNKNOWN // Không xác định / fallback
 }
 
 model SCOrderAnalysis {
-  id                 String     @id @default(cuid())
-  userId             String
-  projectId          String?
-  orderId            String?    // reference đến Order nếu có
-  sourceText         String     @db.Text
-  classification     ScOrderType @default(UNKNOWN)
-  confidence         Float      // 0.0-1.0, độ tin cậy phân loại
-  suggestedAction    String?    // gợi ý action: "phê duyệt PO", "gửi cho bộ phận kế toán", v.v.
-  workflowTrigger    String?    // SC workflow trigger: "approve_po", "invoice_verify", v.v.
-  priority           String?    // LOW | MEDIUM | HIGH | URGENT (nếu gợi ý)
-  llmModel           String?    // model dùng để phân loại (để audit)
-  llmUsed            Boolean    @default(false) // có dùng LLM hay chỉ rule-based
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  id              String      @id @default(cuid())
+  userId          String
+  projectId       String?
+  orderId         String? // reference đến Order nếu có
+  sourceText      String      @db.Text
+  classification  ScOrderType @default(UNKNOWN)
+  confidence      Float // 0.0-1.0, độ tin cậy phân loại
+  suggestedAction String? // gợi ý action: "phê duyệt PO", "gửi cho bộ phận kế toán", v.v.
+  workflowTrigger String? // SC workflow trigger: "approve_po", "invoice_verify", v.v.
+  priority        String? // LOW | MEDIUM | HIGH | URGENT (nếu gợi ý)
+  llmModel        String? // model dùng để phân loại (để audit)
+  llmUsed         Boolean     @default(false) // có dùng LLM hay chỉ rule-based
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -534,22 +486,22 @@ model SCOrderAnalysis {
 }
 
 model AgenticDecision {
-  id              String   @id @default(cuid())
-  orderId         String
-  projectId       String
-  userId          String   // người tạo decision (agent hoặc human trigger)
-  classification  String   // PO_NEW, PO_UPDATE, INVOICE, ASN, UNKNOWN
-  confidence      Float    // 0.0-1.0
-  decision        String   // auto | human_task | manual_review
-  action          String   // JSON string của AgenticAction
-  taskId          String?  // nếu tạo task tự động
-  humanTaskId     String?  // nếu tạo human task
-  processedAt     DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  orderId        String
+  projectId      String
+  userId         String // người tạo decision (agent hoặc human trigger)
+  classification String // PO_NEW, PO_UPDATE, INVOICE, ASN, UNKNOWN
+  confidence     Float // 0.0-1.0
+  decision       String // auto | human_task | manual_review
+  action         String // JSON string của AgenticAction
+  taskId         String? // nếu tạo task tự động
+  humanTaskId    String? // nếu tạo human task
+  processedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
 
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([projectId, decision])
@@ -589,48 +541,48 @@ model SecurityAudit {
 model UserSkill {
   id        String   @id @default(cuid())
   userId    String
-  skill     String   // e.g. "react", "nodejs", "design"
+  skill     String // e.g. "react", "nodejs", "design"
   level     Int      @default(1) // 1-5
   createdAt DateTime @default(now())
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([userId, skill])
   @@index([userId])
   @@map("user_skills")
 }
 
 model UserAvailability {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   userId    String
-  dayOfWeek Int      // 0-6 (Sunday-Saturday)
-  morning   Boolean  @default(true)
-  afternoon Boolean  @default(true)
-  evening   Boolean  @default(false)
-  
+  dayOfWeek Int // 0-6 (Sunday-Saturday)
+  morning   Boolean @default(true)
+  afternoon Boolean @default(true)
+  evening   Boolean @default(false)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([userId, dayOfWeek])
   @@index([userId])
   @@map("user_availability")
 }
 
 model TaskRecommendation {
-  id          String   @id @default(cuid())
-  userId      String
-  projectId   String
-  taskId      String
-  score       Float    // 0.0-1.0
-  reason      String   // Lý do đề xuất (Vietnamese)
-  factors     Json     // { skillMatch, availability, workload, history, priority }
-  status      String   @default("pending") // pending | accepted | dismissed | expired
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime?
-  
+  id        String    @id @default(cuid())
+  userId    String
+  projectId String
+  taskId    String
+  score     Float // 0.0-1.0
+  reason    String // Lý do đề xuất (Vietnamese)
+  factors   Json // { skillMatch, availability, workload, history, priority }
+  status    String    @default("pending") // pending | accepted | dismissed | expired
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId, score])
   @@index([projectId])
   @@map("task_recommendations")
@@ -640,7 +592,7 @@ model RecommendationConfig {
   id    String @id @default(cuid())
   key   String @unique // "weights", "thresholds"
   value Json
-  
+
   @@map("recommendation_configs")
 }
 
@@ -653,17 +605,17 @@ model RecommendationConfig {
 // ---------------------------------------------------------------------------
 
 model MemoryNode {
-  id         String   @id @default(cuid())
+  id         String                      @id @default(cuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  content    String   // The fact/memory content
-  category   String   // 'preference', 'fact', 'decision', 'context'
-  source     String   // 'conversation', 'task', 'manual'
-  confidence Float    @default(1.0)
-  embedding  Unsupported("vector(1024)")?
+  user       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    String // The fact/memory content
+  category   String // 'preference', 'fact', 'decision', 'context'
+  source     String // 'conversation', 'task', 'manual'
+  confidence Float                       @default(1.0)
+  embedding  Unsupported("vector(768)")?
   metadata   Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
 
   outgoingRelations MemoryRelation[] @relation("source")
   incomingRelations MemoryRelation[] @relation("target")
@@ -679,7 +631,7 @@ model MemoryRelation {
   source       MemoryNode @relation("source", fields: [sourceId], references: [id], onDelete: Cascade)
   targetId     String
   target       MemoryNode @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
-  relationType String     // 'related_to', 'causes', 'precedes', 'contradicts'
+  relationType String // 'related_to', 'causes', 'precedes', 'contradicts'
   strength     Float      @default(1.0)
 
   @@unique([sourceId, targetId, relationType])
@@ -692,16 +644,16 @@ model MemoryRelation {
 // ---------------------------------------------------------------------------
 
 model PromptTemplate {
-  id          String   @id @default(cuid())
-  name        String   // 'legal_rag', 'agent_system', 'nlp_classifier'
-  version     String   // semantic version: '1.0.0', '1.1.0'
-  content     String   @db.Text // The prompt template text
-  variables   String[] // Variable names: ['question', 'context']
-  isActive    Boolean  @default(false) // Only one active per name
-  metrics     Json?    // { accuracy, latency, usageCount }
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String // 'legal_rag', 'agent_system', 'nlp_classifier'
+  version   String // semantic version: '1.0.0', '1.1.0'
+  content   String   @db.Text // The prompt template text
+  variables String[] // Variable names: ['question', 'context']
+  isActive  Boolean  @default(false) // Only one active per name
+  metrics   Json? // { accuracy, latency, usageCount }
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   experiments PromptExperiment[]
 
@@ -711,18 +663,18 @@ model PromptTemplate {
 }
 
 model PromptExperiment {
-  id            String   @id @default(cuid())
-  name          String   // 'chunk_size_test', 'top_k_comparison'
-  promptName    String   @unique // Which prompt template this tests (1:1 with active version)
-  variantA      String   // Version A
-  variantB      String   // Version B
-  status        String   @default("running")
-  trafficSplit  Float    @default(0.5) // 50/50 split
-  resultsA      Json?    // { accuracy, count, avgLatency }
-  resultsB      Json?    // { accuracy, count, avgLatency }
-  winner       String?  // 'A', 'B', or null
-  startedAt     DateTime @default(now())
-  endedAt       DateTime?
+  id           String    @id @default(cuid())
+  name         String // 'chunk_size_test', 'top_k_comparison'
+  promptName   String    @unique // Which prompt template this tests (1:1 with active version)
+  variantA     String // Version A
+  variantB     String // Version B
+  status       String    @default("running")
+  trafficSplit Float     @default(0.5) // 50/50 split
+  resultsA     Json? // { accuracy, count, avgLatency }
+  resultsB     Json? // { accuracy, count, avgLatency }
+  winner       String? // 'A', 'B', or null
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
 
   promptTemplate PromptTemplate @relation(fields: [promptName], references: [id], onDelete: Cascade)
 
@@ -737,11 +689,11 @@ model PromptExperiment {
 
 model EvaluationRun {
   id            String   @id @default(cuid())
-  name          String   // 'legal_rag_v1', 'chunk_size_experiment'
+  name          String // 'legal_rag_v1', 'chunk_size_experiment'
   promptVersion String?
   datasetSize   Int
-  metrics       Json     // { faithfulness, answerRelevancy, contextRecall, contextPrecision, accuracy }
-  config        Json?    // { chunkSize, topK, rerankDepth, model }
+  metrics       Json // { faithfulness, answerRelevancy, contextRecall, contextPrecision, accuracy }
+  config        Json? // { chunkSize, topK, rerankDepth, model }
   createdAt     DateTime @default(now())
 
   @@index([name])
@@ -754,16 +706,16 @@ model EvaluationRun {
 // ---------------------------------------------------------------------------
 
 model RetrievalExperiment {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  config        Json
-  datasetSize   Int      @default(0)
-  metrics       Json?
-  status        String   @default("running")
-  createdBy     String?
-  createdAt     DateTime @default(now())
-  completedAt   DateTime?
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  config      Json
+  datasetSize Int       @default(0)
+  metrics     Json?
+  status      String    @default("running")
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
   @@index([name])
   @@index([status])

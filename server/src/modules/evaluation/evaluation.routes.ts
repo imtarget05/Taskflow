@@ -7,7 +7,7 @@ import * as evaluationController from './evaluation.controller';
 // Evaluation runs can be expensive (LLM calls); rate-limit modestly.
 const evalLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
-  limit: env.RATE_LIMIT_LEGAL,
+  limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
 });

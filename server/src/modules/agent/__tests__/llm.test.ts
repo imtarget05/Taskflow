@@ -598,21 +598,22 @@ describe('llm router', () => {
   });
 
   it('routes short questions to the cheap default tier', () => {
-    expect(routeModel('Lương tối thiểu vùng hiện tại là bao nhiêu?')).toBe('default');
+    expect(routeModel('Deadline của task này là khi nào?')).toBe('default');
   });
 
-  it('escalates long legal questions to premium', () => {
+  it('escalates long multi-constraint planning questions to premium', () => {
     const q =
-      'Khi doanh nghiệp chậm trả lương, người lao động có quyền yêu cầu bồi thường theo điều khoản nào ' +
-      'của Bộ luật Lao động và hợp đồng lao động bị chấm dứt thì trách nhiệm của công ty gồm những gì?';
+      'Team đang quá tải sprint này, cần phân bổ lại workload giữa các thành viên ' +
+      'xét theo skill kỹ năng và dependency phụ thuộc giữa các task, milestone nào đang gấp cần ưu tiên hoàn thành trước ' +
+      'để tránh trễ deadline và đảm bảo nguồn lực không bị chồng chéo giữa hai dự án đang chạy song song?';
     expect(routeModel(q)).toBe('premium');
   });
 
   it('escalates very long analytical questions to the reasoning tier', () => {
     const q =
-      `Hãy phân tích so sánh và đối chiếu các quy định về bồi thường thiệt hại trong hợp đồng dân sự, ` +
-      `trường hợp ngoại lệ khi bất khả kháng xảy ra, hậu quả pháp lý khi một bên vi phạm nghĩa vụ, ` +
-      `điều kiện áp dụng các biện pháp khẩn cấp tạm thời trong giải quyết tranh chấp tại tòa án. `;
+      `Hãy phân tích so sánh và đối chiếu các phương án phân bổ nguồn lực khi dự án bị trễ deadline, ` +
+      `trường hợp ngoại lệ khi thành viên chủ chốt nghỉ đột xuất xảy ra, rủi ro khi một bên thay đổi scope, ` +
+      `điều kiện áp dụng các biện pháp khẩn cấp trong xung đột ưu tiên giữa các sprint. `;
     expect(routeModel(q.repeat(3))).toBe('reasoning');
   });
 });

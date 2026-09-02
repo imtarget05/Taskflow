@@ -8,7 +8,6 @@ ALTER TABLE "nlp_feedbacks" DROP CONSTRAINT "nlp_feedbacks_analysisId_fkey";
 ALTER TABLE "nlp_feedbacks" DROP CONSTRAINT "nlp_feedbacks_userId_fkey";
 
 -- DropIndex
-DROP INDEX "legal_chunks_embedding_idx";
 
 -- CreateTable
 CREATE TABLE "suppliers" (
