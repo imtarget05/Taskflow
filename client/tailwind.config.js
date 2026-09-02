@@ -114,6 +114,8 @@ export default {
         elevation1: '0 1px 2px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08)',
         elevation2: '0 2px 6px rgb(0 0 0 / 0.12), 0 4px 12px rgb(0 0 0 / 0.08)',
         elevation3: '0 4px 8px rgb(0 0 0 / 0.14), 0 6px 12px rgb(0 0 0 / 0.10)',
+        fab: '0 4px 12px rgb(0 0 0 / 0.15), 0 8px 24px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08)',
+        'fab-hover': '0 6px 16px rgb(0 0 0 / 0.18), 0 12px 32px rgb(0 0 0 / 0.14)',
       },
     },
   },

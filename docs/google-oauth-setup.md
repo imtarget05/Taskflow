@@ -13,9 +13,16 @@
 4. Name: "TaskFlow" (or your preferred name)
 
 ### 2. Configure Authorized Redirect URIs
-Add these redirect URIs:
+
+Add these redirect URIs in the Google Cloud Console:
+
 - Development: `http://localhost:4000/api/auth/google/callback`
 - Production: `https://your-domain.com/api/auth/google/callback`
+
+> **Important:** The redirect URI must use the **API server** origin, not the
+> frontend origin. In local dev the API runs on port 4000. In production
+> (behind the Cloudflare Pages proxy) use the Pages origin (e.g.
+> `https://taskflow.pages.dev`).
 
 ### 3. Copy Credentials
 After creation, copy:
@@ -52,7 +59,7 @@ GOOGLE_CLIENT_SECRET=dev-mock-secret
    - `GOOGLE_CLIENT_ID` starts with `dev-`
 
 ## Troubleshooting
-- **redirect_uri_mismatch**: Make sure the redirect URI in .env matches Google Console
+- **redirect_uri_mismatch**: Make sure the redirect URI in .env (`GOOGLE_REDIRECT_ORIGIN`) uses the **API server** origin (port 4000 in dev), and that the exact URI `http://localhost:4000/api/auth/google/callback` is registered in the Google Cloud Console. Using the frontend origin (port 5173) will cause this error.
 - **access_denied**: User cancelled the OAuth flow
-- **Google sign-in button not showing**: Check `/auth/google/status` returns `{ configured: true }`
+- **Google sign-in button not showing**: Check `/auth/google/status` returns `{ configured: true }`; verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in `.env`
 - **Dev mode not working**: Ensure `NODE_ENV` is not `production` and `GOOGLE_CLIENT_ID` starts with `dev-`

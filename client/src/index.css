@@ -333,10 +333,26 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in,
   .typing-dot {
     animation: none;
   }
   .card-hover:hover {
     transform: none;
   }
+}
+
+/* M3 FAB — large tonal floating action button */
+.fab-m3 {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15), 0 8px 24px rgb(0 0 0 / 0.12);
+  transition: box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.15s;
+}
+.fab-m3:hover {
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.18), 0 12px 32px rgb(0 0 0 / 0.14);
+  transform: translateY(-1px);
+}
+.fab-m3:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
 }

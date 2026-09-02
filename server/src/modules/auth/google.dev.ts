@@ -26,9 +26,14 @@ export function isDevGoogleEnabled(): boolean {
 }
 
 /**
- * Dev redirect - simulates Google OAuth redirect with a mock code
+ * Dev redirect — simulates Google OAuth redirect with a mock code.
+ *
+ * The browser is bounced back to the API server's callback handler so the
+ * server can complete the sign-in flow locally without Google. The origin is
+ * derived from the incoming request (not GOOGLE_REDIRECT_ORIGIN) so the
+ * callback always lands on the same server that received the redirect request.
  */
-export function devRedirectToGoogle(_req: Request, res: Response): void {
+export function devRedirectToGoogle(req: Request, res: Response): void {
   const state = Math.random().toString(36).slice(2);
   res.cookie('google_oauth_state', state, {
     httpOnly: true,
@@ -37,8 +42,14 @@ export function devRedirectToGoogle(_req: Request, res: Response): void {
     maxAge: 10 * 60 * 1000, // 10 minutes
   });
 
-  const redirectUri = `${env.GOOGLE_REDIRECT_ORIGIN ?? 'http://localhost:4000'}/auth/google/callback`;
-  const callbackUrl = `${redirectUri}?code=dev-mock-code&state=${state}`;
+  // Derive the API origin from the request so the callback always hits the
+  // same server (works behind a proxy via trust-proxy, and in local dev).
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) || req.protocol;
+  const host =
+    (req.headers['x-forwarded-host'] as string | undefined) ||
+    (req.get('host') as string | undefined) ||
+    'localhost:4000';
+  const callbackUrl = `${proto}://${host}/api/auth/google/callback?code=dev-mock-code&state=${state}`;
   res.redirect(callbackUrl);
 }
 
