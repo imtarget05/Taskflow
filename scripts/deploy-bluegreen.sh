@@ -48,10 +48,14 @@ api() {
 BLUE_IMAGE="$(api GET "/services/$RENDER_SERVICE_ID" | sed -n 's/.*"imagePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 log "blue (current) image: ${BLUE_IMAGE:-<unpinned/:latest>}"
 
-# 2. Pin + deploy the green image.
-log "pinning green image: $IMAGE_TAG"
-api PATCH "/services/$RENDER_SERVICE_ID" \
-  "{\"image\": {\"ownerId\": \"$RENDER_OWNER_ID\", \"imagePath\": \"$IMAGE_TAG\"}}" > /dev/null
+# 2. Pin + deploy the new image (skip if already pinned — idempotent).
+if [ "$BLUE_IMAGE" = "$IMAGE_TAG" ]; then
+  log "already pinned to $IMAGE_TAG — skipping re-pin (idempotent)"
+else
+  log "pinning green image: $IMAGE_TAG"
+  api PATCH "/services/$RENDER_SERVICE_ID" \
+    "{\"image\": {\"ownerId\": \"$RENDER_OWNER_ID\", \"imagePath\": \"$IMAGE_TAG\"}}" > /dev/null
+fi
 
 DEPLOY_ID="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache": "do_not"}' | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\(dep-[^"]*\)".*/\1/p' | head -1)"
 [ -n "$DEPLOY_ID" ] || fail "could not start a deployment"
