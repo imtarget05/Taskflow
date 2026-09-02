@@ -246,9 +246,9 @@ Evaluation runs persist to `EvaluationRun` for historical A/B comparison. Prompt
 
 | Category | Count | Framework | Notes |
 |----------|-------|-----------|-------|
-| **Server tests** | 728 | Jest + ts-jest | 69 suites, all module layers |
+| **Server tests** | 733 | Jest + ts-jest | 70 suites, all module layers |
 | **Client tests** | 29 | Vitest + Testing Library | 9 suites, component + page |
-| **Total** | **757** | — | 78 suites, all green |
+| **Total** | **762** | — | 79 suites, all green |
 | **Typecheck** | 0 errors | TypeScript | Server + client |
 | **Eval dataset** | Vietnamese cases | Deterministic stub LLM | Ragas-like metrics |
 | **Load tests** | 3 scenarios | k6 | agent-chat, health-check, rag-search |
