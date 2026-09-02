@@ -245,6 +245,7 @@ model Project {
   scOrderAnalyses  SCOrderAnalysis[]
   agenticDecisions AgenticDecision[]
   recommendations  TaskRecommendation[]
+  ragChunks        RagChunk[]
 
   @@map("projects")
 }
@@ -603,6 +604,25 @@ model RecommendationConfig {
 // MemoryRelation links nodes with typed edges (related_to, causes, precedes,
 // contradicts) to form a traversable memory graph.
 // ---------------------------------------------------------------------------
+
+model RagChunk {
+  id         String   @id @default(cuid())
+  sourceType String // 'task' | 'recommendation'
+  sourceId   String // id của bản ghi nguồn
+  projectId  String
+  content    String // Nội dung chunk đã chuẩn hoá
+  title      String? // Tiêu đề ngắn (VD: tên task)
+  embedding  Unsupported("vector(768)")?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId])
+  @@index([projectId])
+  @@map("rag_chunks")
+}
 
 model MemoryNode {
   id         String                      @id @default(cuid())

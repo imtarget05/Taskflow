@@ -32,6 +32,7 @@ import promptRoutes from './modules/prompt/prompt.routes';
 import evaluationRoutes from './modules/evaluation/evaluation.routes';
 import modelRoutes from './modules/model/model.routes';
 import mlopsRoutes from './modules/mlops/mlops.routes';
+import ragRoutes from './modules/rag/rag.routes';
 import { healthRouter } from './modules/health/health.controller';
 import { initLangfuse } from './lib/langfuse';
 
@@ -122,6 +123,7 @@ export function createApp(): Express {
   app.use('/api/models', modelRoutes);
   app.use('/api/prompts', promptRoutes);
   app.use('/api/mlops', mlopsRoutes);
+  app.use('/api/rag', ragRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
