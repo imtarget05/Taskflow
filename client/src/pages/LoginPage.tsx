@@ -32,8 +32,9 @@ export default function LoginPage() {
     if (googleError) {
       toast('error', 'Google sign-in failed', googleError);
     }
-    const googleSignedIn = searchParams.get('google=signed_in');
-    if (googleSignedIn) {
+    // Server redirects to /?google=signed_in after successful OAuth.
+    // URLSearchParams key is "google", value is "signed_in".
+    if (searchParams.get('google') === 'signed_in') {
       void navigate('/dashboard', { replace: true });
     }
   }, [searchParams, toast, navigate]);

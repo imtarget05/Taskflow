@@ -8,7 +8,7 @@ export interface PageEnv {
   API_ORIGIN?: string;
 }
 
-const DEFAULT_ORIGIN = 'https://taskflow-server-illy.onrender.com';
+const DEFAULT_ORIGIN = 'https://taskflow-server-n9a7.onrender.com';
 
 export async function onRequest(context: { request: Request; env: PageEnv }): Promise<Response> {
   const origin = (typeof context.env?.API_ORIGIN === 'string' && context.env.API_ORIGIN) || DEFAULT_ORIGIN;
@@ -31,5 +31,21 @@ export async function onRequest(context: { request: Request; env: PageEnv }): Pr
   }
 
   const resp = await fetch(target.toString(), init);
-  return new Response(resp.body, resp);
+  const outHeaders = new Headers(resp.headers);
+  const setCookies: string[] =
+    typeof (resp.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie === 'function'
+      ? (resp.headers as unknown as { getSetCookie: () => string[] }).getSetCookie()
+      : resp.headers.get('set-cookie')
+        ? [resp.headers.get('set-cookie') as string]
+        : [];
+  const out = new Response(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: outHeaders,
+  });
+  if (setCookies.length > 1) {
+    out.headers.delete('set-cookie');
+    for (const c of setCookies) out.headers.append('set-cookie', c);
+  }
+  return out;
 }
