@@ -1,0 +1,66 @@
+name: Blue-Green Deploy
+
+# Guarded blue-green release of the backend image: pin the commit-SHA image,
+# deploy, gate on /api/health, and auto-rollback to the previous image on
+# failure. Runs after CI/CD has pushed the immutable SHA tag to GHCR.
+on:
+  workflow_run:
+    workflows: [CI/CD]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Full image tag to deploy (defaults to commit SHA build)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Blue-green deploy + auto-rollback
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Resolve Render config
+        id: rendercfg
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ] && [ -n "$RENDER_OWNER_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Blue-green deploy skipped: RENDER_API_KEY / RENDER_SERVICE_ID / RENDER_OWNER_ID not configured."
+          fi
+
+      - name: Checkout
+        if: steps.rendercfg.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        if: steps.rendercfg.outputs.enabled == 'true'
+        id: image
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="ghcr.io/${{ github.repository_owner }}/taskflow-server:${{ github.event.workflow_run.head_sha || github.sha }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Blue-green deploy (health-gated, auto-rollback)
+        if: steps.rendercfg.outputs.enabled == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+          HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
+        run: |
+          chmod +x scripts/deploy-bluegreen.sh
+          ./scripts/deploy-bluegreen.sh "${{ steps.image.outputs.tag }}"
