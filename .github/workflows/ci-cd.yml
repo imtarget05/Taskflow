@@ -61,6 +61,9 @@ jobs:
         working-directory: server
         run: npx prisma generate
 
+      - name: Enable pgvector extension
+        run: PGPASSWORD=taskflow psql -h localhost -U taskflow -d taskflow_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
       - name: Run migrations (test db)
         working-directory: server
         run: npx prisma migrate deploy

@@ -1,5 +1,6 @@
 -- Recommendation RAG: chunks của task/project history dùng cho retrieval
 -- phục vụ Task Recommendation System. Embedding 768-dim (bge-m3), pgvector.
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE "rag_chunks" (
     "id" TEXT NOT NULL,
     "sourceType" TEXT NOT NULL,

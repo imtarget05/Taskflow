@@ -1,3 +1,6 @@
+-- Enable pgvector for embedding columns (safe if already enabled)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- DropForeignKey
 ALTER TABLE "orders" DROP CONSTRAINT "orders_supplierId_fkey";
 
