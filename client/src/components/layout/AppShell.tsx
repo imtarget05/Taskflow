@@ -25,8 +25,8 @@ const THEME_ICONS: Record<Theme, React.ReactNode> = {
 
 function shellSidebarClass(open: boolean) {
   const base =
-    'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-surface transition-[width,transform] duration-200 ease-out lg:static lg:translate-x-0';
-  if (open) return `${base} w-72 translate-x-0 shadow-modal lg:shadow-none`;
+    'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-outlineVariant bg-surfaceContainerLow transition-[width,transform] duration-500 ease-[cubic-bezier(0.2,0,0,1)] lg:static lg:translate-x-0';
+  if (open) return `${base} w-72 translate-x-0 shadow-elevation2 lg:shadow-none`;
   return `${base} -translate-x-full lg:w-auto lg:translate-x-0`;
 }
 
@@ -115,7 +115,7 @@ export default function AppShell({ children }: AppShellProps) {
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 lg:px-6">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-outlineVariant bg-surfaceContainer px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button
               className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
@@ -127,12 +127,12 @@ export default function AppShell({ children }: AppShellProps) {
             </button>
             <button
               onClick={() => setSearchOpen(true)}
-              className="hidden items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:flex"
+              className="hidden items-center gap-2 rounded-full border border-outlineVariant bg-surfaceContainerHigh px-4 py-2 text-sm text-ink-muted shadow-elevation1 transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:flex"
               aria-label="Search tasks and projects (Cmd+K)"
             >
-              <Search className="h-4 w-4" aria-hidden="true" />
+              <Search className="h-5 w-5" aria-hidden="true" />
               <span className="hidden md:inline">Search…</span>
-              <kbd className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold">
+              <kbd className="rounded-full bg-surfaceContainer px-1.5 py-0.5 text-[10px] font-semibold">
                 ⌘K
               </kbd>
             </button>
@@ -147,8 +147,8 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
-              className={`relative rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                agentOpen ? 'bg-accent-soft text-accent-ink' : ''
+              className={`relative rounded-full p-2.5 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                agentOpen ? 'bg-primaryContainer text-onPrimaryContainer' : ''
               }`}
               onClick={() => setAgentOpen(!agentOpen)}
               aria-label={agentOpen ? 'Close AI assistant' : 'Open AI assistant'}
@@ -157,7 +157,7 @@ export default function AppShell({ children }: AppShellProps) {
               <Sparkles className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
-              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded-full p-2.5 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => setTheme(nextTheme)}
               aria-label={`Switch theme (current: ${theme})`}
             >

@@ -3,10 +3,10 @@ import { forwardRef } from 'react';
 type Variant = 'default' | 'elevated' | 'interactive';
 
 const VARIANTS: Record<Variant, string> = {
-  default: 'border border-line bg-surface shadow-card',
-  elevated: 'border border-border-subtle bg-elevated shadow-card-hover',
+  default: 'border border-outlineVariant bg-surfaceContainerLow shadow-elevation1',
+  elevated: 'border-0 bg-surfaceContainerLow shadow-elevation2',
   interactive:
-    'border border-line bg-surface shadow-card card-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+    'border border-outlineVariant bg-surfaceContainerLow shadow-elevation1 card-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:shadow-elevation2',
 };
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -28,7 +28,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <Tag
       ref={ref}
       tabIndex={variant === 'interactive' ? 0 : undefined}
-      className={`rounded-xl ${VARIANTS[variant]} ${className}`}
+      className={`rounded-[12px] ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}

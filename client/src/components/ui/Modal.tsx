@@ -73,7 +73,7 @@ export default function Modal({ open, onClose, title, size = 'md', children, foo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[10vh] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-scrim/30 p-4 pt-[10vh] backdrop-blur-[2px]"
       onKeyDown={handleKeyDown}
     >
       <div
@@ -81,11 +81,11 @@ export default function Modal({ open, onClose, title, size = 'md', children, foo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`card w-full ${SIZES[size]} shadow-modal`}
+        className={`w-full ${SIZES[size]} rounded-[28px] bg-surfaceContainerHigh shadow-elevation3`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
-          <h2 id={titleId} className="text-base font-semibold text-ink">
+        <div className="flex items-start justify-between gap-4 px-6 py-4">
+          <h2 id={titleId} className="type-title-large text-ink">
             {title}
           </h2>
           <Button
@@ -100,7 +100,7 @@ export default function Modal({ open, onClose, title, size = 'md', children, foo
         </div>
         <div className="px-6 py-5">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>
+          <div className="flex justify-end gap-2 px-6 py-4">{footer}</div>
         )}
       </div>
     </div>

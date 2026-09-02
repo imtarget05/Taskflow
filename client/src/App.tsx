@@ -45,9 +45,20 @@ function ProtectedRoute() {
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
+function guestFallback() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-bg p-6">
+      <div className="w-full max-w-md space-y-4">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-96 w-full rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 function GuestRoute() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return guestFallback();
   return user ? <Navigate to="/dashboard" replace /> : <Outlet />;
 }
 
@@ -66,7 +77,7 @@ export default function App() {
         <Route
           path="/login"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={guestFallback()}>
               <LoginPage />
             </Suspense>
           }
@@ -74,7 +85,7 @@ export default function App() {
         <Route
           path="/register"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={guestFallback()}>
               <RegisterPage />
             </Suspense>
           }
@@ -82,7 +93,7 @@ export default function App() {
         <Route
           path="/forgot-password"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={guestFallback()}>
               <ForgotPasswordPage />
             </Suspense>
           }
@@ -90,7 +101,7 @@ export default function App() {
         <Route
           path="/reset-password"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={guestFallback()}>
               <ResetPasswordPage />
             </Suspense>
           }

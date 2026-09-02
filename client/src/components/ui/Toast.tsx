@@ -42,18 +42,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed right-4 top-4 z-[60] flex w-full max-w-sm flex-col gap-2"
+        className="pointer-events-none fixed bottom-6 left-1/2 z-[60] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
             role={t.variant === 'error' ? 'alert' : 'status'}
-            className="pointer-events-auto flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5 shadow-modal"
+            className="pointer-events-auto flex items-start gap-3 rounded-[4px] bg-inverseSurface p-3.5 shadow-elevation3"
           >
             <div className="mt-0.5 shrink-0">{ICONS[t.variant]}</div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink">{t.title}</p>
-              {t.description && <p className="mt-0.5 text-xs text-ink-secondary">{t.description}</p>}
+              <p className="text-sm font-semibold text-inverseOnSurface">{t.title}</p>
+              {t.description && <p className="mt-0.5 text-xs text-inverseOnSurface/80">{t.description}</p>}
             </div>
             <button
               onClick={() => dismiss(t.id)}

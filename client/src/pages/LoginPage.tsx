@@ -34,7 +34,7 @@ export default function LoginPage() {
     }
     const googleSignedIn = searchParams.get('google=signed_in');
     if (googleSignedIn) {
-      void navigate('/dashboard');
+      void navigate('/dashboard', { replace: true });
     }
   }, [searchParams, toast, navigate]);
 
@@ -44,7 +44,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(email, password);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(ERROR_BY_VARIANT[classifyApiError(err)] ?? 'Invalid email or password');
     } finally {

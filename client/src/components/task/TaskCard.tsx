@@ -88,9 +88,9 @@ export default function TaskCard({ task, onClick, disabled = false }: TaskCardPr
           onClick();
         }
       }}
-      className={`card group mb-2 p-3 transition-shadow hover:shadow-card-hover ${
+      className={`group mb-2 rounded-[12px] bg-surfaceContainerLow p-3 shadow-elevation1 transition-all hover:shadow-elevation2 ${
         disabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-50 ring-2 ring-accent' : ''}`}
+      } ${isDragging ? 'opacity-50 outline outline-2 outline-primary' : ''}`}
     >
       <div className="flex items-start gap-2">
         <button
@@ -104,8 +104,8 @@ export default function TaskCard({ task, onClick, disabled = false }: TaskCardPr
               toggleComplete(e);
             }
           }}
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
-            task.completed ? 'border-accent bg-accent text-white' : 'border-line bg-surface hover:border-accent'
+          className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[2px] border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+            task.completed ? 'border-primary bg-primary text-onPrimary' : 'border-outline bg-surface hover:border-primary'
           }`}
         >
           {task.completed && <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />}

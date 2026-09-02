@@ -49,8 +49,8 @@ export default function BoardColumn({ column, projectId, role, onTaskClick, onRe
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[120px] w-full flex-col rounded-xl bg-surface-2 p-3 transition-shadow ${
-        isOver ? 'ring-2 ring-accent' : ''
+      className={`flex min-h-[120px] w-full flex-col rounded-[12px] bg-surfaceContainer p-3 shadow-elevation1 transition-all ${
+        isOver ? 'outline outline-2 outline-primary' : ''
       }`}
     >
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
@@ -80,9 +80,9 @@ export default function BoardColumn({ column, projectId, role, onTaskClick, onRe
             </Button>
           </form>
         ) : (
-          <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink">
+          <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink font-display">
             <span className="truncate">{column.name}</span>
-            <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
+            <span className="rounded-full bg-surfaceContainerHighest px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
               {column.tasks.length}
             </span>
           </h3>

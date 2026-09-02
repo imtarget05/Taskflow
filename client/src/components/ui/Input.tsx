@@ -26,10 +26,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         id={inputId}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={`block w-full rounded-lg border bg-surface px-3 py-2 text-sm text-ink shadow-card placeholder:text-ink-muted focus:outline-none focus:ring-1 disabled:pointer-events-none disabled:opacity-60 ${
+        className={`block w-full rounded-t-[4px] border border-outline bg-surfaceContainerHighest px-3 py-3 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:pointer-events-none disabled:opacity-60 ${
           error
-            ? 'border-danger focus:border-danger focus:ring-danger'
-            : 'border-line focus:border-accent focus:ring-accent'
+            ? 'border-error focus:border-error focus:ring-error'
+            : 'border-outline focus:border-primary focus:ring-primary'
         } ${className}`}
         {...rest}
       />
