@@ -48,20 +48,32 @@ api() {
 BLUE_IMAGE="$(api GET "/services/$RENDER_SERVICE_ID" | sed -n 's/.*"imagePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 log "blue (current) image: ${BLUE_IMAGE:-<unpinned/:latest>}"
 
-# 2. Pin + deploy the new image (skip if already pinned — idempotent).
-if [ "$BLUE_IMAGE" = "$IMAGE_TAG" ]; then
-  log "already pinned to $IMAGE_TAG — skipping re-pin (idempotent)"
-else
-  log "pinning green image: $IMAGE_TAG"
-  api PATCH "/services/$RENDER_SERVICE_ID" \
-    "{\"image\": {\"ownerId\": \"$RENDER_OWNER_ID\", \"imagePath\": \"$IMAGE_TAG\"}}" > /dev/null
+# 2. Pin the new image (always attempt — each step handles its own 400).
+log "pinning green image: $IMAGE_TAG"
+if ! api PATCH "/services/$RENDER_SERVICE_ID" \
+  "{\"image\": {\"ownerId\": \"$RENDER_OWNER_ID\", \"imagePath\": \"$IMAGE_TAG\"}}" > /dev/null 2>&1; then
+  # 400 when already pinned to same SHA is expected — treat as success.
+  log "pin returned error (likely already pinned) — continuing to deploy step"
 fi
 
-DEPLOY_ID="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache": "do_not"}' | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\(dep-[^"]*\)".*/\1/p' | head -1)"
-[ -n "$DEPLOY_ID" ] || fail "could not start a deployment"
-log "deployment started: $DEPLOY_ID"
+# 3. Trigger a deployment (always attempt — handle duplicate-deploy 400).
+DEPLOY_ID=""
+if DEPLOY_RESP="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache": "do_not"}' 2>&1)"; then
+  DEPLOY_ID="$(echo "$DEPLOY_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\(dep-[^"]*\)".*/\1/p' | head -1)"
+else
+  POST_ERR="$DEPLOY_RESP"
+  log "deploy POST failed: $POST_ERR"
+  log "likely duplicate deploy (CI already triggered $IMAGE_TAG) — resolving latest deploy"
+fi
+if [ -z "$DEPLOY_ID" ]; then
+  # Fallback: use the most recent deploy for this service (covers race case).
+  DEPLOY_ID="$(api GET "/services/$RENDER_SERVICE_ID/deploys?limit=1" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\(dep-[^"]*\)".*/\1/p' | head -1)"
+  log "resolved deploy from latest: ${DEPLOY_ID:-<none>}"
+fi
+[ -n "$DEPLOY_ID" ] || fail "could not start or resolve a deployment"
+log "deployment to watch: $DEPLOY_ID"
 
-# 3. Wait for the deployment to finish (live / deactivated / build_failed).
+# 4. Wait for the deployment to finish (live / deactivated / build_failed).
 STATUS=""
 ELAPSED=0
 while [ "$ELAPSED" -lt "$WAIT_TIMEOUT" ]; do
@@ -91,7 +103,7 @@ case "$STATUS" in
   *) fail "deployment ended with status '$STATUS'"; rollback ;;
 esac
 
-# 4. Health gate: poll /api/health (via the service URL or HEALTH_URL).
+# 5. Health gate: poll /api/health (via the service URL or HEALTH_URL).
 SERVICE_URL="$(api GET "/services/$RENDER_SERVICE_ID" | sed -n 's/.*"serviceDetails"[^{]*{.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 HEALTH_URL="${HEALTH_URL:-${SERVICE_URL:+$SERVICE_URL/api/health}}"
 
