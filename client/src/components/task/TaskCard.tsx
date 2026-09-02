@@ -14,6 +14,13 @@ const PRIORITY_TONE: Record<TaskPriority, 'neutral' | 'info' | 'warning' | 'dang
   URGENT: 'danger',
 };
 
+const PRIORITY_BAR: Record<TaskPriority, string> = {
+  LOW: 'bg-slate-300',
+  MEDIUM: 'bg-info',
+  HIGH: 'bg-warning',
+  URGENT: 'bg-danger',
+};
+
 interface TaskCardProps {
   task: Task;
   onClick?: () => void;
@@ -88,10 +95,12 @@ export default function TaskCard({ task, onClick, disabled = false }: TaskCardPr
           onClick();
         }
       }}
-      className={`group mb-2 rounded-[12px] bg-surfaceContainerLow p-3 shadow-elevation1 transition-all hover:shadow-elevation2 ${
+      className={`group relative mb-2 rounded-xl bg-surfaceContainerLow p-3.5 shadow-elevation1 transition-all duration-200 hover:shadow-elevation2 hover:-translate-y-0.5 ${
         disabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
-      } ${isDragging ? 'opacity-50 outline outline-2 outline-primary' : ''}`}
+      } ${isDragging ? 'opacity-50 outline outline-2 outline-primary shadow-elevation3' : ''} ${task.completed ? 'opacity-70' : ''}`}
     >
+      {/* Priority indicator bar */}
+      <div className={`absolute left-0 top-2 bottom-2 w-1 rounded-full ${PRIORITY_BAR[task.priority]}`} aria-hidden="true" />
       <div className="flex items-start gap-2">
         <button
           role="checkbox"

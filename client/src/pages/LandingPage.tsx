@@ -97,17 +97,19 @@ function SiteHeader() {
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 -top-24 mx-auto h-72 max-w-3xl rounded-full bg-accent-soft opacity-60 blur-3xl motion-reduce:hidden" aria-hidden="true" />
+      {/* Gradient orbs */}
+      <div className="pointer-events-none absolute -top-32 left-1/2 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-br from-primaryContainer/50 via-transparent to-secondaryContainer/30 blur-3xl motion-reduce:hidden" aria-hidden="true" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-tertiary/10 blur-3xl motion-reduce:hidden" aria-hidden="true" />
       <div className="relative mx-auto max-w-6xl px-4 pb-14 pt-14 md:px-8 md:pb-20 md:pt-20">
         <div className="grid items-center gap-10 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
           <div>
-            <p className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-secondary shadow-card">
-              <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-primaryContainer px-4 py-1.5 text-xs font-semibold text-onPrimaryContainer shadow-elevation1">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               Now with an AI project assistant
             </p>
             <h1 className="type-display mt-5 text-balance">
               Plan projects clearly.{' '}
-              <span className="text-accent">Move work forward</span> with your team.
+              <span className="bg-gradient-to-r from-primary to-tertiary bg-clip-text text-transparent">Move work forward</span> with your team.
             </h1>
             <p className="type-body mt-4 max-w-md text-ink-secondary">
               Taskflow gives your team boards, tasks, and conversations in one calm
@@ -115,11 +117,11 @@ function Hero() {
               before you commit to it.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link to="/register" className="btn-primary justify-center sm:px-6">
+              <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-onPrimary shadow-elevation1 transition-all hover:opacity-90 hover:shadow-elevation2 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 justify-center sm:px-6">
                 Create your workspace
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
-              <Link to="/login" className="btn-secondary justify-center sm:px-6">Log in</Link>
+              <Link to="/login" className="inline-flex items-center justify-center gap-2 rounded-full border border-outline bg-surface px-6 py-2.5 text-sm font-medium text-ink shadow-elevation1 transition-all hover:bg-surfaceContainer active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 justify-center sm:px-6">Log in</Link>
             </div>
             <p className="type-meta mt-4 text-ink-muted">Free to start · Works in your browser · Vietnamese & English</p>
           </div>

@@ -21,17 +21,17 @@ interface AppSidebarProps {
 }
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
-  `group relative flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+  `group relative flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
     isActive
-      ? 'bg-accent-soft font-medium text-accent-ink'
-      : 'text-ink-secondary hover:bg-surface-muted hover:text-ink'
+      ? 'bg-primaryContainer text-onPrimaryContainer'
+      : 'text-ink-secondary hover:bg-surfaceContainerHighest hover:text-ink'
   }`;
 
-/** Quiet left-edge indicator for the active item (not a heavy filled block). */
-function ActiveRail() {
+/** Active indicator pill for navigation rail */
+function ActiveIndicator() {
   return (
     <span
-      className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+      className="absolute inset-y-1 left-0 w-1 rounded-r-full bg-primary"
       aria-hidden="true"
     />
   );
@@ -60,7 +60,7 @@ export default function AppSidebar({
           className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
           onClick={onCloseMobile}
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary font-display text-sm font-bold text-onPrimary">
             T
           </span>
           {!collapsed && (
@@ -81,14 +81,14 @@ export default function AppSidebar({
         <ul className="space-y-0.5 px-3">
           <li>
             <NavLink to="/dashboard" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Dashboard' : undefined}>
-              <ActiveRail />
+              <ActiveIndicator />
               <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
               {!collapsed && <span>Dashboard</span>}
             </NavLink>
           </li>
           <li>
             <NavLink to="/recommendations" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Đề xuất' : undefined}>
-              <ActiveRail />
+              <ActiveIndicator />
               <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
               {!collapsed && <span>Đề xuất</span>}
             </NavLink>
@@ -109,7 +109,7 @@ export default function AppSidebar({
 
         <div className="mt-4 px-3">
           <NavLink to="/settings" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Settings' : undefined}>
-            <ActiveRail />
+            <ActiveIndicator />
             <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
             {!collapsed && <span>Settings</span>}
           </NavLink>
@@ -168,12 +168,12 @@ function ProjectList({
             onClick={onCloseMobile}
             title={collapsed ? project.name : undefined}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              `flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 collapsed ? 'justify-center px-0' : 'px-3'
               } ${
                 isActive
-                  ? 'bg-accent-soft font-medium text-accent-ink'
-                  : 'text-ink-secondary hover:bg-surface-muted hover:text-ink'
+                  ? 'bg-primaryContainer text-onPrimaryContainer'
+                  : 'text-ink-secondary hover:bg-surfaceContainerHighest hover:text-ink'
               }`
             }
           >

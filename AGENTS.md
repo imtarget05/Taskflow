@@ -44,5 +44,18 @@ The channel session has cwd=None — an unqualified `npm`/`git` fails with "not 
 - TDD: write test first → RED → implement → GREEN.
 - READ target file before patching; use real .env vars, never invent secrets.
 
+## Design System (Material You / M3)
+- **Seed color**: `#6366F1` (indigo-500) — full M3 tonal palette in `client/src/index.css`
+- **Surfaces**: `surfaceContainerLow/Lowest/Low/High/Highest` + `background`
+- **Typography**: `font-display` (Google Sans) for headings, `font-sans` (Roboto Flex) for body
+- **Shape scale**: `rounded-sm`(8px) / `rounded-md`(12px) / `rounded-lg`(16px) / `rounded-2xl`(20px) / `rounded-full`(pill)
+- **Elevation**: `shadow-elevation1/2/3` (multi-layer shadows)
+- **Animations**: `animate-rise` / `animate-fade-in` / `animate-slide-up` / `animate-scale-in` (cubic-bezier easing)
+- **Button variants**: `primary` / `secondary` / `ghost` / `danger` / `tonal` / `outlined` / `elevated` / `text`
+- **Card variants**: `filled` / `elevated` / `outlined` / `interactive`
+- **Badge tones**: `neutral` / `success` / `warning` / `danger` / `info` / `accent`
+- **Status tokens**: `--success` / `--warning` / `--danger` / `--info` + `-soft` variants
+- **Component library**: `client/src/components/ui/` (Button, Card, Input, Badge, Modal, etc.)
+
 ## Delivery
 Project progress reports go to Telegram channel -1004347872274 (Taskflow).

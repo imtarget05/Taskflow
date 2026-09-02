@@ -1,12 +1,13 @@
 import { forwardRef } from 'react';
 
-type Variant = 'default' | 'elevated' | 'interactive';
+type Variant = 'filled' | 'elevated' | 'outlined' | 'interactive';
 
 const VARIANTS: Record<Variant, string> = {
-  default: 'border border-outlineVariant bg-surfaceContainerLow shadow-elevation1',
-  elevated: 'border-0 bg-surfaceContainerLow shadow-elevation2',
+  filled: 'bg-surfaceContainerLow',
+  elevated: 'bg-surfaceContainerLow shadow-elevation2',
+  outlined: 'border border-outlineVariant bg-surface',
   interactive:
-    'border border-outlineVariant bg-surfaceContainerLow shadow-elevation1 card-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:shadow-elevation2',
+    'bg-surfaceContainerLow shadow-elevation1 card-hover cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:shadow-elevation2',
 };
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -16,11 +17,11 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Semantic surface container. Prefer this over the legacy `.card` utility in
- * new work; padding is left to the caller (convention: p-4 / p-5).
+ * M3 surface container. Prefer this over the legacy `.card` utility.
+ * Padding is left to the caller (convention: p-4 / p-5).
  */
 const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
-  { variant = 'default', as = 'div', className = '', children, ...rest },
+  { variant = 'filled', as = 'div', className = '', children, ...rest },
   ref
 ) {
   const Tag = as;
@@ -28,7 +29,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <Tag
       ref={ref}
       tabIndex={variant === 'interactive' ? 0 : undefined}
-      className={`rounded-[12px] ${VARIANTS[variant]} ${className}`}
+      className={`rounded-2xl ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}
