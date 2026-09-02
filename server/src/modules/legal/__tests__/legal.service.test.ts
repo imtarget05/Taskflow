@@ -4,6 +4,7 @@ import { env } from '../../../config/env';
 jest.mock('../../../lib/prisma', () => ({
   prisma: {
     $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     legalCache: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
@@ -34,6 +35,7 @@ import { embed, rerank, chatCompletion, routeModel, modelForTier } from '../../.
 
 const mockedPrisma = prisma as unknown as {
   $queryRaw: jest.Mock;
+  $executeRaw: jest.Mock;
   legalCache: {
     findUnique: jest.Mock;
     upsert: jest.Mock;
@@ -129,7 +131,7 @@ describe('legal.service', () => {
     ]);
     expect(result.disclaimer).toBe(DISCLAIMER);
     expect(result.modelUsed).toBe('premium-model');
-    expect(mockedEmbed).toHaveBeenCalledTimes(1);
+    expect(mockedEmbed).toHaveBeenCalledTimes(3);
     expect(mockedRerank).toHaveBeenCalledTimes(1);
     expect(mockedChat).toHaveBeenCalledTimes(1);
     expect(mockedTier).toHaveBeenCalledWith('premium');

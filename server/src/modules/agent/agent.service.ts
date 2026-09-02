@@ -31,6 +31,7 @@ import {
 import { env } from '../../config/env';
 import { traceAgentTurn } from './tracer';
 import { buildMemoryContext, extractMemories, storeMemories } from './memory.service';
+import { RequestCoalescer } from '../cache/request-coalescer';
 
 export interface AgentChatMessage {
   role: string;
@@ -147,6 +148,14 @@ export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_UPLOAD_TEXT_CHARS = 20_000;
 export const UPLOAD_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.json', '.xml', '.log', '.pdf', '.docx']);
 export const UPLOAD_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']);
+
+// Request coalescer: deduplicates concurrent identical chat requests
+interface ChatResult {
+  completion: { content: string; toolCalls: LLMToolCall[] };
+  reply: string;
+  actionResult: AgentActionResult | null;
+}
+const chatCoalescer = new RequestCoalescer<ChatResult>(5000);
 
 // Magic-byte signatures used to verify an uploaded "image" is genuine before
 // we hand bytes to the model/embedding pipeline (prevents disguised payloads).
@@ -268,7 +277,10 @@ export async function chat(
   // The whole turn is wrapped in a Langfuse trace (no-op when LANGFUSE_* keys
   // are absent). Inside, we record an LLM span (model + latency) and an action
   // span whose output carries the guardrail decision (accepted / rejected).
-  const result = await traceAgentTurn(
+  // Coalesce concurrent requests with same message content
+  const messageKey = JSON.stringify({ userId, messages, options });
+  const result = await chatCoalescer.coalesce(messageKey, async () => {
+    return await traceAgentTurn(
     {
       userId,
       conversationId: options.conversationId ?? 'new',
@@ -321,7 +333,8 @@ export async function chat(
 
       return { completion, reply, actionResult };
     }
-  );
+    );
+  });
 
   const { reply, actionResult } = result;
 

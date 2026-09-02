@@ -8,6 +8,7 @@ import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 import { chatCompletion, embed, modelForTier, rerank, routeModel } from '../agent/llm';
 import { renderPrompt } from '../prompt/prompt.service';
+import { SemanticCache } from '../cache/semantic-cache.service';
 
 export interface LegalCitation {
   document: string;
@@ -56,6 +57,8 @@ export const LEGAL_RAG_PARAMS = {
   minSimilarity: MIN_SIMILARITY,
   chunkSize: CHUNK_SIZE,
 };
+
+const semanticCache = new SemanticCache(0.92);
 
 // ---------------------------------------------------------------------------
 // LangChain: legal answer template. Citations are mandatory — the model is
@@ -402,6 +405,18 @@ export async function searchLegal(userId: string, question: string): Promise<Leg
     };
   }
 
+  // Check semantic cache for similar queries (embedding-based similarity)
+  const semanticCached = await semanticCache.get(q);
+  if (semanticCached) {
+    return {
+      answer: semanticCached,
+      citations: [],
+      disclaimer: DISCLAIMER,
+      modelUsed: null,
+      cached: true,
+    };
+  }
+
   const result = await getGraph().invoke({ question: q });
 
   await prisma.legalCache.upsert({
@@ -420,6 +435,16 @@ export async function searchLegal(userId: string, question: string): Promise<Leg
       modelUsed: result.modelUsed,
     },
   });
+
+  // Store in semantic cache for future similar queries (best-effort)
+  try {
+    await semanticCache.set(q, result.answer ?? '', {
+      model: result.modelUsed,
+      citations: result.citations,
+    });
+  } catch {
+    // Semantic cache is best-effort; ignore failures
+  }
 
   return {
     answer: result.answer ?? '',
