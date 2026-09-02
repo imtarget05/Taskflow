@@ -37,13 +37,10 @@ import { healthRouter } from './modules/health/health.controller';
 import { initLangfuse } from './lib/langfuse';
 
 function isAllowedOrigin(origin: string): boolean {
-  if (env.CORS_ORIGINS.some((allowed) => origin === allowed)) return true;
-  try {
-    const host = new URL(origin).hostname;
-    return host.endsWith('.pages.dev');
-  } catch {
-    return false;
-  }
+  // Strict allow-list only. The legacy `*.pages.dev` wildcard was REMOVED: an
+  // attacker could deploy `evil.pages.dev` and read the API with credentials.
+  // Production domains must be listed explicitly via ALLOWED_ORIGINS/CLIENT_URL.
+  return env.CORS_ORIGINS.some((allowed) => origin === allowed);
 }
 
 const corsOptions: CorsOptions = {
@@ -59,10 +56,10 @@ const corsOptions: CorsOptions = {
 export function createApp(): Express {
   const app = express();
 
-  // The site is served behind the Cloudflare Pages proxy in production
-  // (and the Vite dev proxy locally): trust the immediate hop so req.ip /
-  // express-rate-limit resolve the real client IP from X-Forwarded-For.
-  app.set('trust proxy', 1);
+  // Trust proxy: Cloudflare Pages (1) + Render proxy (1) = 2 hops in
+  // production; 1 hop locally (Vite dev proxy). Use 2 in production so
+  // req.ip / rate-limit / SecurityAudit pick the real client IP.
+  app.set('trust proxy', env.NODE_ENV === 'production' ? 2 : 1);
 
   app.use(helmet());
   app.use(cors(corsOptions));

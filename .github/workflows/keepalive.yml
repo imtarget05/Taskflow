@@ -15,5 +15,5 @@ jobs:
       - name: Ping Render health endpoint
         run: |
           curl -sf -o /dev/null --max-time 60 \
-            https://taskflow-server-illy.onrender.com/api/health \
+            https://taskflow-server-n9a7.onrender.com/api/health \
             || echo "health check returned non-2xx (cold start or down)"

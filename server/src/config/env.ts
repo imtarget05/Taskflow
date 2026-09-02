@@ -117,9 +117,12 @@ export const env = {
   GOOGLE_CLIENT_SECRET: parsed.success ? parsed.data.GOOGLE_CLIENT_SECRET : undefined,
   GOOGLE_REDIRECT_ORIGIN: parsed.success ? parsed.data.GOOGLE_REDIRECT_ORIGIN : undefined,
   FRONTEND_URL: parsed.success ? parsed.data.FRONTEND_URL : 'http://localhost:5173',
-  CORS_ORIGINS:
-    allowedOrigins ??
-    [parsed.success ? parsed.data.CLIENT_URL : 'http://localhost:5173'],
+  CORS_ORIGINS: Array.from(
+    new Set([
+      ...(allowedOrigins ?? []),
+      parsed.success ? parsed.data.CLIENT_URL : 'http://localhost:5173',
+    ])
+  ).filter(Boolean),
   SMTP_HOST: parsed.success ? parsed.data.SMTP_HOST : undefined,
   SMTP_PORT: parsed.success ? parsed.data.SMTP_PORT : undefined,
   SMTP_USER: parsed.success ? parsed.data.SMTP_USER : undefined,

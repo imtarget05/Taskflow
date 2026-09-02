@@ -212,11 +212,14 @@ model NlpFeedback {
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique @db.VarChar(64)
+  tokenHash String    @unique @db.VarChar(64)
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  // Set when the token is consumed by a rotation. A second refresh with the
+  // same token = token reuse → the whole family is revoked (see auth.service).
+  usedAt    DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -442,7 +445,7 @@ model InventoryItem {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId, sku])
+  @@unique([projectId, sku])
   @@index([projectId])
   @@map("inventory_items")
 }

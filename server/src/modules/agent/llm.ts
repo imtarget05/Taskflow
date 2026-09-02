@@ -85,12 +85,15 @@ const REASONING_RE =
 const COMPLEX_DOMAIN_RE =
   /(deadline|priority|urgently|khẩn|gấp|quá tải|overload|phân bổ|workload|skill|kỹ năng|nguồn lực|resource|sprint|milestone|dependency|phụ thuộc)/i;
 
-/** Privacy-safe structured log line for LLM provider events (no prompts/keys/bodies). */
+/**
+ * Privacy-safe structured log line for LLM provider events (no prompts/keys/bodies).
+ * Routes through the app logger so all records are consistent + pino-filterable.
+ */
 function llmLog(level: 'info'|'warn'|'error', event: string, data: Record<string, unknown>): void {
-  const line = JSON.stringify({ ts: new Date().toISOString(), area: 'llm', event, ...data });
-  if (level === 'error') console.error(line);
-  else if (level === 'warn') console.warn(line);
-  else console.log(line);
+  const base = { area: 'llm', event, ...data };
+  if (level === 'error') logger.error(base, 'llm provider event');
+  else if (level === 'warn') logger.warn(base, 'llm provider event');
+  else logger.info(base, 'llm provider event');
 }
 
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);

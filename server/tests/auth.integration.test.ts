@@ -105,11 +105,16 @@ describe('Auth API integration', () => {
   describe('POST /api/auth/refresh', () => {
     it('issues a new access token from a valid refresh token', async () => {
       const agent = request.agent(app);
-      await agent
+      const reg = await agent
         .post('/api/auth/register')
         .send({ email: 'refresh@taskflow.dev', password: 'password123', name: 'Refresh User' });
+      // Refresh is no longer CSRF-exempt: echo the csrf_token cookie.
+      const csrf = (reg.headers['set-cookie'] as unknown as string[])
+        .find((c) => c.startsWith('csrf_token='))
+        ?.split(';')[0]
+        .split('=')[1];
 
-      const res = await agent.post('/api/auth/refresh');
+      const res = await agent.post('/api/auth/refresh').set('x-csrf-token', csrf ?? '');
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);

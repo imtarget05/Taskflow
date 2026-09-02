@@ -7,6 +7,7 @@ export type SecurityAction =
   | 'AUTH_LOGOUT'
   | 'AUTH_FORBIDDEN'
   | 'AUTH_TOKEN_INVALID'
+  | 'AUTH_TOKEN_REUSE'
   | 'ROUTE_400_PROBE'
   | 'ROUTE_404_PROBE'
   | 'SECURITY_EVENT';

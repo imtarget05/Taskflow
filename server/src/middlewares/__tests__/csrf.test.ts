@@ -23,8 +23,28 @@ describe('csrfProtection', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('skips /api/auth/* routes', () => {
+  it('skips pre-auth routes (login/register)', () => {
     const req = mockReq({ path: '/api/auth/login', cookies: { [CSRF_COOKIE]: 'tok' } });
+    csrfProtection(req, {} as Response, next);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('enforces CSRF on logout (no longer blanket-skipped)', () => {
+    // Logout carries the session; a malicious site must not force it out.
+    const req = mockReq({
+      path: '/api/auth/logout',
+      cookies: { [CSRF_COOKIE]: 'token' },
+      headers: { [CSRF_HEADER]: 'wrong' },
+    });
+    expect(() => csrfProtection(req, {} as Response, next)).toThrow(AppError);
+  });
+
+  it('lets a logout through when the CSRF header matches', () => {
+    const req = mockReq({
+      path: '/api/auth/logout',
+      cookies: { [CSRF_COOKIE]: 'tok' },
+      headers: { [CSRF_HEADER]: 'tok' },
+    });
     csrfProtection(req, {} as Response, next);
     expect(next).toHaveBeenCalledTimes(1);
   });

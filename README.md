@@ -3,7 +3,7 @@
 <div align="center">
 
 [![CI/CD](https://github.com/imtarget05/TaskFlow/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/imtarget05/TaskFlow/actions/workflows/ci-cd.yml)
-[![Tests](https://img.shields.io/badge/tests-757%2F757%20passing-brightgreen)](https://github.com/imtarget05/TaskFlow)
+[![Tests](https://img.shields.io/badge/tests-762%2F762%20passing-brightgreen)](https://github.com/imtarget05/TaskFlow)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-blue)](https://github.com/imtarget05/TaskFlow)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](https://github.com/imtarget05/TaskFlow)
 [![Production](https://img.shields.io/badge/production-live-success)](https://taskflow-server-n9a7.onrender.com)

@@ -7,6 +7,7 @@ jest.mock('../../../lib/prisma', () => ({
     project: { findUnique: jest.fn() },
     supplier: { findUnique: jest.fn() },
     order: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    projectMember: { findUnique: jest.fn() },
   },
 }));
 
@@ -21,6 +22,7 @@ const mockedPrisma = prisma as unknown as {
   project: { findUnique: jest.Mock };
   supplier: { findUnique: jest.Mock };
   order: { create: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+  projectMember: { findUnique: jest.Mock };
 };
 
 describe('supplychain.service.createOrder validation', () => {
@@ -29,6 +31,7 @@ describe('supplychain.service.createOrder validation', () => {
     mockedPrisma.project.findUnique.mockResolvedValue({ id: 'proj-real' });
     mockedPrisma.supplier.findUnique.mockResolvedValue({ id: 'sup-real' });
     mockedPrisma.order.create.mockResolvedValue({ id: 'order-1' });
+    mockedPrisma.projectMember.findUnique.mockResolvedValue({ role: 'MEMBER' });
   });
 
   it('rejects a non-existent projectId with 400 (no P2025 FK crash)', async () => {
@@ -39,7 +42,7 @@ describe('supplychain.service.createOrder validation', () => {
         project: { connect: { id: 'proj-ghost' } },
         supplier: { connect: { id: 'sup-real' } },
         status: 'PENDING_APPROVAL',
-      } as unknown as Prisma.OrderCreateInput)
+      } as unknown as Prisma.OrderCreateInput, 'user-1')
     ).rejects.toMatchObject({ statusCode: StatusCodes.BAD_REQUEST });
   });
 
@@ -51,7 +54,7 @@ describe('supplychain.service.createOrder validation', () => {
         project: { connect: { id: 'proj-real' } },
         supplier: { connect: { id: 'sup-ghost' } },
         status: 'PENDING_APPROVAL',
-      } as unknown as Prisma.OrderCreateInput)
+      } as unknown as Prisma.OrderCreateInput, 'user-1')
     ).rejects.toMatchObject({ statusCode: StatusCodes.BAD_REQUEST });
   });
 
@@ -61,7 +64,7 @@ describe('supplychain.service.createOrder validation', () => {
       project: { connect: { id: 'proj-real' } },
       supplier: { connect: { id: 'sup-real' } },
       status: 'PENDING_APPROVAL',
-    } as unknown as Prisma.OrderCreateInput);
+    } as unknown as Prisma.OrderCreateInput, 'user-1');
     expect(result).toBeDefined();
     expect(mockedPrisma.order.create).toHaveBeenCalledTimes(1);
   });
@@ -79,7 +82,7 @@ describe('supplychain.service.createOrder validation', () => {
         project: { connect: { id: 'proj-real' } },
         supplier: { connect: { id: 'sup-real' } },
         status: 'PENDING_APPROVAL',
-      } as unknown as Prisma.OrderCreateInput)
+      } as unknown as Prisma.OrderCreateInput, 'user-1')
     ).rejects.toBe(otherErr);
   });
 });

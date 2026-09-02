@@ -2,6 +2,8 @@ import { RequestHandler } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { asyncHandler, AppError } from '../../utils/errors';
 import { prisma } from '../../lib/prisma';
+import { Role } from '@prisma/client';
+import { assertRole } from '../project/project.service';
 import * as agenticService from './agentic.service';
 import { AnalyseOrderResult } from '../supplychain/sc-nlp.service';
 import { dispatchToN8n } from '../integrations/n8n';
@@ -31,6 +33,9 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
   if (order.projectId !== projectId) {
     throw new AppError('Order does not belong to project', StatusCodes.BAD_REQUEST);
   }
+
+  // Actors must be a member of the order's project before it may act on it.
+  await assertRole(projectId, userId, Role.MEMBER);
 
   // 2. Chạy rule-based analysis (dùng orderNumber + notes làm context)
   const text = `${order.orderNumber ?? 'PO'}\n${order.notes ?? ''}`;
@@ -109,6 +114,10 @@ export const processOrder: RequestHandler = asyncHandler(async (req, res) => {
 // Lấy lịch sử decisions cho project
 export const getDecisions: RequestHandler = asyncHandler(async (req, res) => {
   const projectId = String(req.params.projectId);
+  const userId = req.user!.id;
+
+  // Only members may read a project's decision history.
+  await assertRole(projectId, userId, Role.VIEWER);
 
   const decisions = await prisma.agenticDecision.findMany({
     where: { projectId },

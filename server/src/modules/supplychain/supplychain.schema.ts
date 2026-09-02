@@ -61,6 +61,19 @@ export const createInventoryItemSchema = z.object({
   minStock: z.number().int().min(0).optional(),
 });
 
+// Strict-by-default update guard: rejects any unknown field (mass-assignment)
+// and enforces quantity/minStock >= 0 so a client can never corrupt stock.
+export const updateInventoryItemSchema = z
+  .object({
+    sku: z.string().min(1).max(100).optional(),
+    name: z.string().min(1).max(200).optional(),
+    quantity: z.number().int().min(0).optional(),
+    unit: z.string().max(20).optional(),
+    location: z.string().max(200).nullable().optional(),
+    minStock: z.number().int().min(0).optional(),
+  })
+  .strict();
+
 export const adjustInventorySchema = z.object({
   quantity: z.number().int(),
   reason: z.string().max(200).optional(),

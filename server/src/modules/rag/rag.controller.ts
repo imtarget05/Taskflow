@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { indexProject, retrieve } from './rag.service';
+import { indexProject, retrieve, assertProjectAccess } from './rag.service';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
 
@@ -10,6 +10,7 @@ export async function indexProjectHandler(
     const userId = (req as unknown as { user?: { id?: string } }).user?.id;
     if (!userId) throw new AppError('Chưa xác thực', StatusCodes.UNAUTHORIZED);
     const projectId = String(req.params.projectId);
+    await assertProjectAccess(userId, projectId);
     const indexed = await indexProject(projectId);
     res.json({ success: true, data: { projectId, indexed } });
   } catch (err) {

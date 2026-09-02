@@ -2,7 +2,7 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { RequestHandler } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import * as supplychainService from './supplychain.service';
-import { createSupplierSchema, createOrderSchema, updateOrderStatusSchema, createLineItemSchema, adjustInventorySchema, createInventoryItemSchema } from './supplychain.schema';
+import { createSupplierSchema, createOrderSchema, updateOrderStatusSchema, createLineItemSchema, adjustInventorySchema, createInventoryItemSchema, updateInventoryItemSchema } from './supplychain.schema';
 import { AppError } from '../../utils/errors';
 
 // ---------------------------------------------------------------------------
@@ -53,12 +53,12 @@ export const getOrders: RequestHandler = async (req, res) => {
   if (projectId) where.projectId = projectId as string;
   if (supplierId) where.supplierId = supplierId as string;
   if (status) where.status = status as string;
-  const orders = await supplychainService.getOrders(where);
+  const orders = await supplychainService.getOrders(where, req.user!.id);
   res.json({ data: orders, count: orders.length });
 };
 
 export const getOrder: RequestHandler = async (req, res) => {
-  const order = await supplychainService.getOrderById(req.params.id as string);
+  const order = await supplychainService.getOrderById(req.params.id as string, req.user!.id);
   res.json({ data: order });
 };
 
@@ -75,7 +75,7 @@ export const createOrder: RequestHandler = async (req, res) => {
     currency: raw.currency ?? 'VND',
     notes: raw.notes,
   };
-  const order = await supplychainService.createOrder(data);
+  const order = await supplychainService.createOrder(data, req.user!.id);
   res.status(201).json({ data: order });
 };
 
@@ -83,12 +83,12 @@ export const updateOrderStatus: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const { status } = updateOrderStatusSchema.parse(req.body);
   // Enforce the order status state machine (rejects illegal jumps).
-  const order = await supplychainService.transitionOrderStatus(id as string, status as OrderStatus);
+  const order = await supplychainService.transitionOrderStatus(id as string, status as OrderStatus, req.user!.id);
   res.json({ data: order });
 };
 
 export const deleteOrder: RequestHandler = async (req, res) => {
-  await supplychainService.deleteOrder(req.params.id as string);
+  await supplychainService.deleteOrder(req.params.id as string, req.user!.id);
   res.status(204).send();
 };
 
@@ -101,7 +101,7 @@ export const getLineItems: RequestHandler = async (req, res) => {
   if (!orderId || typeof orderId !== 'string') {
     throw new AppError('orderId query parameter is required', StatusCodes.BAD_REQUEST);
   }
-  const lineItems = await supplychainService.getLineItemsByOrder(orderId);
+  const lineItems = await supplychainService.getLineItemsByOrder(orderId, req.user!.id);
   res.json({ data: lineItems, count: lineItems.length });
 };
 
@@ -114,7 +114,7 @@ export const createLineItem: RequestHandler = async (req, res) => {
     quantity: data.quantity,
     unitPrice: data.unitPrice,
     amount: data.amount,
-  });
+  }, req.user!.id);
   res.status(201).json({ data: lineItem });
 };
 
@@ -126,12 +126,12 @@ export const updateLineItem: RequestHandler = async (req, res) => {
     ...(data.quantity && { quantity: data.quantity }),
     ...(data.unitPrice && { unitPrice: data.unitPrice }),
     ...(data.amount !== undefined && { amount: data.amount }),
-  });
+  }, req.user!.id);
   res.json({ data: lineItem });
 };
 
 export const deleteLineItem: RequestHandler = async (req, res) => {
-  await supplychainService.deleteLineItem(req.params.id as string);
+  await supplychainService.deleteLineItem(req.params.id as string, req.user!.id);
   res.status(204).send();
 };
 
@@ -141,12 +141,15 @@ export const deleteLineItem: RequestHandler = async (req, res) => {
 
 export const getInventory: RequestHandler = async (req, res) => {
   const { projectId } = req.query;
-  const items = await supplychainService.getInventoryItems(projectId ? String(projectId) : undefined);
+  const items = await supplychainService.getInventoryItems(
+    projectId ? String(projectId) : undefined,
+    req.user!.id
+  );
   res.json({ data: items, count: items.length });
 };
 
 export const getInventoryItem: RequestHandler = async (req, res) => {
-  const item = await supplychainService.getInventoryItemById(req.params.id as string);
+  const item = await supplychainService.getInventoryItemById(req.params.id as string, req.user!.id);
   res.json({ data: item });
 };
 
@@ -160,22 +163,15 @@ export const createInventoryItem: RequestHandler = async (req, res) => {
     unit: data.unit || 'Cái',
     location: data.location || null,
     minStock: data.minStock ?? 0,
-  });
+  }, req.user!.id);
   res.status(201).json({ data: item });
 };
 
 export const updateInventoryItem: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { sku, name, quantity, unit, location, minStock } = req.body;
-  const patch: Record<string, unknown> = {};
-  if (sku !== undefined) patch.sku = sku;
-  if (name !== undefined) patch.name = name;
-  if (quantity !== undefined) patch.quantity = quantity;
-  if (unit !== undefined) patch.unit = unit;
-  if (location !== undefined) patch.location = location;
-  if (minStock !== undefined) patch.minStock = minStock;
-
-  const item = await supplychainService.updateInventoryItem(id as string, patch);
+  // Strict schema: rejects unknown fields (mass-assignment) + negative quantity.
+  const patch = updateInventoryItemSchema.parse(req.body);
+  const item = await supplychainService.updateInventoryItem(id as string, patch, req.user!.id);
   res.json({ data: item });
 };
 
@@ -192,6 +188,6 @@ export const adjustInventory: RequestHandler = async (req, res) => {
 };
 
 export const deleteInventoryItem: RequestHandler = async (req, res) => {
-  await supplychainService.deleteInventoryItem(req.params.id as string);
+  await supplychainService.deleteInventoryItem(req.params.id as string, req.user!.id);
   res.status(204).send();
 };

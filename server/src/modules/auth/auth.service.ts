@@ -6,6 +6,7 @@ import { env, isEmailConfigured } from '../../config/env';
 import { createHash, randomBytes } from 'crypto';
 
 import { sendPasswordResetEmail } from './email.service';
+import { recordSecurityEvent } from './security.service';
 
 export interface AuthResult {
   accessToken: string;
@@ -85,6 +86,23 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
     throw new AppError('Refresh token expired or revoked', 401);
   }
 
+  // Atomic claim: mark the token consumed. If zero rows are updated, the token
+  // was ALREADY used by a previous rotation → someone is replaying a stolen
+  // token. That is a reuse-attack signal: revoke EVERY session for the user.
+  const claimed = await prisma.refreshToken.updateMany({
+    where: { id: stored.id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  if (claimed.count === 0) {
+    const revoked = await revokeAllRefreshTokens(stored.userId);
+    void recordSecurityEvent({
+      action: 'AUTH_TOKEN_REUSE',
+      userId: stored.userId,
+      metadata: { revokedSessions: revoked, tokenId: stored.id },
+    });
+    throw new AppError('Refresh token reuse detected; all sessions have been revoked', 401);
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
     select: { id: true, email: true, name: true },
@@ -93,9 +111,15 @@ export async function refresh(refreshToken: string): Promise<AuthResult> {
     throw new AppError('User not found', 401);
   }
 
-  // Rotate: revoke old token, issue new pair.
-  await prisma.refreshToken.delete({ where: { id: stored.id } });
+  // Rotate: the consumed token stays marked (for reuse detection + cleanup);
+  // issue a brand-new access/refresh pair.
   return issueTokens(user);
+}
+
+/** Revoke all of a user's refresh tokens (used on a suspected reuse attack). */
+export async function revokeAllRefreshTokens(userId: string): Promise<number> {
+  const result = await prisma.refreshToken.deleteMany({ where: { userId } });
+  return result.count;
 }
 
 export async function logout(refreshToken: string): Promise<void> {

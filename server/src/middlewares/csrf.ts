@@ -25,7 +25,15 @@ export function generateCsrfToken(): string {
 export function csrfProtection(req: Request, _res: Response, next: NextFunction): void {
   const method = req.method.toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return next();
-  if (req.path.startsWith('/api/auth')) return next();
+
+  // Only the pre-auth flows are exempt (no csrf_token cookie exists before login),
+  // because they are stateless credential exchanges (and already rate-limited).
+  // Logout/refresh carry the httpOnly session cookie, so they MUST prove origin
+  // by echoing the csrf_token — otherwise a malicious site could force a logout.
+  const isPreAuth = ['/api/auth/login', '/api/auth/register', '/api/auth/google'].some(
+    (p) => req.path === p || req.path.startsWith(p)
+  );
+  if (isPreAuth) return next();
 
   const cookieToken = req.cookies?.[CSRF_COOKIE];
   if (!cookieToken) return next();

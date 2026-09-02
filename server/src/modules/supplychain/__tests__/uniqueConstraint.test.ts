@@ -44,7 +44,7 @@ describe('supplychain.service unique-constraint handling', () => {
   it('createInventoryItem returns 409 on duplicate sku (no 500)', async () => {
     mockedPrisma.inventoryItem.create.mockRejectedValue(uniqueErr(['sku']));
     await expect(
-      scService.createInventoryItem({ sku: 'DUP', name: 'X' } as Prisma.InventoryItemCreateInput)
+      scService.createInventoryItem({ sku: 'DUP', name: 'X' } as Prisma.InventoryItemCreateInput, 'user-1')
     ).rejects.toMatchObject({ statusCode: StatusCodes.CONFLICT });
   });
 

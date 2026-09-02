@@ -23,6 +23,7 @@ jest.mock('../../../lib/prisma', () => ({
     refreshToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -41,6 +42,7 @@ const mockedPrisma = prisma as unknown as {
   refreshToken: {
     create: jest.Mock;
     findUnique: jest.Mock;
+    updateMany: jest.Mock;
     delete: jest.Mock;
     deleteMany: jest.Mock;
   };
@@ -130,11 +132,12 @@ describe('auth.service', () => {
 
       mockedPrisma.refreshToken.findUnique.mockResolvedValue({
         id: 'rt1',
+        userId: 'u1',
         tokenHash: 'hash',
         expiresAt: new Date(Date.now() + 100000),
       });
+      mockedPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
       mockedPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'x@y.com', name: 'X' });
-      mockedPrisma.refreshToken.delete.mockResolvedValue({});
 
       const result = await refresh(auth.refreshToken);
       expect(result.accessToken).toBeDefined();
@@ -170,6 +173,55 @@ describe('auth.service', () => {
       });
 
       await expect(refresh(auth.refreshToken)).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('detects reuse of an already-claimed token and revokes all sessions', async () => {
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'r@y.com', name: 'R' });
+      mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
+      const auth = await register({ email: 'r@y.com', password: 'password123', name: 'R' });
+
+      mockedPrisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        userId: 'u1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 100000),
+      });
+      // First use: claim succeeds.
+      mockedPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      mockedPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'r@y.com', name: 'R' });
+      await refresh(auth.refreshToken);
+
+      // Second use of the SAME token: claim fails → reuse attack.
+      mockedPrisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+      mockedPrisma.refreshToken.deleteMany.mockResolvedValue({ count: 2 });
+
+      await expect(refresh(auth.refreshToken)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockedPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+    });
+
+    it('claims a token atomically (updateMany where usedAt is null)', async () => {
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed' as never);
+      mockedPrisma.user.findUnique.mockResolvedValue(null);
+      mockedPrisma.user.create.mockResolvedValue({ id: 'u1', email: 'c@y.com', name: 'C' });
+      mockedPrisma.refreshToken.create.mockResolvedValue({ id: 'rt1' });
+      const auth = await register({ email: 'c@y.com', password: 'password123', name: 'C' });
+
+      mockedPrisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        userId: 'u1',
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 100000),
+      });
+      mockedPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      mockedPrisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'c@y.com', name: 'C' });
+
+      await refresh(auth.refreshToken);
+      expect(mockedPrisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { id: 'rt1', usedAt: null },
+        data: { usedAt: expect.any(Date) },
+      });
     });
 
     it('throws 401 when the user no longer exists', async () => {

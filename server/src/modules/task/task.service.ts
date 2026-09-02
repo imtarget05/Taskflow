@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { assertRole } from '../project/project.service';
 import { emitToProject, SOCKET_EVENTS } from '../../lib/socket';
 import { AppError } from '../../utils/errors';
+import { escapeHtml } from '../../utils/sanitize';
 import { createActivity } from '../activity/activity.service';
 
 export interface CreateTaskData {
@@ -50,8 +51,8 @@ export async function createTask(actorId: string, data: CreateTaskData) {
     data: {
       projectId: data.projectId,
       columnId: data.columnId,
-      title: data.title.trim(),
-      description: data.description,
+      title: escapeHtml(data.title.trim()),
+      description: data.description ? escapeHtml(data.description) : data.description,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
       priority: data.priority ?? TaskPriority.MEDIUM,
       position: nextPos,
@@ -86,8 +87,8 @@ export async function updateTask(
   if (existing.projectId !== projectId) throw new AppError('Task not found', 404);
 
   const updates: Prisma.TaskUpdateInput = {};
-  if (data.title !== undefined) updates.title = data.title.trim();
-  if (data.description !== undefined) updates.description = data.description;
+  if (data.title !== undefined) updates.title = escapeHtml(data.title.trim());
+  if (data.description !== undefined) updates.description = data.description ? escapeHtml(data.description) : data.description;
   if (data.priority !== undefined) updates.priority = data.priority;
   if (data.completed !== undefined) updates.completed = data.completed;
   if (data.dueDate !== undefined) updates.dueDate = data.dueDate ? new Date(data.dueDate) : null;

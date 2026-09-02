@@ -107,6 +107,39 @@ export function errorHandler(
     return;
   }
 
+  // Prisma known request errors (constraint / relation / missing-record) →
+  // semantically correct status codes instead of a generic 500. Specific
+  // handlers (e.g. createSupplier) may still map these earlier for custom
+  // messages, but this is the safe global fallback.
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    logger.warn({ err, path: req.originalUrl, code: err.code }, 'Prisma known request error');
+    let message = 'Database error';
+    let status = StatusCodes.BAD_REQUEST;
+    switch (err.code) {
+      case 'P2002': // unique constraint violation
+        message = 'Giá trị đã tồn tại (vi phạm ràng buộc duy nhất)';
+        status = StatusCodes.CONFLICT;
+        break;
+      case 'P2003': // foreign key constraint violation
+        message = 'Bản ghi tham chiếu không tồn tại';
+        status = StatusCodes.BAD_REQUEST;
+        break;
+      case 'P2014': // relation violation
+        message = 'Ràng buộc quan hệ không hợp lệ';
+        status = StatusCodes.CONFLICT;
+        break;
+      case 'P2025': // record not found
+        message = 'Bản ghi không tồn tại';
+        status = StatusCodes.NOT_FOUND;
+        break;
+      default:
+        message = `Database error (${err.code})`;
+        status = StatusCodes.BAD_REQUEST;
+    }
+    res.status(status).json({ success: false, message });
+    return;
+  }
+
   // Never leak internal error details to the client; log it structured.
   logger.error({ err, path: req.originalUrl, method: req.method }, 'Unhandled error');
   res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({

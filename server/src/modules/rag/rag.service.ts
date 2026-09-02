@@ -154,7 +154,7 @@ export function fuseRRF(
 }
 
 /** Kiểm tra user có quyền đọc project (member hoặc owner). */
-async function assertProjectAccess(userId: string, projectId: string): Promise<void> {
+export async function assertProjectAccess(userId: string, projectId: string): Promise<void> {
   const member = await prisma.projectMember.findFirst({
     where: { projectId, userId },
     select: { role: true },

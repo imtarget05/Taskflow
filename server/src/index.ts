@@ -1,6 +1,7 @@
 import http from 'http';
 import { createApp } from './app';
 import { env } from './config/env';
+import { logger } from './lib/logger';
 import { closeSocket, initSocket } from './lib/socket';
 import { prisma } from './lib/prisma';
 import { flushTracer } from './modules/agent/tracer';
@@ -21,12 +22,12 @@ async function bootstrap(): Promise<void> {
   cleanup.unref();
 
   server.listen(env.PORT, () => {
-    console.log(`🚀 TaskFlow server running on http://localhost:${env.PORT}`);
+    logger.info({ port: env.PORT }, 'TaskFlow server started');
   });
 }
 
 async function gracefulShutdown(signal: string): Promise<void> {
-  console.log(`🛑 Received ${signal}, shutting down gracefully...`);
+  logger.info({ signal }, 'Graceful shutdown requested');
   const forceExit = setTimeout(() => process.exit(1), 10_000);
   try {
     if (httpServer) await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
@@ -37,7 +38,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
     clearTimeout(forceExit);
     process.exit(0);
   } catch (error) {
-    console.error('Graceful shutdown failed:', error);
+    logger.error({ err: error }, 'Graceful shutdown failed');
     process.exit(1);
   }
 }
@@ -46,6 +47,6 @@ process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 
 bootstrap().catch((err) => {
-  console.error('Failed to start server:', err);
+  logger.error({ err }, 'Failed to start server');
   process.exit(1);
 });
