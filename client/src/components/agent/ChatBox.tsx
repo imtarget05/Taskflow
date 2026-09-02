@@ -35,8 +35,6 @@ export default function ChatBox() {
     upload,
     clear,
     canUseAgent,
-    provider,
-    model,
     projectId,
     language,
     setLanguage,
@@ -106,11 +104,8 @@ export default function ChatBox() {
     if (file) void upload(file);
   }
 
-  const statusText = canUseAgent === false
-    ? 'Chưa cấu hình'
-    : model
-      ? `${provider ?? 'AI'} · ${model}`
-      : 'Sẵn sàng';
+  // Professional header — never leak raw provider/model id (e.g. @cf/meta/llama...). Show only status.
+  const statusText = canUseAgent === false ? 'Chưa cấu hình' : 'Sẵn sàng · TaskFlow AI';
 
   return (
     <>

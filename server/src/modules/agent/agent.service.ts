@@ -81,6 +81,8 @@ export interface AgentActionResult {
 }
 
 const ACTION_TAG_RE = /\[\[TASKFLOW_ACTION\]\]([\s\S]*?)\[\[\/TASKFLOW_ACTION\]\]/;
+const SYSTEM_REMINDER_RE = /<system[_-]?reminder>[\s\S]*?<\/system[_-]?reminder>/gi;
+const THINKING_RE = /<thinking>[\s\S]*?<\/thinking>/gi;
 
 /**
  * Function tools advertised to the LLM via OpenAI-compatible `tools`. The model
@@ -306,12 +308,22 @@ export async function chat(
         span.end();
       }
 
-      const tagAction = parseAction(completion.content ?? '');
-      const action = completion.toolCalls.length
+      const originalContent = completion.content ?? '';
+      const tagAction = parseAction(originalContent);
+      let action: AgentAction | null = completion.toolCalls.length
         ? toolCallToAction(completion.toolCalls[0])
         : tagAction;
+      // Guard: never execute a create action when the user's latest message
+      // shows no intent to create (e.g. a simple "hi" greeting). This prevents
+      // hallucinating a project board on casual greetings.
+      if (action && !hasCreateIntent(lastUserTexts(messages).join(' '), action.name)) {
+        action = null;
+      }
 
-      let reply = (completion.content ?? '').replace(ACTION_TAG_RE, '').trim();
+      let reply = sanitizeAssistantContent(originalContent);
+      reply = reply.replace(ACTION_TAG_RE, '').trim();
+      // Final safety: strip any leaked internal tags that survived the first pass.
+      reply = sanitizeAssistantContent(reply);
       let actionResult: AgentActionResult | null = null;
 
       if (action) {
@@ -328,7 +340,7 @@ export async function chat(
           span.end();
         }
         reply = (reply ? `${reply}\n\n` : '') + res.summary;
-        reply = reply.trim();
+        reply = sanitizeAssistantContent(reply.trim());
       }
 
       return { completion, reply, actionResult };
@@ -484,16 +496,20 @@ export async function* chatStream(
 
   // Process action from tool calls or content tag
   const tagAction = parseAction(fullContent);
-  const action = toolCalls.length ? toolCallToAction(toolCalls[0]) : tagAction;
+  let action: AgentAction | null = toolCalls.length ? toolCallToAction(toolCalls[0]) : tagAction;
+  if (action && !hasCreateIntent(lastUserTexts(messages).join(' '), action.name)) {
+    action = null;
+  }
 
-  let reply = fullContent.replace(ACTION_TAG_RE, '').trim();
+  let reply = sanitizeAssistantContent(fullContent.replace(ACTION_TAG_RE, '').trim());
+  reply = sanitizeAssistantContent(reply);
   let actionResult: AgentActionResult | null = null;
 
   if (action) {
     const res = await executeAction(action, userId);
     actionResult = res;
     yield { type: 'action', data: res };
-    reply = (reply ? `${reply}\n\n` : '') + res.summary;
+    reply = sanitizeAssistantContent((reply ? `${reply}\n\n` : '') + res.summary);
     reply = reply.trim();
   }
 
@@ -943,4 +959,39 @@ export async function parseUpload(
     text: truncated ? trimmed.slice(0, MAX_UPLOAD_TEXT_CHARS) : trimmed,
     truncated,
   };
+}
+
+/**
+ * Strip internal-only tags that must never be shown to the user (system
+ * reminders, chain-of-thought, etc.). The provider may echo these back when
+ * the model hallucinates a system message.
+ */
+export function sanitizeAssistantContent(content: string): string {
+  return content
+    .replace(SYSTEM_REMINDER_RE, '')
+    .replace(THINKING_RE, '')
+    .replace(ACTION_TAG_RE, '')
+    .trim();
+}
+
+/**
+ * Heuristic: does the latest user text contain real intent to call the given
+ * create action? Prevents greeting-like messages ("hi") from triggering a
+ * hallucinated board creation.
+ */
+export function hasCreateIntent(userText: string, actionName: string): boolean {
+  const t = userText.toLowerCase().trim();
+  if (!t) return false;
+  // Pure greetings never count as create intent — blocks "hi" hallucinations.
+  if (/^(hi|hello|hey|xin\s*chào|chào|yo|hola)[!.\s]*$/i.test(t)) return false;
+  // Short explicit confirmations are treated as intent (user already said what
+  // to create in an earlier turn; "có/ok" is the confirmation).
+  if (/^(có|co|ok|oke|okay|yes|đồng\s*ý|dong\s*y|cứ\s*tạo|tạo\s*đi|go\s*ahead|confirm)[!.\s]*$/i.test(t)) return true;
+  if (actionName === 'create_project' || actionName === 'create_workspace') {
+    return /(tạo|tao|create|new\s*(project|board|workspace)|dự\s*án|board|workspace)/i.test(t);
+  }
+  if (actionName === 'create_task') {
+    return /(tạo|tao|create|new\s*task|task|nhiệm\s*vụ|công\s*việc)/i.test(t);
+  }
+  return true;
 }
