@@ -41,6 +41,8 @@ export default defineConfig(({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: true,
+    // E2E specs belong to Playwright (npm run test:e2e), not vitest.
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     coverage: {
       provider: 'v8',
       include: ['src/pages/LoginPage.tsx'],
