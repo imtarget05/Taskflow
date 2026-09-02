@@ -60,8 +60,11 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as (typeof error.config & { _retry?: boolean; _csrfRetry?: boolean }) | undefined;
     if (!original) return Promise.reject(error);
+    // /auth/me (session bootstrap) must NOT trigger the refresh+redirect flow:
+    // a 401 there just means "anonymous" — AuthProvider handles it. Retrying
+    // caused an infinite reload loop on /login (refresh 400 → redirect).
     const isAuthEndpoint =
-      original.url?.includes('/auth/') && !original.url.includes('/auth/me');
+      original.url?.includes('/auth/') && !original.url.includes('/auth/csrf');
 
     if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true;
@@ -73,8 +76,14 @@ api.interceptors.response.use(
       } catch (refreshError) {
         refreshPromise = null;
         clearAuth();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login?reason=session_expired';
+        // Only bounce to /login when we're on an app page. Redirecting from
+        // the login/register pages themselves caused an infinite reload loop
+        // (guest page mounts providers → 401 → refresh 400 → redirect).
+        const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+        if (!path.startsWith('/login') && !path.startsWith('/register')) {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login?reason=session_expired';
+          }
         }
         return Promise.reject(refreshError);
       }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from 'react';
 import api from '@/lib/api';
 import { useToast } from '@/store/toast';
+import { useAuth } from '@/store/auth';
 import { ResolvedLanguage } from '@/lib/language';
 
 export type AgentLanguage = 'auto' | 'vi' | 'en' | 'zh';
@@ -84,6 +85,7 @@ function nextId(): string {
 
 export function AgentProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -131,9 +133,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   }, [projectId]);
 
   useEffect(() => {
+    // Chưa đăng nhập thì bỏ qua — các call này sẽ 401 và không có ý nghĩa gì
+    // trên trang guest (login/register).
+    if (!user) return;
     void checkStatus();
     void refreshConversations();
-  }, [checkStatus, refreshConversations]);
+  }, [checkStatus, refreshConversations, user]);
 
   async function runTurn(text: string, attachment?: AgentAttachment) {
     const trimmed = text.trim();
