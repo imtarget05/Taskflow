@@ -1,7 +1,11 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-dotenv.config();
+// In test mode, skip loading .env to avoid overwriting test-specific env vars
+// that may be set by the test setup (e.g., NODE_ENV=test, DATABASE_URL, etc.).
+if (process.env.NODE_ENV !== 'test') {
+  dotenv.config();
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

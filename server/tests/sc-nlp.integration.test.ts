@@ -82,6 +82,7 @@ describe('SC NLP Analysis integration', () => {
     });
 
     it('returns classification + confidence + suggestedAction (fallback rule-based khi AI unavailable)', async () => {
+      // Increase timeout because LLM calls can take ~13s and may be slower under load
       const res = await authed()
         .post('/api/sc/nlp/analyse-order')
         .send({ text: 'PO số PO-2026-001 từ nhà cung cấp ABC, 500 cái linh kiện' });
@@ -109,7 +110,7 @@ describe('SC NLP Analysis integration', () => {
       const analysis = analyses[0];
       expect(analysis.classification).toContain('PO');
       expect(analysis.suggestedAction).toBeDefined();
-    });
+    }, 30000);
 
     it('phân loại PO cập nhật (annotation / điều chỉnh)', async () => {
       const res = await authed()
