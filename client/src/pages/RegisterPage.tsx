@@ -33,26 +33,36 @@ export default function RegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (!name.trim()) {
+      setError('Vui lòng nhập họ tên');
+      return;
+    }
+    if (!email.trim() || !email.includes('@')) {
+      setError('Vui lòng nhập email hợp lệ');
+      return;
+    }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError('Mật khẩu phải có ít nhất 8 ký tự');
       return;
     }
     setIsLoading(true);
     try {
-      await register(name, email, password);
+      await register(name.trim(), email.trim(), password);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      let message = 'Registration failed. Please check your details and try again.';
+      let message = 'Đăng ký thất bại. Vui lòng kiểm tra lại.';
       if (axios.isAxiosError(err)) {
         const data = err.response?.data as { message?: string } | undefined;
-        if (err.response?.status === 429) {
+        if (err.response?.status === 409) {
+          message = 'Email này đã được đăng ký. Hãy đăng nhập thay vì tạo mới.';
+        } else if (err.response?.status === 429) {
           message = RATE_LIMIT_HINT;
         } else if (!err.response) {
           message = NETWORK_HINT;
         } else if (data?.message) {
           message = data.message;
         } else if (classifyApiError(err) === 'server') {
-          message = 'Taskflow is having trouble creating your account. Please try again shortly.';
+          message = 'Taskflow đang bận. Vui lòng thử lại sau.';
         }
       }
       setError(message);

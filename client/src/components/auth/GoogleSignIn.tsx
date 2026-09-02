@@ -40,14 +40,25 @@ export function GoogleSignIn({ className }: GoogleSignInProps) {
   }, []);
 
   async function handleClick() {
-    if (status === null || !status.configured) {
-      toast('error', 'Google sign-in unavailable', 'Google sign-in is not configured on the server yet.');
+    if (status === null) {
+      toast('error', 'Đang kiểm tra Google...', 'Vui lòng đợi 1-2 giây rồi thử lại.');
+      return;
+    }
+    if (!status.configured) {
+      toast('error', 'Google chưa cấu hình', 'Vui lòng dùng đăng nhập email/mật khẩu hoặc tài khoản demo bên dưới.');
       return;
     }
     window.location.href = `${API_URL}/auth/google`;
   }
 
-  if (status === null) return null;
+  if (status === null) {
+    return (
+      <Button type="button" variant="secondary" className="w-full flex items-center justify-center gap-2" disabled>
+        <span className="h-5 w-5 animate-pulse rounded-full bg-surface-2" aria-hidden="true" />
+        Đang kiểm tra Google...
+      </Button>
+    );
+  }
 
   return (
     <Button
