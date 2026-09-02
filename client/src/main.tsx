@@ -35,3 +35,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+// PWA: register the offline-shell service worker (production only — the dev
+// server's HMR/websocket flow conflicts with SW interception).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* offline support is best-effort */
+    });
+  });
+}
