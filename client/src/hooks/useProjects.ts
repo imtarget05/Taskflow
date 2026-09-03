@@ -462,3 +462,14 @@ export function useRecentActivities(limit = 12) {
     },
   });
 }
+
+/** Tasks assigned to current user across all projects (GET /api/tasks?assigneeId=me). */
+export function useMyTasks() {
+  return useQuery({
+    queryKey: ['tasks', 'mine'],
+    queryFn: async () => {
+      const res = await api.get<{ data: Task[] }>('/tasks?assigneeId=me');
+      return res.data.data;
+    },
+  });
+}

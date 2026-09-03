@@ -173,3 +173,30 @@ export async function listTasks(projectId: string) {
     orderBy: { position: 'asc' },
   });
 }
+
+export async function listMyTasks(userId: string, assigneeId?: string) {
+  const targetAssigneeId = assigneeId ?? userId;
+  const projects = await prisma.projectMember.findMany({
+    where: { userId },
+    select: { projectId: true },
+  });
+  const projectIds = projects.map(p => p.projectId);
+
+  return prisma.task.findMany({
+    where: {
+      projectId: { in: projectIds },
+      assignments: { some: { userId: targetAssigneeId } },
+      completed: false,
+    },
+    include: {
+      project: { select: { id: true, name: true, color: true } },
+      column: { select: { id: true, name: true } },
+      assignments: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+    },
+    orderBy: [
+      { dueDate: 'asc' },
+      { priority: 'desc' },
+      { createdAt: 'desc' },
+    ],
+  });
+}

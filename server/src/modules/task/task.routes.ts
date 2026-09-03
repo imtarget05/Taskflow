@@ -6,6 +6,9 @@ const router = Router();
 
 router.use(authenticate);
 
+// GET /api/tasks?assigneeId=me — global tasks for current user
+router.get('/tasks', taskController.listMyTasks);
+
 // POST /api/projects/:projectId/tasks
 // GET /api/projects/:projectId/tasks
 // GET /api/projects/:projectId/tasks/:taskId

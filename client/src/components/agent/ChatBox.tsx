@@ -1,15 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Bot, FileUp, History, Languages, Paperclip, Plus, Send, Trash2, X } from 'lucide-react';
-import { useAgent, AgentLanguage } from '@/store/agent';
+import { Bot, FileUp, History, Paperclip, Plus, Send, Trash2, X, Zap } from 'lucide-react';
+import { useAgent } from '@/store/agent';
 import { Button } from '@/components/ui';
 import { timeAgo } from '@/lib/time';
-
-const LANGUAGE_OPTIONS: { value: AgentLanguage; label: string }[] = [
-  { value: 'auto', label: 'Auto (ưu tiên Tiếng Việt)' },
-  { value: 'vi', label: 'Tiếng Việt' },
-  { value: 'en', label: 'English' },
-  { value: 'zh', label: '中文' },
-];
 
 const SUGGESTIONS = [
   'Lập kế hoạch sprint tuần này',
@@ -33,11 +26,9 @@ export default function ChatBox() {
     isUploading,
     send,
     upload,
+    routeRequest,
     clear,
     canUseAgent,
-    projectId,
-    language,
-    setLanguage,
     conversations,
     historyOpen,
     setHistoryOpen,
@@ -47,6 +38,8 @@ export default function ChatBox() {
     deleteConversation,
   } = useAgent();
   const [draft, setDraft] = useState('');
+  const [smartRoute, setSmartRoute] = useState(false);
+  const [routeResult, setRouteResult] = useState<{ agent: string; reason: string; data?: unknown } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll while the user is already at/near the bottom — scrolling
   // up to re-read history must never be yanked back down.
@@ -79,6 +72,12 @@ export default function ChatBox() {
     const body = draft.trim();
     if (!body || isTyping) return;
     setDraft('');
+    if (smartRoute) {
+      setRouteResult(null);
+      const result = await routeRequest(body);
+      setRouteResult(result);
+      return;
+    }
     await send(body);
   }
 
@@ -109,30 +108,27 @@ export default function ChatBox() {
 
   return (
     <>
-      {/* M3 FAB — extended when closed, compact X when open */}
+      {/* M3 FAB — icon-only, 56×56dp per M3 spec */}
       <button
         onClick={() => setOpen(!open)}
-        className={`fab-m3 fixed bottom-5 right-5 z-50 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+        className={`fab-m3 fixed bottom-5 right-5 z-50 flex items-center justify-center focus-m3 ${
           open
             ? 'h-14 w-14 rounded-xl bg-surfaceContainerHighest text-ink shadow-elevation2'
-            : 'h-14 gap-2 rounded-xl bg-primaryContainer px-5 text-onPrimaryContainer'
+            : 'h-14 w-14 rounded-xl bg-primaryContainer text-onPrimaryContainer'
         }`}
-        aria-label={open ? 'Close AI assistant' : 'Open AI assistant'}
+        aria-label={open ? 'Đóng AI Assistant' : 'Mở AI Assistant'}
         aria-expanded={open}
       >
         {open ? (
           <X className="h-6 w-6" aria-hidden="true" />
         ) : (
-          <>
-            <Bot className="h-6 w-6 shrink-0" aria-hidden="true" />
-            <span className="hidden text-sm font-semibold tracking-wide sm:inline">Hỏi AI</span>
-          </>
+          <Bot className="h-6 w-6 shrink-0" aria-hidden="true" />
         )}
       </button>
 
       {open && (
         <div
-          className="fixed bottom-24 right-4 z-50 flex max-h-[min(80vh,640px)] w-[min(94vw,400px)] flex-col overflow-hidden rounded-xl border border-outlineVariant bg-surfaceContainerLow shadow-elevation3 animate-scale-in"
+          className="fixed bottom-24 right-4 z-50 flex max-h-[min(70vh,560px)] w-[min(94vw,400px)] flex-col overflow-hidden rounded-xl border border-outlineVariant bg-surfaceContainerLow shadow-elevation3 animate-scale-in"
           onDragEnter={(e) => {
             e.preventDefault();
             dragDepth.current += 1;
@@ -160,60 +156,50 @@ export default function ChatBox() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:bg-surfaceContainerHighest" title="Điều hướng câu hỏi đến đúng agent (SC Agentic / ML Agent / Chat)">
+                  <input
+                    type="checkbox"
+                    checked={smartRoute}
+                    onChange={(e) => setSmartRoute(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-outlineVariant accent-primary"
+                    aria-label="Smart Route"
+                  />
+                  Smart Route
+                </label>
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(true)}
-                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink"
-                  aria-label="Conversation history"
+                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Lịch sử hội thoại"
                 >
                   <History className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={newConversation}
-                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink"
-                  aria-label="New conversation"
-                  title="New conversation"
+                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Cuộc trò chuyện mới"
+                  title="Cuộc trò chuyện mới"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={clear}
-                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink"
-                  aria-label="Clear conversation"
+                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Xóa cuộc trò chuyện"
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink"
-                  aria-label="Close AI assistant"
+                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Đóng AI Assistant"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
-            </div>
-            <div className="mt-2.5 flex items-center justify-between gap-2">
-              <span className="inline-flex items-center rounded-full bg-surfaceContainerHighest px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
-                {projectId ? 'Trong board hiện tại' : 'Toàn workspace'}
-              </span>
-              <label className="flex shrink-0 items-center gap-1.5 text-ink-secondary" title="Ngôn ngữ trợ lý">
-                <Languages className="h-3 w-3" aria-hidden="true" />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as AgentLanguage)}
-                  aria-label="Assistant language"
-                  className="rounded-full border border-outlineVariant bg-surfaceContainerHighest px-2 py-1 text-xs text-ink outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                >
-                  {LANGUAGE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
           </div>
 
@@ -249,7 +235,7 @@ export default function ChatBox() {
                         setDraft(s);
                         textareaRef.current?.focus();
                       }}
-                      className="rounded-xl border border-outlineVariant bg-surfaceContainerHighest px-3.5 py-2.5 text-left text-xs font-medium text-ink-secondary transition-colors hover:border-primary/40 hover:bg-primaryContainer/30 hover:text-onPrimaryContainer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="rounded-xl border border-outlineVariant bg-surfaceContainerHighest px-3.5 py-2.5 text-left text-xs font-medium text-ink-secondary transition-colors hover:border-primary/40 hover:bg-primaryContainer/30 hover:text-onPrimaryContainer focus-m3-soft"
                     >
                       {s}
                     </button>
@@ -268,8 +254,8 @@ export default function ChatBox() {
                     <div
                       className={`whitespace-pre-wrap px-3.5 py-2.5 text-sm leading-relaxed shadow-elevation1 ${
                         m.role === 'user'
-                          ? 'rounded-[20px_4px_20px_20px] bg-primary text-onPrimary'
-                          : 'rounded-[4px_20px_20px_20px] border border-outlineVariant bg-surfaceContainerHighest text-ink'
+                          ? 'rounded-[16px_4px_16px_16px] bg-primary text-onPrimary'
+                          : 'rounded-[4px_16px_16px_16px] border border-outlineVariant bg-surfaceContainerHighest text-ink'
                       }`}
                     >
                       {m.attachment && (
@@ -310,7 +296,7 @@ export default function ChatBox() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primaryContainer text-onPrimaryContainer">
                   <Bot className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
-                <div className="flex items-center gap-1.5 rounded-[4px_20px_20px_20px] border border-outlineVariant bg-surfaceContainerHighest px-4 py-3 shadow-elevation1">
+                <div className="flex items-center gap-1.5 rounded-[4px_16px_16px_16px] border border-outlineVariant bg-surfaceContainerHighest px-4 py-3 shadow-elevation1">
                   {isUploading ? (
                     <span className="flex items-center gap-1.5 text-xs text-ink-muted">
                       <FileUp className="h-3.5 w-3.5" aria-hidden="true" /> Đang đọc file…
@@ -327,15 +313,43 @@ export default function ChatBox() {
             )}
           </div>
 
+          {/* Smart Route result banner */}
+          {routeResult && (
+            <div className="shrink-0 border-t border-outlineVariant bg-accent-soft px-4 py-2.5">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-accent-ink">Smart Route</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-ink">
+                    <span className="font-medium">{routeResult.agent}</span>
+                    <span className="text-ink-secondary"> — {routeResult.reason}</span>
+                  </p>
+                  {routeResult.data != null && (
+                    <pre className="mt-1 max-h-24 overflow-auto rounded bg-surfaceContainerLow p-2 text-[10px] leading-relaxed text-ink-secondary">
+                      {typeof routeResult.data === 'string' ? routeResult.data : JSON.stringify(routeResult.data, null, 2)}
+                    </pre>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRouteResult(null)}
+                  className="rounded-full p-1 text-ink-muted hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Đóng kết quả"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Input — M3 pill field */}
           <form onSubmit={handleSubmit} className="shrink-0 border-t border-outlineVariant bg-surfaceContainerHigh p-3">
-            <div className="flex items-end gap-2 rounded-xl border border-outlineVariant bg-surfaceContainerHighest px-2 py-2 shadow-elevation1 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+            <div className="flex items-end gap-2 rounded-xl border border-outlineVariant bg-surfaceContainerHighest px-2 py-2 shadow-elevation1 field-focus">
               <button
                 type="button"
                 onClick={pickFile}
                 disabled={isTyping || isUploading || canUseAgent === false}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surfaceContainer text-ink-secondary transition-colors hover:bg-primaryContainer hover:text-onPrimaryContainer disabled:opacity-40"
-                aria-label="Attach a file"
+                aria-label="Đính kèm file"
                 title="Đính kèm txt, md, csv, json, pdf, docx…"
               >
                 <Paperclip className="h-4 w-4" aria-hidden="true" />
@@ -362,8 +376,8 @@ export default function ChatBox() {
                 rows={1}
                 disabled={isTyping || isUploading}
                 placeholder={isUploading ? 'Đang đọc file…' : 'Hỏi trợ lý AI hoặc tải file…'}
-                aria-label="Message the AI assistant"
-                className="max-h-[120px] min-h-[36px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-muted disabled:opacity-50"
+                aria-label="Nhắn tin cho AI Assistant"
+                className="max-h-[120px] min-h-[36px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-muted disabled:opacity-50"
               />
               <Button
                 type="submit"
@@ -371,13 +385,16 @@ export default function ChatBox() {
                 variant="primary"
                 className="h-9 w-9 shrink-0 rounded-full p-0"
                 disabled={isTyping || isUploading || !draft.trim()}
-                aria-label="Send message"
+                aria-label={smartRoute ? "Điều hướng câu hỏi" : "Gửi tin nhắn"}
+                title={smartRoute ? "Điều hướng đến agent phù hợp" : "Gửi tin nhắn"}
               >
-                <Send className="h-4 w-4" aria-hidden="true" />
+                {smartRoute ? <Zap className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
               </Button>
             </div>
             <p className="mt-2 text-center text-[10px] text-ink-muted">
-              Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB
+              {smartRoute
+                ? "Smart Route: câu hỏi sẽ được điều hướng đến SC Agentic, ML Agent, hoặc Chat"
+                : "Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB"}
             </p>
           </form>
 
@@ -392,8 +409,8 @@ export default function ChatBox() {
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(false)}
-                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink"
-                  aria-label="Close history"
+                  className="rounded-full p-2 text-ink-secondary transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
+                  aria-label="Đóng lịch sử"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -417,7 +434,7 @@ export default function ChatBox() {
                           <button
                             type="button"
                             onClick={() => void loadConversation(c.id)}
-                            className="min-w-0 flex-1 text-left"
+                            className="min-w-0 flex-1 text-left focus-m3-soft"
                           >
                             <span
                               className={`block truncate text-sm ${
@@ -435,8 +452,8 @@ export default function ChatBox() {
                           <button
                             type="button"
                             onClick={() => void deleteConversation(c.id)}
-                            className="shrink-0 rounded-full p-2 text-ink-muted opacity-0 transition-opacity hover:bg-errorContainer hover:text-error group-hover:opacity-100"
-                            aria-label="Delete conversation"
+                            className="shrink-0 rounded-full p-2 text-ink-muted opacity-0 transition-opacity hover:bg-errorContainer hover:text-error group-hover:opacity-100 focus-m3-soft"
+                            aria-label="Xóa cuộc trò chuyện"
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>

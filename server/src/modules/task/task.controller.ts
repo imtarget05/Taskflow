@@ -28,6 +28,12 @@ const updateSchema = z.object({
 const idParam = z.object({ projectId: z.string().min(1), taskId: z.string().min(1) });
 const projectParam = z.object({ projectId: z.string().min(1) });
 
+export const listMyTasks = asyncHandler(async (req: Request, res: Response) => {
+  const assigneeId = req.query.assigneeId === 'me' ? req.user!.id : undefined;
+  const tasks = await taskService.listMyTasks(req.user!.id, assigneeId);
+  res.status(StatusCodes.OK).json({ success: true, data: tasks });
+});
+
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const params = projectParam.safeParse(req.params);
   const body = createSchema.safeParse(req.body);

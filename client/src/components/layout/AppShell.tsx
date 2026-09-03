@@ -118,7 +118,7 @@ export default function AppShell({ children }: AppShellProps) {
         <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-outlineVariant bg-surfaceContainer px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button
-              className="rounded-full p-2 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+              className="rounded-full p-2 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-m3 lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
               aria-expanded={mobileOpen}
@@ -127,7 +127,7 @@ export default function AppShell({ children }: AppShellProps) {
             </button>
             <button
               onClick={() => setSearchOpen(true)}
-              className="hidden items-center gap-2 rounded-full border border-outlineVariant bg-surfaceContainerHigh px-4 py-2 text-sm text-ink-muted shadow-elevation1 transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex"
+              className="hidden items-center gap-2 rounded-full border border-outlineVariant bg-surfaceContainerHigh px-4 py-2 text-sm text-ink-muted shadow-elevation1 transition-colors hover:bg-surfaceContainerHighest hover:text-ink focus-m3 sm:flex"
               aria-label="Search tasks and projects (Cmd+K)"
             >
               <Search className="h-5 w-5" aria-hidden="true" />
@@ -137,7 +137,7 @@ export default function AppShell({ children }: AppShellProps) {
               </kbd>
             </button>
             <button
-              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink sm:hidden"
+              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink focus-m3 sm:hidden"
               onClick={() => setSearchOpen(true)}
               aria-label="Search tasks and projects"
             >
@@ -147,7 +147,7 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
-              className={`relative rounded-full p-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              className={`relative rounded-full p-2.5 transition-colors focus-m3 ${
                 agentOpen
                   ? 'bg-primaryContainer text-onPrimaryContainer shadow-elevation1'
                   : 'text-ink-muted hover:bg-surfaceContainerHigh hover:text-ink'
@@ -160,7 +160,7 @@ export default function AppShell({ children }: AppShellProps) {
               <Bot className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
-              className="rounded-full p-2.5 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="rounded-full p-2.5 text-ink-muted transition-colors hover:bg-surfaceContainerHigh hover:text-ink focus-m3"
               onClick={() => setTheme(nextTheme)}
               aria-label={`Switch theme (current: ${theme})`}
             >

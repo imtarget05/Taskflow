@@ -50,33 +50,25 @@
     --elevation-2: 0 2px 6px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.04);
     --elevation-3: 0 4px 12px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.06);
 
-    /* Surfaces (legacy aliases — map to M3 for migration) */
+    /* Surfaces (mapped to M3 tokens) */
     --bg: 248 250 252;
     --surface: 255 255 255;
     --surface-muted: 241 245 249;
     --surface-elevated: 255 255 255;
-
-    /* Legacy surface aliases */
     --surface-2: 241 245 249;
     --surface-3: 226 232 240;
 
-    /* Text */
+    /* Text (mapped to M3 tokens) */
     --ink: 15 23 42;           /* slate-900 */
     --ink-secondary: 71 85 105; /* slate-600 */
     --ink-muted: 148 163 184;   /* slate-400 */
 
-    /* Borders */
+    /* Borders (mapped to M3 tokens) */
     --border-subtle: 226 232 240;
     --line: 203 213 225;       /* slate-300 */
     --border-strong: 148 163 184;
 
-    /* Accent */
-    --accent: 99 102 241;       /* indigo-500 */
-    --accent-hover: 79 70 229;  /* indigo-600 */
-    --accent-soft: 238 242 255; /* indigo-50 */
-    --accent-ink: 67 56 202;    /* indigo-700 */
-
-    /* Status */
+    /* Status colors (mapped to M3 tokens) */
     --success: 34 197 94;       /* green-500 */
     --success-soft: 240 253 244;
     --warning: 245 158 11;      /* amber-500 */
@@ -115,7 +107,7 @@
     --sys-inverse-on-surface: 15 23 42;
     --sys-scrim: 0 0 0;
 
-    /* Surfaces (legacy) */
+    /* Surfaces (mapped to M3 tokens) */
     --bg: 15 23 42;
     --surface: 30 41 59;
     --surface-muted: 51 65 85;
@@ -123,23 +115,17 @@
     --surface-2: 51 65 85;
     --surface-3: 67 77 92;
 
-    /* Text */
+    /* Text (mapped to M3 tokens) */
     --ink: 241 245 249;          /* slate-100 */
     --ink-secondary: 148 163 184; /* slate-400 */
     --ink-muted: 100 116 139;     /* slate-500 */
 
-    /* Borders */
+    /* Borders (mapped to M3 tokens) */
     --border-subtle: 51 65 85;
     --line: 71 85 105;
     --border-strong: 100 116 139;
 
-    /* Accent */
-    --accent: 129 140 248;        /* indigo-400 */
-    --accent-hover: 165 180 252;
-    --accent-soft: 30 27 75;
-    --accent-ink: 199 210 254;    /* indigo-200 */
-
-    /* Status */
+    /* Status colors (mapped to M3 tokens) */
     --success: 74 222 128;        /* green-400 */
     --success-soft: 20 83 45;
     --warning: 251 191 36;       /* amber-400 */
@@ -159,13 +145,25 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-surface;
+    @apply outline-none;
   }
 
-  /* M3 focus indicator alternative (3px outline) */
+  /* M3 focus: 3px outline in secondary color, subtle offset */
   .focus-m3:focus-visible {
     outline: 3px solid rgb(var(--sys-secondary));
     outline-offset: 2px;
+  }
+
+  /* For interactive surfaces (cards, buttons) — softer */
+  .focus-m3-soft:focus-visible {
+    outline: 2px solid rgb(var(--sys-outline));
+    outline-offset: 1px;
+  }
+
+  /* For input fields — M3 spec: 2px primary on focus-within */
+  .field-focus:focus-within {
+    border-color: rgb(var(--sys-primary));
+    box-shadow: 0 0 0 2px rgb(var(--sys-primary) / 0.2);
   }
 }
 
