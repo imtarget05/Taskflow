@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/ui/Toast';
-import { AuthProvider } from '@/store/auth';
 import ChatBox from '@/components/agent/ChatBox';
 
 const mockSend = vi.fn();
