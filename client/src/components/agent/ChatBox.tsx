@@ -194,7 +194,7 @@ export default function ChatBox() {
           <div
             ref={scrollRef}
             onScroll={handleMessagesScroll}
-            className="min-h-[260px] flex-1 space-y-3 overflow-y-auto overscroll-contain bg-surfaceContainer px-4 py-4"
+            className="min-h-[260px] flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain bg-surfaceContainer px-4 py-4"
           >
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-4 px-2 py-6 text-center">
@@ -231,9 +231,9 @@ export default function ChatBox() {
                       <Bot className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
                   )}
-                  <div className={`max-w-[82%] ${m.role === 'user' ? 'items-end' : ''}`}>
+                  <div className={`max-w-[82%] min-w-0 ${m.role === 'user' ? 'items-end' : ''}`}>
                     <div
-                      className={`whitespace-pre-wrap px-3.5 py-2.5 text-sm leading-relaxed shadow-elevation1 ${
+                      className={`whitespace-pre-wrap break-words overflow-hidden px-3.5 py-2.5 text-sm leading-relaxed shadow-elevation1 ${
                         m.role === 'user'
                           ? 'rounded-[16px_4px_16px_16px] bg-primary text-onPrimary'
                           : 'rounded-[4px_16px_16px_16px] border border-outlineVariant bg-surfaceContainerHighest text-ink'
@@ -241,7 +241,7 @@ export default function ChatBox() {
                     >
                       {m.attachment && (
                         <span
-                          className={`mb-2 flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium ${
+                          className={`mb-2 flex min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium ${
                             m.role === 'user'
                               ? 'bg-white/15 text-white'
                               : 'bg-surfaceContainer text-ink-secondary'

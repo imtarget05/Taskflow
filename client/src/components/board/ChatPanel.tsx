@@ -64,7 +64,7 @@ export default function ChatPanel({ projectId, name, members, currentUser, role,
         </button>
       </header>
 
-      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-3">
         {isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-12 w-3/4" />
@@ -96,7 +96,7 @@ export default function ChatPanel({ projectId, name, members, currentUser, role,
             return (
               <div key={m.id} className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
                 {!mine && <Avatar name={m.sender.name} size="sm" className="mt-0.5 shrink-0" />}
-                <div className={`max-w-[80%] ${mine ? 'items-end' : ''}`}>
+                <div className={`max-w-[80%] min-w-0 ${mine ? 'items-end' : ''}`}>
                   <div
                     className={`rounded-2xl px-3 py-2 text-sm ${
                       mine
