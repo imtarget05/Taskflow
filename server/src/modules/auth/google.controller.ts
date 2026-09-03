@@ -121,7 +121,7 @@ export const googleCallback = asyncHandler(async (req: Request, res: Response) =
     const redirectUri = googleService.clientRedirectUri(req);
     const result = await googleService.authenticateWithGoogle(code, redirectUri);
     setAuthCookies(res, result.accessToken, result.refreshToken);
-    res.redirect(`${origin}/?google=signed_in`);
+    res.redirect(`${origin}/dashboard`);
   } catch (err) {
     if (err instanceof AppError && err.statusCode === StatusCodes.CONFLICT) {
       return redirectWithError(res, 'This email is already registered with a password. Sign in with that account instead.', origin);
