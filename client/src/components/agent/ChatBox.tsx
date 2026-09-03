@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Bot, FileUp, History, Paperclip, Plus, Send, Trash2, X, Zap } from 'lucide-react';
+import { Bot, FileUp, History, Paperclip, Plus, Send, Trash2, X } from 'lucide-react';
 import { useAgent } from '@/store/agent';
 import { Button } from '@/components/ui';
 import { timeAgo } from '@/lib/time';
@@ -26,7 +26,6 @@ export default function ChatBox() {
     isUploading,
     send,
     upload,
-    routeRequest,
     clear,
     canUseAgent,
     conversations,
@@ -38,8 +37,6 @@ export default function ChatBox() {
     deleteConversation,
   } = useAgent();
   const [draft, setDraft] = useState('');
-  const [smartRoute, setSmartRoute] = useState(false);
-  const [routeResult, setRouteResult] = useState<{ agent: string; reason: string; data?: unknown } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll while the user is already at/near the bottom — scrolling
   // up to re-read history must never be yanked back down.
@@ -72,12 +69,6 @@ export default function ChatBox() {
     const body = draft.trim();
     if (!body || isTyping) return;
     setDraft('');
-    if (smartRoute) {
-      setRouteResult(null);
-      const result = await routeRequest(body);
-      setRouteResult(result);
-      return;
-    }
     await send(body);
   }
 
@@ -156,16 +147,6 @@ export default function ChatBox() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:bg-surfaceContainerHighest" title="Điều hướng câu hỏi đến đúng agent (SC Agentic / ML Agent / Chat)">
-                  <input
-                    type="checkbox"
-                    checked={smartRoute}
-                    onChange={(e) => setSmartRoute(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-outlineVariant accent-primary"
-                    aria-label="Smart Route"
-                  />
-                  Smart Route
-                </label>
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(true)}
@@ -313,34 +294,6 @@ export default function ChatBox() {
             )}
           </div>
 
-          {/* Smart Route result banner */}
-          {routeResult && (
-            <div className="shrink-0 border-t border-outlineVariant bg-accent-soft px-4 py-2.5">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-accent-ink">Smart Route</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-ink">
-                    <span className="font-medium">{routeResult.agent}</span>
-                    <span className="text-ink-secondary"> — {routeResult.reason}</span>
-                  </p>
-                  {routeResult.data != null && (
-                    <pre className="mt-1 max-h-24 overflow-auto rounded bg-surfaceContainerLow p-2 text-[10px] leading-relaxed text-ink-secondary">
-                      {typeof routeResult.data === 'string' ? routeResult.data : JSON.stringify(routeResult.data, null, 2)}
-                    </pre>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRouteResult(null)}
-                  className="rounded-full p-1 text-ink-muted hover:bg-surfaceContainerHighest hover:text-ink focus-m3-soft"
-                  aria-label="Đóng kết quả"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Input — M3 pill field */}
           <form onSubmit={handleSubmit} className="shrink-0 border-t border-outlineVariant bg-surfaceContainerHigh p-3">
             <div className="flex items-end gap-2 rounded-xl border border-outlineVariant bg-surfaceContainerHighest px-2 py-2 shadow-elevation1 field-focus">
@@ -385,16 +338,13 @@ export default function ChatBox() {
                 variant="primary"
                 className="h-9 w-9 shrink-0 rounded-full p-0"
                 disabled={isTyping || isUploading || !draft.trim()}
-                aria-label={smartRoute ? "Điều hướng câu hỏi" : "Gửi tin nhắn"}
-                title={smartRoute ? "Điều hướng đến agent phù hợp" : "Gửi tin nhắn"}
+                aria-label="Gửi tin nhắn"
               >
-                {smartRoute ? <Zap className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                <Send className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
             <p className="mt-2 text-center text-[10px] text-ink-muted">
-              {smartRoute
-                ? "Smart Route: câu hỏi sẽ được điều hướng đến SC Agentic, ML Agent, hoặc Chat"
-                : "Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB"}
+              Kéo-thả file vào cửa sổ để đính kèm · tối đa 5 MB
             </p>
           </form>
 
