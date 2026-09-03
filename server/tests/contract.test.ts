@@ -15,6 +15,7 @@ jest.mock('../src/lib/prisma', () => ({
     order: { findUnique: jest.fn(), findFirst: jest.fn() },
     agenticDecision: { create: jest.fn() },
     task: { findMany: jest.fn(), findUnique: jest.fn() },
+    aIUsage: { groupBy: jest.fn() },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(1),
   },
@@ -88,5 +89,46 @@ describe('Contract: /api/rag/search', () => {
     const r = await request(app).get('/api/rag/search').set('Authorization', authHeader());
     expect(r.status).toBe(400);
     expect(r.body.success).toBe(false);
+  });
+});
+
+describe('Contract: /api/analytics/llm-cost (cost dashboard)', () => {
+  it('GET thiếu auth trả 401 (authenticate bắt buộc)', async () => {
+    const app = createApp();
+    const r = await request(app).get('/api/analytics/llm-cost');
+    expect(r.status).toBe(401);
+    expect(r.body.success).toBe(false);
+  });
+
+  it('GET ?days=0 trả 400 (validationError shape, không đụng DB)', async () => {
+    const app = createApp();
+    const r = await request(app)
+      .get('/api/analytics/llm-cost?days=0')
+      .set('Authorization', authHeader());
+    expect(r.status).toBe(400);
+    expect(r.body.success).toBe(false);
+  });
+
+  it('GET hợp lệ trả shape { success, data: { currency, days, scope, totalCostUsd, byModel[] } }', async () => {
+    (prisma.aIUsage as unknown as { groupBy: jest.Mock }).groupBy = jest
+      .fn()
+      .mockResolvedValue([
+        {
+          model: 'gpt-4o',
+          _sum: { inputTokens: 100, outputTokens: 50, inputCostUsd: 0.1, outputCostUsd: 0.2, totalCostUsd: 0.3 },
+          _count: { _all: 1 },
+        },
+      ]);
+    const app = createApp();
+    const r = await request(app)
+      .get('/api/analytics/llm-cost?days=7')
+      .set('Authorization', authHeader());
+    expect(r.status).toBe(200);
+    expect(r.body.success).toBe(true);
+    expect(r.body.data.currency).toBe('USD');
+    expect(r.body.data.days).toBe(7);
+    expect(r.body.data.scope).toBe('user');
+    expect(r.body.data.totalCostUsd).toBe(0.3);
+    expect(Array.isArray(r.body.data.byModel)).toBe(true);
   });
 });
