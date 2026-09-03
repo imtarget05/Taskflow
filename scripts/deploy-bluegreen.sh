@@ -63,7 +63,7 @@ fi
 
 # 3. Trigger a deployment (always attempt — handle duplicate-deploy 400).
 DEPLOY_ID=""
-if DEPLOY_RESP="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache": "do_not"}' 2>&1)"; then
+if DEPLOY_RESP="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache": "do_not_clear"}' 2>&1)"; then
   DEPLOY_ID="$(echo "$DEPLOY_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\(dep-[^"]*\)".*/\1/p' | head -1)"
 else
   POST_ERR="$DEPLOY_RESP"
