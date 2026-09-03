@@ -8,6 +8,15 @@ import { verifyAccessToken } from '../utils/token';
  * Socket.io server wrapper. Exposes the io instance for use in
  * route handlers to emit realtime events (board updates, activities, etc).
  */
+
+/**
+ * Socket endpoint nằm dưới /api để đi cùng proxy với REST API:
+ *  - Production: Pages Function proxy (same-origin) → cookie access_token
+ *    được gửi kèm handshake, không bị third-party cookie chặn.
+ *  - Dev: Vite proxy /api → localhost:4000.
+ */
+export const SOCKET_PATH = '/api/socket.io';
+
 let io: Server | null = null;
 
 export const SOCKET_EVENTS = {
@@ -29,6 +38,7 @@ export const SOCKET_EVENTS = {
 
 export function initSocket(server: HTTPServer): Server {
   io = new Server(server, {
+    path: SOCKET_PATH,
     cors: {
       origin: env.CORS_ORIGINS,
       methods: ['GET', 'POST'],

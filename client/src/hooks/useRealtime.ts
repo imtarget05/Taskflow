@@ -31,12 +31,21 @@ export function useRealtime(projectId: string | undefined): RealtimeStatus {
   useEffect(() => {
     if (!projectId) return;
 
+    // Socket đi qua CÙNG origin với app (path /api/socket.io → Pages Function
+    // proxy → backend) để cookie access_token được gửi kèm handshake. VITE_SOCKET_URL
+    // chỉ dùng khi muốn override (vd: docker compose trỏ tới server container).
     const socket = io(import.meta.env.VITE_SOCKET_URL || window.location.origin, {
       withCredentials: true,
-      // Long-polling through the same-origin Pages proxy: WebSocket relays are
-      // not available on the proxy, but events flush immediately on the
-      // pending poll, so realtime latency is unchanged.
+      path: '/api/socket.io',
+      // Long-polling qua proxy: WebSocket relay không khả dụng trên Pages
+      // Function, nhưng event vẫn flush ngay trên poll đang chờ.
       transports: ['polling'],
+      // Không reconnect vô hạn khi backend xoay instance (Render free spin-down)
+      // — ngắt sau một lần thử lại để UI hiện trạng thái offline thay vì
+      // "Reconnecting..." mãi mãi.
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 5,
     });
     socketRef.current = socket;
     const joinBoard = () => socket.emit('board:join', { projectId });
