@@ -93,6 +93,13 @@ jobs:
         working-directory: client
         run: npm run test:coverage
 
+      - name: OpenAPI drift check
+        run: npm run openapi:check -w server
+
+      - name: Agent eval gate (toolRecall ≥90%)
+        working-directory: server
+        run: npm run eval:agent && npm run eval:report
+
       - name: Build
         run: npm run build
 

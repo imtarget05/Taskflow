@@ -1,0 +1,430 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TaskFlow API",
+    "version": "1.0.0",
+    "description": "TaskFlow — Kanban + Supply Chain + Agent. Auto-generated from Zod schemas."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "local"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "access_token"
+      }
+    },
+    "schemas": {
+      "RouteSuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "routed": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "enum": [
+                      "chat",
+                      "sc_agentic",
+                      "ml_agent"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "agent",
+                  "reason"
+                ]
+              },
+              "result": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "agent",
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "routed",
+              "result"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "RouteRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "example": "đơn hàng cần phê duyệt"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true,
+            "format": "cuid",
+            "example": "cuid..."
+          },
+          "agent": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "sc_agentic",
+              "ml_agent"
+            ],
+            "example": "chat"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "MetricsPrometheusText": {
+        "type": "string"
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/api/agent/route": {
+      "post": {
+        "summary": "Smart Route — phân loại và thực thi agent",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Routed + executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "summary": "Preview route without execution",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "example": "reorder point 500"
+            },
+            "required": true,
+            "name": "text",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Route preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "agent": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "agent",
+                        "reason"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Prometheus metrics (auth required)",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prometheus text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsPrometheusText"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/rag/search": {
+      "get": {
+        "summary": "RAG hybrid search",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "example": "thanh toán"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "cuid",
+              "example": "cuid..."
+            },
+            "required": false,
+            "name": "projectId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "example": 5
+            },
+            "required": false,
+            "name": "topK",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "query": {
+                          "type": "string"
+                        },
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "sourceType": {
+                                "type": "string"
+                              },
+                              "sourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "content": {
+                                "type": "string"
+                              },
+                              "score": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "sourceType",
+                              "sourceId",
+                              "title",
+                              "content",
+                              "score"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "query",
+                        "results"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rag/index/{projectId}": {
+      "post": {
+        "summary": "Index project tasks into RAG (requires MEMBER)",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "cuid"
+            },
+            "required": true,
+            "name": "projectId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "indexed count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "projectId": {
+                          "type": "string"
+                        },
+                        "indexed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "projectId",
+                        "indexed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (VIEWER)"
+          }
+        }
+      }
+    }
+  }
+}

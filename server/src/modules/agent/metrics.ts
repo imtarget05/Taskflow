@@ -43,12 +43,27 @@ export function getGauge(name: string, labels: Record<string, string>): number {
   return bucket.get(JSON.stringify(labels)) ?? 0;
 }
 
+const METRIC_HELP: Record<string, string> = {
+  tf_llm_calls_total: 'Total LLM calls by model and status',
+  tf_llm_latency_ms_sum: 'Sum of LLM latency ms by model',
+  tf_llm_latency_ms_count: 'Count of LLM latency measurements by model',
+  tf_llm_tokens_total: 'Total LLM tokens by model and type (prompt/completion)',
+  tf_llm_cost_usd_total: 'Total LLM cost in USD by model',
+  tf_tool_calls_total: 'Total tool calls by tool name',
+  tf_agentic_decisions_total: 'Total agentic decisions by type',
+  tf_errors_total: 'Total errors by type',
+};
+
+function helpFor(name: string): string {
+  return METRIC_HELP[name] ?? name;
+}
+
 export function getMetrics(): string {
   const lines: string[] = [];
 
   for (const [name, bucket] of COUNTERS) {
-    const typeInfo = name.startsWith('tf_') ? 'counter' : 'counter';
-    lines.push(`# TYPE ${name} ${typeInfo}`);
+    lines.push(`# HELP ${name} ${helpFor(name)}`);
+    lines.push(`# TYPE ${name} counter`);
     for (const [key, val] of bucket) {
       const labels = JSON.parse(key);
       const labelStr = Object.entries(labels)
@@ -59,6 +74,7 @@ export function getMetrics(): string {
   }
 
   for (const [name, bucket] of GAUGES) {
+    lines.push(`# HELP ${name} ${helpFor(name)}`);
     lines.push(`# TYPE ${name} gauge`);
     for (const [key, val] of bucket) {
       const labels = JSON.parse(key);
@@ -98,6 +114,10 @@ export function recordAgenticDecision(decisionType: string): void {
 
 export function recordError(errorType: string): void {
   incrementCounter('tf_errors_total', { type: errorType });
+}
+
+export function recordCost(model: string, costUsd: number): void {
+  incrementCounter('tf_llm_cost_usd_total', { model }, costUsd);
 }
 
 export function getLLMAverageLatency(model: string): number {

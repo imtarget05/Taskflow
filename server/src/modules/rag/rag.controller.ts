@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { indexProject, retrieve, assertProjectAccess } from './rag.service';
-import { AppError } from '../../utils/errors';
+import { AppError, validationError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
+import { indexProjectParamsSchema, searchQuerySchema } from './rag.schema';
 
 export async function indexProjectHandler(
   req: Request, res: Response, next: NextFunction
@@ -9,8 +10,10 @@ export async function indexProjectHandler(
   try {
     const userId = (req as unknown as { user?: { id?: string } }).user?.id;
     if (!userId) throw new AppError('Chưa xác thực', StatusCodes.UNAUTHORIZED);
-    const projectId = String(req.params.projectId);
-    await assertProjectAccess(userId, projectId);
+    const parsed = indexProjectParamsSchema.safeParse(req.params);
+    if (!parsed.success) throw validationError(parsed.error);
+    const { projectId } = parsed.data;
+    await assertProjectAccess(userId, projectId, 'MEMBER');
     const indexed = await indexProject(projectId);
     res.json({ success: true, data: { projectId, indexed } });
   } catch (err) {
@@ -24,12 +27,11 @@ export async function searchHandler(
   try {
     const userId = (req as unknown as { user?: { id?: string } }).user?.id;
     if (!userId) throw new AppError('Chưa xác thực', StatusCodes.UNAUTHORIZED);
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-    if (!q) throw new AppError('Thiếu tham số q', StatusCodes.BAD_REQUEST);
-    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
-    const topK = req.query.topK ? parseInt(String(req.query.topK), 10) : undefined;
-    const results = await retrieve(userId, q, { projectId, topK });
-    res.json({ success: true, data: { query: q, results } });
+    const parsed = searchQuerySchema.safeParse(req.query);
+    if (!parsed.success) throw validationError(parsed.error);
+    const { q, projectId, topK } = parsed.data;
+    const results = await retrieve(userId, q.trim(), { projectId, topK });
+    res.json({ success: true, data: { query: q.trim(), results } });
   } catch (err) {
     next(err);
   }

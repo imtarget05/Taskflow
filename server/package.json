@@ -23,14 +23,18 @@
     "legal:index": "tsx scripts/index-legal.ts",
     "db:up": "docker-compose up -d db",
     "eval:report": "jest --config jest.config.js --runInBand tests/eval/accuracy-report.test.ts",
-    "eval:benchmark": "npx ts-node tests/eval/benchmark-report.ts"
+    "eval:benchmark": "npx ts-node tests/eval/benchmark-report.ts",
+    "openapi": "tsx scripts/generate-openapi.ts",
+    "openapi:check": "tsx scripts/generate-openapi.ts && git diff --exit-code openapi.json openapi.yaml"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@langchain/core": "^1.2.9",
     "@langchain/langgraph": "^1.4.12",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.81.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -39,6 +43,7 @@
     "googleapis": "^176.0.0",
     "helmet": "^8.0.0",
     "http-status-codes": "^2.3.0",
+    "ioredis": "^5.11.1",
     "js-tiktoken": "^1.0.21",
     "jsonwebtoken": "^9.0.2",
     "langfuse": "^3.38.20",
@@ -48,7 +53,9 @@
     "pino-http": "^10.5.0",
     "prisma": "^5.22.0",
     "socket.io": "^4.8.1",
+    "swagger-ui-express": "^5.0.1",
     "unpdf": "^1.8.1",
+    "yaml": "^2.9.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -62,6 +69,7 @@
     "@types/node": "^22.10.2",
     "@types/nodemailer": "^8.0.1",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "eslint": "^8.57.1",

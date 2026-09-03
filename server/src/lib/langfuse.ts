@@ -19,7 +19,8 @@ export function initLangfuse(): Langfuse | null {
   if (!publicKey || !secretKey) return null;
 
   try {
-    lf = new Langfuse({ publicKey, secretKey });
+    const baseUrl = process.env.LANGFUSE_BASEURL || undefined;
+    lf = new Langfuse({ publicKey, secretKey, baseUrl });
     return lf;
   } catch {
     return null;

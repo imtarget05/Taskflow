@@ -71,6 +71,8 @@ export async function createTask(actorId: string, data: CreateTaskData) {
   await prisma.activity.update({ where: { id: before.id }, data: { taskId: task.id } });
 
   emitToProject(data.projectId, SOCKET_EVENTS.TASK_CREATED, task);
+  // Tier2: enqueue via BullMQ when Redis available, else Tier1 inline fallback
+  void import('../rag/rag.queue').then((m) => m.enqueueTaskUpsert(task.id, data.projectId)).catch(() => {});
   return task;
 }
 
@@ -119,6 +121,7 @@ export async function updateTask(
   await createActivity(projectId, actorId, taskId, 'TASK_UPDATED', { title: task.title });
 
   emitToProject(projectId, SOCKET_EVENTS.TASK_UPDATED, task);
+  void import('../rag/rag.queue').then((m) => m.enqueueTaskUpsert(task.id, projectId)).catch(() => {});
   return task;
 }
 
@@ -133,6 +136,7 @@ export async function deleteTask(actorId: string, projectId: string, taskId: str
   await prisma.task.delete({ where: { id: taskId } });
 
   emitToProject(projectId, SOCKET_EVENTS.TASK_DELETED, { id: taskId });
+  void import('../rag/rag.queue').then((m) => m.enqueueTaskDelete(taskId)).catch(() => {});
   return { id: taskId };
 }
 

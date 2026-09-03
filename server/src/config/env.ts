@@ -70,6 +70,8 @@ const envSchema = z.object({
   N8N_API_KEY: z.string().optional(),
   N8N_SIGNING_SECRET: z.string().optional(),
   INTEGRATIONS_ENCRYPTION_KEY: z.string().optional(),
+  // Redis / BullMQ for Tier2 RAG queue (optional — Tier1 cron works without it)
+  REDIS_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -150,6 +152,7 @@ export const env = {
   N8N_API_KEY: parsed.success ? parsed.data.N8N_API_KEY : undefined,
   N8N_SIGNING_SECRET: parsed.success ? parsed.data.N8N_SIGNING_SECRET : undefined,
   INTEGRATIONS_ENCRYPTION_KEY: parsed.success ? parsed.data.INTEGRATIONS_ENCRYPTION_KEY : undefined,
+  REDIS_URL: parsed.success ? parsed.data.REDIS_URL : undefined,
 };
 
 export function isEmailConfigured(): boolean {

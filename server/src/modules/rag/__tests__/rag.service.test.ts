@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { embed, isLLMConfigured } from '../../agent/llm';
+import { embed, embedBatched, isLLMConfigured } from '../../agent/llm';
 import {
   chunkProjectTasks,
   retrieve,
@@ -20,6 +20,7 @@ jest.mock('../../../lib/prisma', () => ({
 
 jest.mock('../../agent/llm', () => ({
   embed: jest.fn(),
+  embedBatched: jest.fn(),
   isLLMConfigured: jest.fn(),
 }));
 
@@ -32,6 +33,7 @@ const mockedPrisma = prisma as unknown as {
   ragChunk: { count: jest.Mock; deleteMany: jest.Mock };
 };
 const mockedEmbed = embed as jest.Mock;
+const mockedEmbedBatched = embedBatched as jest.Mock;
 const mockedIsConfigured = isLLMConfigured as jest.Mock;
 
 const TASKS = [
@@ -64,6 +66,7 @@ describe('rag.service — Recommendation RAG', () => {
     jest.clearAllMocks();
     mockedIsConfigured.mockReturnValue(true);
     mockedEmbed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+    mockedEmbedBatched.mockResolvedValue([[0.1, 0.2, 0.3]]);
   });
 
   describe('chunkProjectTasks', () => {
@@ -91,7 +94,7 @@ describe('rag.service — Recommendation RAG', () => {
     it('embed + upsert từng chunk vào rag_chunks', async () => {
       mockedPrisma.task.findMany.mockResolvedValue(TASKS);
       (mockedPrisma.$executeRaw as jest.Mock).mockResolvedValue(1);
-      mockedEmbed.mockResolvedValue([
+      mockedEmbedBatched.mockResolvedValue([
         [0.1, 0.2, 0.3],
         [0.4, 0.5, 0.6],
       ]);
@@ -100,7 +103,7 @@ describe('rag.service — Recommendation RAG', () => {
       const indexed = await svc.indexProject('p1');
 
       expect(indexed).toBe(2);
-      expect(mockedEmbed).toHaveBeenCalled();
+      expect(mockedEmbedBatched).toHaveBeenCalled();
       expect(mockedPrisma.$executeRaw).toHaveBeenCalledTimes(2);
     });
 
@@ -108,7 +111,7 @@ describe('rag.service — Recommendation RAG', () => {
       mockedPrisma.task.findMany.mockResolvedValue([]);
       const svc = (await import('../rag.service')) as typeof import('../rag.service');
       expect(await svc.indexProject('p1')).toBe(0);
-      expect(mockedEmbed).not.toHaveBeenCalled();
+      expect(mockedEmbedBatched).not.toHaveBeenCalled();
     });
   });
 

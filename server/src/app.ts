@@ -21,6 +21,8 @@ import analyticsRoutes from './modules/analytics/analytics.routes';
 import { recent as activityRecentHandler } from './modules/activity/activity.controller.recent';
 import agentRoutes from './modules/agent/agent.routes';
 import memoryRoutes from './modules/agent/memory.routes';
+import supervisorRoutes from './modules/agent/supervisor.routes';
+import metricsRoutes from './modules/agent/metrics.routes';
 import exportRoutes from './modules/export/export.routes';
 import nlpRoutes from './modules/nlp/nlp.routes';
 import supplychainRoutes from './modules/supplychain/supplychain.routes';
@@ -33,6 +35,7 @@ import evaluationRoutes from './modules/evaluation/evaluation.routes';
 import modelRoutes from './modules/model/model.routes';
 import mlopsRoutes from './modules/mlops/mlops.routes';
 import ragRoutes from './modules/rag/rag.routes';
+import docsRoutes from './modules/docs/docs.routes';
 import { healthRouter } from './modules/health/health.controller';
 import { initLangfuse } from './lib/langfuse';
 
@@ -80,7 +83,8 @@ export function createApp(): Express {
   app.use(csrfProtection);
   app.use(pinoHttp({ redact: ['req.headers.authorization', 'req.headers.cookie'] }));
 
-  // Public health probe (no auth, no rate limit) + best-effort Langfuse init.
+  // Public docs + health (no auth) — OpenAPI must be inspectable
+  app.use('/api/docs', docsRoutes);
   app.use('/api/health', healthRouter);
   initLangfuse();
 
@@ -109,6 +113,9 @@ export function createApp(): Express {
   app.get('/api/activities', authenticate, activityRecentHandler);
   app.use('/api/agent', agentRoutes);
   app.use('/api/agent', memoryRoutes);
+  app.use('/api/agent', supervisorRoutes);
+  // Metrics: auth-required (reuse authenticate), same security model as supervisor
+  app.use('/api', metricsRoutes);
   app.use('/api/nlp', nlpRoutes);
   app.use('/api/sc', supplychainRoutes);
   app.use('/api/sc/nlp', scNlpRoutes);

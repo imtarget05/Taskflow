@@ -1,0 +1,48 @@
+{
+  "title": "TaskFlow — API & Agent",
+  "tags": ["taskflow"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "LLM Calls (rate 5m)",
+      "targets": [{ "expr": "rate(tf_llm_calls_total[5m])" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM Avg Latency (ms)",
+      "targets": [{ "expr": "tf_llm_latency_ms_sum / tf_llm_latency_ms_count" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM Cost (USD, total)",
+      "targets": [{ "expr": "tf_llm_cost_usd_total" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM Cost (USD / day)",
+      "targets": [{ "expr": "increase(tf_llm_cost_usd_total[24h])" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tasks Today (create rate)",
+      "targets": [{ "expr": "increase(tf_tool_calls_total[24h])" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors (rate 5m)",
+      "targets": [{ "expr": "rate(tf_errors_total[5m])" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agentic Decisions",
+      "targets": [{ "expr": "increase(tf_agentic_decisions_total[5m])" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool Calls",
+      "targets": [{ "expr": "rate(tf_tool_calls_total[5m])" }]
+    }
+  ],
+  "schemaVersion": 38
+}

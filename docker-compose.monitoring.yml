@@ -1,0 +1,54 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: taskflow-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - taskflow_prom_data:/prometheus
+    ports:
+      - "9090:9090"
+    environment:
+      - METRICS_BEARER_TOKEN=${METRICS_BEARER_TOKEN:-dummy-for-local-dev}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache gettext >/dev/null 2>&1 || true
+        envsubst < /etc/prometheus/prometheus.yml > /tmp/prometheus.yml
+        exec prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: taskflow-grafana
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - taskflow_grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: taskflow-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - taskflow_alert_data:/alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+
+volumes:
+  taskflow_prom_data:
+  taskflow_grafana_data:
+  taskflow_alert_data:

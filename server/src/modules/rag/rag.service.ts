@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../utils/errors';
 import { StatusCodes } from 'http-status-codes';
-import { embed, isLLMConfigured } from '../agent/llm';
+import { embed, embedBatched, isLLMConfigured } from '../agent/llm';
 
 /**
  * Recommendation RAG — Retrieval-Augmented Generation cho Task Recommendation
@@ -83,6 +83,7 @@ export function chunkProjectTasks(tasks: TaskForChunk[]): RagChunkInput[] {
 /**
  * Index toàn bộ task của project vào rag_chunks (upsert theo
  * (sourceType, sourceId)). Trả về số chunk đã ghi.
+ * Dùng embedBatched để tránh payload quá lớn khi project nhiều task.
  */
 export async function indexProject(projectId: string): Promise<number> {
   const tasks = (await prisma.task.findMany({
@@ -99,7 +100,7 @@ export async function indexProject(projectId: string): Promise<number> {
     );
   }
 
-  const embeddings = await embed(chunks.map((c) => c.content));
+  const embeddings = await embedBatched(chunks.map((c) => c.content), { batchSize: 32, concurrency: 2 });
 
   let written = 0;
   for (let i = 0; i < chunks.length; i++) {
@@ -121,6 +122,48 @@ export async function indexProject(projectId: string): Promise<number> {
     written++;
   }
   return written;
+}
+
+/**
+ * Upsert một task lẻ — dùng cho hook create/update (Tier 1 incremental, không cần re-index toàn bộ).
+ * Best-effort: nếu LLM chưa cấu hình thì bỏ qua, không throw.
+ */
+export async function upsertTaskChunk(taskId: string): Promise<void> {
+  if (!isLLMConfigured()) return;
+  const task = (await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { assignments: { select: { userId: true } } },
+  })) as unknown as TaskForChunk | null;
+  if (!task) return;
+  const chunks = chunkProjectTasks([task]);
+  if (chunks.length === 0) return;
+  const c = chunks[0];
+  try {
+    const [vec] = await embed([c.content]);
+    if (!vec) return;
+    await prisma.$executeRaw`
+      INSERT INTO "rag_chunks" ("id", "sourceType", "sourceId", "projectId", "content", "title", "embedding", "metadata", "createdAt", "updatedAt")
+      VALUES (
+        gen_random_uuid(), ${c.sourceType}, ${c.sourceId}, ${c.projectId},
+        ${c.content}, ${c.title}, ${Prisma.raw(vectorLiteral(vec))},
+        ${c.metadata ? JSON.stringify(c.metadata) : null}::jsonb, NOW(), NOW()
+      )
+      ON CONFLICT ("sourceType", "sourceId")
+      DO UPDATE SET "content" = EXCLUDED."content", "title" = EXCLUDED."title",
+        "embedding" = EXCLUDED."embedding", "metadata" = EXCLUDED."metadata",
+        "updatedAt" = NOW()
+    `;
+  } catch {
+    // best-effort — không block task CRUD
+  }
+}
+
+export async function deleteTaskChunk(taskId: string): Promise<void> {
+  try {
+    await prisma.ragChunk.deleteMany({ where: { sourceType: 'task', sourceId: taskId } });
+  } catch {
+    // best-effort
+  }
 }
 
 /**
@@ -154,12 +197,17 @@ export function fuseRRF(
 }
 
 /** Kiểm tra user có quyền đọc project (member hoặc owner). */
-export async function assertProjectAccess(userId: string, projectId: string): Promise<void> {
+export async function assertProjectAccess(userId: string, projectId: string, minRole: 'VIEWER' | 'MEMBER' = 'VIEWER'): Promise<void> {
   const member = await prisma.projectMember.findFirst({
     where: { projectId, userId },
     select: { role: true },
   });
-  if (member) return;
+  if (member) {
+    if (minRole === 'MEMBER' && member.role === 'VIEWER') {
+      throw new AppError('Bạn không có quyền thực hiện hành động này (cần MEMBER)', StatusCodes.FORBIDDEN);
+    }
+    return;
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

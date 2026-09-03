@@ -1,0 +1,50 @@
+groups:
+  - name: taskflow.slo
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(tf_errors_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate (>0.5/s for 2m)"
+          description: "Error rate is {{ $value }} errors/s"
+
+      - alert: SupervisorCircuitOpen
+        expr: increase(tf_errors_total{type=~"supervisor_circuit_open_.*"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Supervisor circuit breaker OPEN"
+          description: "Supervisor route {{ $labels.type }} tripped circuit breaker"
+
+      - alert: LLMLatencyHigh
+        expr: tf_llm_latency_ms_sum / tf_llm_latency_ms_count > 2000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM p50 latency >2s for 5m"
+          description: "LLM latency high, check provider / fallback"
+
+      - alert: AgenticManualReviewSpike
+        expr: increase(tf_agentic_decisions_total{decision="manual_review"}[15m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Manual review spike (>20 in 15m)"
+          description: "Many agentic decisions require manual review — check classifier"
+
+  - name: taskflow.infra
+    interval: 30s
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} down"

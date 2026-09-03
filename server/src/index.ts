@@ -5,6 +5,9 @@ import { logger } from './lib/logger';
 import { closeSocket, initSocket } from './lib/socket';
 import { prisma } from './lib/prisma';
 import { flushTracer } from './modules/agent/tracer';
+import { startRagCron, stopRagCron } from './lib/rag-cron';
+import { startRagWorker, stopRagQueue } from './modules/rag/rag.queue';
+import { closeRedis } from './lib/redis';
 
 let httpServer: ReturnType<typeof http.createServer> | null = null;
 
@@ -24,6 +27,8 @@ async function bootstrap(): Promise<void> {
   server.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, 'TaskFlow server started');
   });
+  startRagWorker();
+  startRagCron();
 }
 
 async function gracefulShutdown(signal: string): Promise<void> {
@@ -32,6 +37,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   try {
     if (httpServer) await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
     await closeSocket();
+    stopRagCron();
+    await stopRagQueue();
+    await closeRedis();
     await prisma.$disconnect();
     // Flush any pending Langfuse traces (no-op when tracing is disabled).
     await flushTracer();

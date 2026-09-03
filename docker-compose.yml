@@ -17,6 +17,21 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: taskflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - taskflow_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
   server:
     build:
       context: .
@@ -26,6 +41,7 @@ services:
       PORT: 4000
       CLIENT_URL: http://localhost:5173
       DATABASE_URL: postgresql://taskflow:taskflow@db:5432/taskflow?schema=public
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET before starting the production stack}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET before starting the production stack}
       JWT_ACCESS_EXPIRES_IN: 15m
@@ -34,6 +50,8 @@ services:
       - "4000:4000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   client:
@@ -53,3 +71,4 @@ services:
 
 volumes:
   taskflow_pgdata:
+  taskflow_redisdata:
