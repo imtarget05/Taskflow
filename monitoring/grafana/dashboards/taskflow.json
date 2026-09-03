@@ -25,6 +25,17 @@
     },
     {
       "type": "timeseries",
+      "title": "LLM Cost per User (USD / 24h)",
+      "description": "Per-user attribution from the AIUsage ledger + tf_llm_cost_usd_total{user} label. Persistent totals: GET /api/analytics/llm-cost",
+      "targets": [{ "expr": "sum by (user) (increase(tf_llm_cost_usd_total[24h]))" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM Tokens per User (24h)",
+      "targets": [{ "expr": "sum by (user) (increase(tf_llm_tokens_total[24h]))" }]
+    },
+    {
+      "type": "timeseries",
       "title": "Tasks Today (create rate)",
       "targets": [{ "expr": "increase(tf_tool_calls_total[24h])" }]
     },

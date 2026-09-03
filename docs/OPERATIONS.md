@@ -23,7 +23,9 @@ Checklist xoay: 1) tạo secret mới 2) set env 3) deploy 4) verify `/api/healt
 ## 3. Grafana & Prometheus — cost & alert tuning
 
 - **Scrape auth:** `monitoring/prometheus.yml` job `taskflow-server` đã hỗ trợ `authorization: Bearer ${METRICS_BEARER_TOKEN}` qua `envsubst`. Khi bật `/api/metrics` auth, set `METRICS_BEARER_TOKEN` (Render env) và `docker compose` sẽ thay thế.
-- **Cost dashboard:** panel `LLM Cost (USD)` = `sum(tf_llm_cost_usd_total)` — reset khi restart (in-memory). Để persist, cần push sang Prometheus remote-write hoặc thay bằng `prom-client` persistent (backlog).
+- **Cost dashboard:** panel `LLM Cost (USD)` = `sum(tf_llm_cost_usd_total)` — reset khi restart (in-memory). **Persistent per-user/team:** endpoint `GET /api/analytics/llm-cost?days=30[&projectId=][&model=]` đọc từ bảng `ai_usage` (ghi mỗi lượt agent chat — `userId`/`projectId`/tokens/cost), không mất khi restart. Panel `LLM Cost per User (USD / 24h)` dùng label `user` trên `tf_llm_cost_usd_total`.
+- **Pricing:** bảng giá mặc định USD/1M tokens cho các model phổ biến trong `server/src/modules/agent/llm.ts` (`DEFAULT_LLM_PRICING`). Model local/Ollama không có giá → cost $0. Override qua env `LLM_PRICING_JSON` (JSON `{"<model>": {"inputUsdPer1M": x, "outputUsdPer1M": y}}`).
+- **Limitation:** luồng streaming (`/api/agent/chat/stream`) chưa ghi usage (provider không trả `usage` trong SSE chunk) — chỉ non-streaming path được tính. Provider không trả `usage` → hệ thống ước lượng tokens bằng tokenizer nội bộ để cost vẫn được ghi nhận.
 - **Alert tuning sau 1 tuần data thật:** điều chỉnh `HighErrorRate >0.5/s` và `LLMLatency >2s` nếu p50 thực tế cao hơn. Xem `monitoring/alerts.yml` — sửa `expr` rồi `docker compose -f docker-compose.monitoring.yml restart prometheus`.
 
 ## 4. Tier2 Redis

@@ -93,15 +93,34 @@ export function resetMetrics(): void {
   GAUGES.clear();
 }
 
-export function recordLLMCall(model: string, durationMs: number, status: number): void {
-  incrementCounter('tf_llm_calls_total', { model, status: String(status) });
-  incrementCounter('tf_llm_latency_ms_sum', { model }, durationMs);
-  incrementCounter('tf_llm_latency_ms_count', { model });
+/** Build Prometheus labels for an LLM metric, optionally attributing to a user. */
+function metricLabels(model: string, userId?: string): Record<string, string> {
+  const labels: Record<string, string> = { model };
+  if (userId) labels.user = userId;
+  return labels;
 }
 
-export function recordTokens(model: string, promptTokens: number, completionTokens: number): void {
-  incrementCounter('tf_llm_tokens_total', { model, type: 'prompt' }, promptTokens);
-  incrementCounter('tf_llm_tokens_total', { model, type: 'completion' }, completionTokens);
+export function recordLLMCall(
+  model: string,
+  durationMs: number,
+  status: number,
+  userId?: string
+): void {
+  const base = metricLabels(model, userId);
+  incrementCounter('tf_llm_calls_total', { ...base, status: String(status) });
+  incrementCounter('tf_llm_latency_ms_sum', base, durationMs);
+  incrementCounter('tf_llm_latency_ms_count', base);
+}
+
+export function recordTokens(
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+  userId?: string
+): void {
+  const base = metricLabels(model, userId);
+  incrementCounter('tf_llm_tokens_total', { ...base, type: 'prompt' }, promptTokens);
+  incrementCounter('tf_llm_tokens_total', { ...base, type: 'completion' }, completionTokens);
 }
 
 export function recordToolCall(toolName: string): void {
@@ -116,9 +135,10 @@ export function recordError(errorType: string): void {
   incrementCounter('tf_errors_total', { type: errorType });
 }
 
-export function recordCost(model: string, costUsd: number): void {
-  incrementCounter('tf_llm_cost_usd_total', { model }, costUsd);
+export function recordCost(model: string, costUsd: number, userId?: string): void {
+  incrementCounter('tf_llm_cost_usd_total', metricLabels(model, userId), costUsd);
 }
+
 
 export function getLLMAverageLatency(model: string): number {
   const sum = getCounter('tf_llm_latency_ms_sum', { model });

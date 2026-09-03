@@ -7,5 +7,6 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/overview', analyticsController.overview);
+router.get('/llm-cost', analyticsController.llmCost);
 
 export default router;

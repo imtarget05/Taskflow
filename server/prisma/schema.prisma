@@ -58,6 +58,7 @@ model User {
   availabilities       UserAvailability[]
   recommendations      TaskRecommendation[]
   memoryNodes          MemoryNode[]
+  usageLogs            AIUsage[]
 
   @@map("users")
 }
@@ -153,12 +154,22 @@ model AgentPlan {
 
 // Token usage ledger for the AI assistant (neuron-budget observability).
 model AIUsage {
-  id           String   @id @default(cuid())
-  model        String
-  inputTokens  Int
+  id          String   @id @default(cuid())
+  userId      String?  // nullable: non-user-attributed paths (embeddings, cron, ...)
+  projectId   String?  // nullable: cross-project / global LLM calls
+  model       String
+  inputTokens Int
   outputTokens Int
-  createdAt    DateTime @default(now())
+  inputCostUsd  Float @default(0)
+  outputCostUsd Float @default(0)
+  totalCostUsd  Float @default(0)
+  createdAt     DateTime @default(now())
 
+  user    User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
   @@index([createdAt])
   @@map("ai_usage")
 }
@@ -249,6 +260,7 @@ model Project {
   agenticDecisions AgenticDecision[]
   recommendations  TaskRecommendation[]
   ragChunks        RagChunk[]
+  usageLogs        AIUsage[]
 
   @@map("projects")
 }

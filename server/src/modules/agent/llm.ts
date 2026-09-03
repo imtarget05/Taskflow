@@ -66,6 +66,129 @@ export interface ChatCompletionWithToolsResult {
   content: string;
   /** Zero or more tool calls the model requested. */
   toolCalls: LLMToolCall[];
+  /**
+   * Token usage + computed cost for this call. Always present for the
+   * non-streaming path (falls back to estimates when the provider omits usage,
+   * e.g. Ollama/local models) so cost attribution never silently drops to 0.
+   */
+  usage?: LLMUsage;
+}
+
+/** Pricing snapshot for a model: USD charged per 1,000,000 tokens. */
+export interface LLMPricing {
+  inputUsdPer1M: number;
+  outputUsdPer1M: number;
+}
+
+/** Cost breakdown for a single LLM call. */
+export interface LLMCostBreakdown {
+  promptTokens: number;
+  completionTokens: number;
+  inputCostUsd: number;
+  outputCostUsd: number;
+  totalCostUsd: number;
+}
+
+/** Recorded token usage + cost attribution for one LLM call. */
+export interface LLMUsage {
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  cost: LLMCostBreakdown;
+}
+
+/**
+ * Default per-model pricing in USD per 1,000,000 tokens. Sourced from the
+ * public pricing pages of common providers (OpenAI, Google). Local/Ollama
+ * models are intentionally absent → unknown models score $0 unless an operator
+ * configures them via the `LLM_PRICING_JSON` env var (JSON of
+ * `{ "<model>": { inputUsdPer1M, outputUsdPer1M } }`).
+ */
+const DEFAULT_LLM_PRICING: Record<string, LLMPricing> = {
+  'gpt-4o': { inputUsdPer1M: 1.5, outputUsdPer1M: 3.0 },
+  'gpt-4o-mini': { inputUsdPer1M: 0.15, outputUsdPer1M: 0.6 },
+  'gpt-4-turbo': { inputUsdPer1M: 2.5, outputUsdPer1M: 7.5 },
+  'gpt-3.5-turbo': { inputUsdPer1M: 0.5, outputUsdPer1M: 1.5 },
+  'google/gemini-2.0-flash': { inputUsdPer1M: 0.075, outputUsdPer1M: 0.3 },
+  'google/gemini-2.0-flash-lite': { inputUsdPer1M: 0.015, outputUsdPer1M: 0.06 },
+  'google/gemini-1.5-pro': { inputUsdPer1M: 1.75, outputUsdPer1M: 7.0 },
+  '@cf/meta/llama-2-7b-chat-int8': { inputUsdPer1M: 0.15, outputUsdPer1M: 0.15 },
+  '@cf/meta/llama-3-8b-instruct': { inputUsdPer1M: 0.2, outputUsdPer1M: 0.2 },
+  '@cf/microsoft/phi-2': { inputUsdPer1M: 0.15, outputUsdPer1M: 0.15 },
+};
+
+/** Parsed `LLM_PRICING_JSON` env override (memoised on raw value so env changes in
+ * tests invalidate the cache without a reset hook — string compare is cheap). */
+let envPricing: Record<string, LLMPricing> | undefined;
+let envPricingRaw: string | undefined;
+function loadEnvPricing(): Record<string, LLMPricing> | undefined {
+  const raw = process.env.LLM_PRICING_JSON;
+  if (raw === envPricingRaw) return envPricing;
+  envPricingRaw = raw;
+  envPricing = undefined;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const out: Record<string, LLMPricing> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v && typeof v === 'object') {
+          const o = v as { inputUsdPer1M?: unknown; outputUsdPer1M?: unknown };
+          const i = Number(o.inputUsdPer1M);
+          const o2 = Number(o.outputUsdPer1M);
+          if (Number.isFinite(i) && Number.isFinite(o2)) {
+            out[k] = { inputUsdPer1M: i, outputUsdPer1M: o2 };
+          }
+        }
+      }
+      envPricing = out;
+    } catch {
+      envPricing = undefined;
+    }
+  }
+  return envPricing;
+}
+
+/** Resolve effective pricing for a model: env override > default table. */
+export function getLLMPricing(model: string): LLMPricing | undefined {
+  return loadEnvPricing()?.[model] ?? DEFAULT_LLM_PRICING[model];
+}
+
+/**
+ * Compute USD cost for a model call. Unknown models (local/Ollama) cost $0
+ * while still preserving the token counts for observability. Tokens are clamped
+ * to >= 0 (defensive against malformed provider responses).
+ */
+export function computeLLMCost(
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+): LLMCostBreakdown {
+  const p = Math.max(0, Math.trunc(promptTokens));
+  const c = Math.max(0, Math.trunc(completionTokens));
+  const pricing = getLLMPricing(model);
+  if (!pricing) {
+    return {
+      promptTokens: p,
+      completionTokens: c,
+      inputCostUsd: 0,
+      outputCostUsd: 0,
+      totalCostUsd: 0,
+    };
+  }
+  const inputCostUsd = roundMicro(p / 1_000_000 * pricing.inputUsdPer1M);
+  const outputCostUsd = roundMicro(c / 1_000_000 * pricing.outputUsdPer1M);
+  return {
+    promptTokens: p,
+    completionTokens: c,
+    inputCostUsd,
+    outputCostUsd,
+    totalCostUsd: roundMicro(inputCostUsd + outputCostUsd),
+  };
+}
+
+/** Round to micro-USD (6 decimals) to avoid float drift in aggregates. */
+function roundMicro(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
 }
 
 /**
@@ -396,7 +519,7 @@ export async function chatCompletionWithTools(
         durationMs,
         exhausted: RETRYABLE_STATUS.has(res.status),
       });
-      return { ok: false, status: res.status, content: '', toolCalls: [] };
+            return { ok: false, status: res.status, content: '', toolCalls: [], model, promptTokens: 0, completionTokens: 0 };
     }
 
     llmLog('info', 'provider_request', {
@@ -406,9 +529,10 @@ export async function chatCompletionWithTools(
       durationMs,
     });
 
-    const data = (await res.json()) as {
+        const data = (await res.json()) as {
       choices?: ToolChoice[];
-      result?: { choices?: ToolChoice[] };
+      result?: { choices?: ToolChoice[]; usage?: unknown; response?: { usage?: unknown } };
+      usage?: unknown;
     };
     const choice = data?.choices?.[0] ?? data?.result?.choices?.[0];
     const content = typeof choice?.message?.content === 'string' ? choice.message.content : '';
@@ -416,20 +540,31 @@ export async function chatCompletionWithTools(
       name: tc?.function?.name ?? '',
       arguments: tc?.function?.arguments ?? '',
     }));
-    return { ok: true, status: 200, content, toolCalls, durationMs };
+    const { promptTokens, completionTokens } = await extractUsage(data, messages, content);
+    return { ok: true, status: 200, content, toolCalls, durationMs, model, promptTokens, completionTokens };
   };
 
   const first = await attempt(primaryModel);
   if (first.ok) {
     observeLLMCall(primaryModel, first.durationMs ?? 0, first.status ?? 0);
-    return { content: first.content, toolCalls: first.toolCalls };
+    return {
+      content: first.content,
+      toolCalls: first.toolCalls,
+      usage: buildUsage(primaryModel, first.promptTokens, first.completionTokens),
+    };
   }
 
   const FALLBACK_ELIGIBLE_STATUS = new Set([...RETRYABLE_STATUS, PROVIDER_EMPTY_RESPONSE]);
   const fallbackModel = env.LLM_FALLBACK_MODEL;
   if (fallbackModel && fallbackModel !== primaryModel && FALLBACK_ELIGIBLE_STATUS.has(first.status)) {
     const fb = await attempt(fallbackModel);
-    if (fb.ok) return { content: fb.content, toolCalls: fb.toolCalls };
+    if (fb.ok) {
+      return {
+        content: fb.content,
+        toolCalls: fb.toolCalls,
+        usage: buildUsage(fallbackModel, fb.promptTokens, fb.completionTokens),
+      };
+    }
   }
 
   if (first.status === 429) {
@@ -447,6 +582,48 @@ export async function chatCompletionWithTools(
   throw new AppError(`LLM request failed (HTTP ${first.status ?? 'unknown'})`, StatusCodes.BAD_GATEWAY);
 }
 
+/** Extract provider-reported token usage; fall back to deterministic estimates
+ * when the provider omits usage (Ollama/free/local). See extractUsage docs. */
+async function extractUsage(
+  data: { usage?: unknown; result?: { usage?: unknown; response?: { usage?: unknown } } },
+  messages: LLMMessage[],
+  content: string
+): Promise<{ promptTokens: number; completionTokens: number }> {
+  const u = (data?.usage ?? data?.result?.usage ?? data?.result?.response?.usage ?? {}) as {
+    prompt_tokens?: unknown;
+    completion_tokens?: unknown;
+    input_tokens?: unknown;
+    output_tokens?: unknown;
+  };
+  const promptTokens = toTokenCount(u.prompt_tokens ?? u.input_tokens);
+  const completionTokens = toTokenCount(u.completion_tokens ?? u.output_tokens);
+  if (promptTokens === 0 && completionTokens === 0) {
+    // Provider omitted usage → estimate deterministically so cost attribution
+    // never silently zeros out for local/free-tier providers.
+    return {
+      promptTokens: await estimateMessagesTokens(messages),
+      completionTokens: await countTokens(content),
+    };
+  }
+  return { promptTokens, completionTokens };
+}
+
+function toTokenCount(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
+/** Assemble a persisted-ready LLMUsage (model + tokens + cost breakdown). */
+function buildUsage(
+  model: string,
+  promptTokens: number | undefined,
+  completionTokens: number | undefined
+): LLMUsage {
+  const p = promptTokens ?? 0;
+  const c = completionTokens ?? 0;
+  return { model, promptTokens: p, completionTokens: c, cost: computeLLMCost(model, p, c) };
+}
+
 interface ToolChoice {
   message?: {
     content?: null | string;
@@ -460,6 +637,9 @@ interface ChatCompletionWithToolsResultInternal {
   content: string;
   toolCalls: LLMToolCall[];
   durationMs?: number;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 /**

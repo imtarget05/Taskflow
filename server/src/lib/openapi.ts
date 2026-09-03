@@ -92,6 +92,46 @@ registry.registerPath({
   security: [{ cookieAuth: [] }, { bearerAuth: [] }],
 });
 
+const LlmCostQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).optional().openapi({ example: 30 }),
+  projectId: z.string().cuid().optional().openapi({ example: 'cuid...' }),
+  model: z.string().max(120).optional(),
+});
+
+const LlmCostResponse = z.object({
+  success: z.boolean(),
+  data: z.object({
+    currency: z.literal('USD'),
+    days: z.number(),
+    scope: z.enum(['user', 'project']),
+    totalCostUsd: z.number(),
+    totalInputTokens: z.number(),
+    totalOutputTokens: z.number(),
+    totalCalls: z.number(),
+    byModel: z.array(z.object({
+      model: z.string(),
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      inputCostUsd: z.number(),
+      outputCostUsd: z.number(),
+      totalCostUsd: z.number(),
+    })),
+  }),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/analytics/llm-cost',
+  summary: 'Cost dashboard — LLM spend per user (default) or per project team',
+  request: { query: LlmCostQuery },
+  responses: {
+    200: { description: 'Aggregated LLM cost + tokens', content: { 'application/json': { schema: LlmCostResponse } } },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Forbidden (not a member of the project)' },
+  },
+  security: [{ cookieAuth: [] }, { bearerAuth: [] }],
+});
+
 export function buildOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
   return generator.generateDocument({

@@ -16,7 +16,8 @@ import {
   LLMContentPart,
   LLMFunctionTool,
   LLMToolCall,
-  streamChatCompletionWithTools,
+    streamChatCompletionWithTools,
+  LLMUsage,
 } from './llm';
 import {
   buildSystemPrompt,
@@ -32,6 +33,8 @@ import { env } from '../../config/env';
 import { traceAgentTurn } from './tracer';
 import { buildMemoryContext, extractMemories, storeMemories } from './memory.service';
 import { RequestCoalescer } from '../cache/request-coalescer';
+import { logger } from '../../lib/logger';
+import { recordCost, recordError, recordLLMCall, recordTokens } from './metrics';
 
 export interface AgentChatMessage {
   role: string;
@@ -64,6 +67,56 @@ export interface ChatOptions {
   projectId?: string | null;
   conversationId?: string | null;
   skipPersist?: boolean;
+}
+
+/**
+ * Persist per-user / per-project LLM usage + USD cost — best-effort only.
+ *
+ * Two observability layers are refreshed:
+ * 1. Persistent ledger (AIUsage) — survives restarts, powers
+ *    `GET /api/analytics/llm-cost`.
+ * 2. In-memory Prometheus counters (`tf_llm_*`, incl. the `user` label).
+ *
+ * DB failures are logged + counted but NEVER thrown — cost observability must
+ * not degrade the chat path. When `skipPersist` is set (eval/integrations mode),
+ * the persistent row is skipped while counters still accrue.
+ */
+async function recordLLMUsage(
+  userId: string,
+  projectId: string | null | undefined,
+  skipPersist: boolean,
+  usage: LLMUsage
+): Promise<void> {
+  const { model, promptTokens, completionTokens, cost } = usage;
+  recordTokens(model, promptTokens, completionTokens, userId);
+  recordCost(model, cost.totalCostUsd, userId);
+  recordLLMCall(model, 0, 200, userId);
+
+  if (skipPersist) return;
+  try {
+    await prisma.aIUsage.create({
+      data: {
+        user: userId ? { connect: { id: userId } } : undefined,
+        project: projectId ? { connect: { id: projectId } } : undefined,
+        model,
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        inputCostUsd: cost.inputCostUsd,
+        outputCostUsd: cost.outputCostUsd,
+        totalCostUsd: cost.totalCostUsd,
+      },
+    });
+  } catch (err) {
+    recordError('ai_usage_persist_failure');
+    logger.error(
+      {
+        area: 'llm',
+        event: 'ai_usage_persist_failure',
+        error: err instanceof Error ? err.message : String(err),
+      },
+      'LLM usage persist failed'
+    );
+  }
 }
 
 /** A machine-readable create action the model may emit to actually change data. */
@@ -306,6 +359,17 @@ export async function chat(
           metadata: { tier: routeModel(lastUserTexts(messages).join(' ')) },
         });
         span.end();
+      }
+
+      // Attribute token usage + USD cost to the calling user/project
+      // (best-effort: never throws into the chat path).
+      if (completion.usage) {
+        void recordLLMUsage(
+          userId,
+          options.projectId,
+          Boolean(options.skipPersist),
+          completion.usage
+        );
       }
 
       const originalContent = completion.content ?? '';
