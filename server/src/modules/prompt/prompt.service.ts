@@ -123,13 +123,33 @@ export async function renderPrompt(name: string, variables: Record<string, strin
 
 /**
  * Create a new A/B test experiment.
+ * promptName can be either a PromptTemplate id or a name — if a name is given,
+ * resolve to the active PromptTemplate id first (frontend sends name).
  */
 export async function createExperiment(data: CreateExperimentInput) {
+  let promptTemplateId = data.promptName;
+
+  // Frontend sends prompt name (e.g. "legal_rag") while schema FK expects PromptTemplate.id.
+  // Try resolve name → id if direct id lookup misses.
+  try {
+    const byId = await prisma.promptTemplate.findUnique({ where: { id: promptTemplateId } });
+    if (!byId) {
+      const byName = await prisma.promptTemplate.findFirst({
+        where: { name: data.promptName },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (byName) promptTemplateId = byName.id;
+      // else keep original — create will fail with P2003 → mapped to 400 below
+    }
+  } catch {
+    // findUnique/findFirst failed (e.g. DB unavailable) — fall through to create
+  }
+
   try {
     return await prisma.promptExperiment.create({
       data: {
         name: data.name,
-        promptName: data.promptName,
+        promptName: promptTemplateId,
         variantA: data.variantA,
         variantB: data.variantB,
         trafficSplit: data.trafficSplit ?? 0.5,
@@ -139,6 +159,9 @@ export async function createExperiment(data: CreateExperimentInput) {
   } catch (err: unknown) {
     if (isPrismaError(err, 'P2002')) {
       throw new AppError(`Experiment "${data.name}" already exists`, StatusCodes.CONFLICT);
+    }
+    if (isPrismaError(err, 'P2003')) {
+      throw new AppError(`Prompt template "${data.promptName}" not found`, StatusCodes.BAD_REQUEST);
     }
     throw err;
   }

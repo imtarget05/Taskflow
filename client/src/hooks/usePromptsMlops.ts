@@ -94,7 +94,7 @@ export function useAnalyzePromptExperiment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string): Promise<PromptExperiment> => {
-      const res = await api.post<{ data: PromptExperiment }>(`/prompts/experiments/${id}/analyze`);
+      const res = await api.get<{ data: PromptExperiment }>(`/prompts/experiments/${id}/analyze`);
       return res.data.data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['prompts', 'experiments'] }),

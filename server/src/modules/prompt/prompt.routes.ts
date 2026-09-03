@@ -19,5 +19,6 @@ router.post('/experiments', promptController.createExperiment);
 router.get('/experiments', promptController.listExperiments);
 router.post('/experiments/:id/record', promptController.recordResult);
 router.get('/experiments/:id/analyze', promptController.analyzeExperiment);
+router.post('/experiments/:id/analyze', promptController.analyzeExperiment); // alias: frontend historically dùng POST
 
 export default router;

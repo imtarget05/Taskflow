@@ -40,8 +40,8 @@ export default function IntegrationsPage() {
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <TypeCard icon={<Search className="h-5 w-5" />} title="RAG Search" desc="Tìm kiếm ngữ nghĩa + từ khoá qua lịch sử task dự án." />
-        <TypeCard icon={<Zap className="h-5 w-5" />} title="n8n Workflows" desc="10-node order automation — webhook đã cấu hình." />
-        <TypeCard icon={<Cable className="h-5 w-5" />} title="MCP Tools" desc="5 tools (list_projects, search_tasks, rag_search…." />
+        <TypeCard icon={<Zap className="h-5 w-5" />} title="n8n Workflows" desc="10-node order automation — webhook server-side (cần N8N_API_URL)." />
+        <TypeCard icon={<Cable className="h-5 w-5" />} title="MCP Tools" desc="5 tools (list_projects, search_tasks, rag_search…) — local stdio, chạy npm run mcp -w server." />
       </section>
 
       <Card className="p-4">
