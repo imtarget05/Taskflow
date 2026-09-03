@@ -101,7 +101,7 @@ export function useUserSkills() {
   return useQuery({
     queryKey: skillsKey,
     queryFn: async () => {
-      const res = await api.get<{ data: UserSkill[] }>('/users/me/skills');
+      const res = await api.get<{ data: UserSkill[] }>('/recommendations/users/me/skills');
       return res.data.data;
     },
   });
@@ -111,7 +111,7 @@ export function useUpdateUserSkills() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (skills: { skill: string; level: number }[]) => {
-      await api.put('/users/me/skills', { skills });
+      await api.put('/recommendations/users/me/skills', { skills });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: skillsKey });
@@ -123,7 +123,7 @@ export function useUserAvailability() {
   return useQuery({
     queryKey: availabilityKey,
     queryFn: async () => {
-      const res = await api.get<{ data: UserAvailability[] }>('/users/me/availability');
+      const res = await api.get<{ data: UserAvailability[] }>('/recommendations/users/me/availability');
       return res.data.data;
     },
   });
@@ -133,7 +133,7 @@ export function useUpdateUserAvailability() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (availability: { dayOfWeek: number; morning: boolean; afternoon: boolean; evening: boolean }[]) => {
-      await api.put('/users/me/availability', availability);
+      await api.put('/recommendations/users/me/availability', availability);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: availabilityKey });

@@ -7,19 +7,28 @@ import {
   deleteModel as deleteOllamaModel,
   showModel,
   isOllamaRunning,
+  OllamaModel,
 } from './ollama.client';
 import {
   getActiveModel,
   validateModel,
   getModelRecommendations,
 } from './model.service';
+import { logger } from '../../lib/logger';
 
 /**
  * GET /api/models
  * List all locally available Ollama models.
+ *
+ * Production chạy LLM provider Cloudflare Workers AI (không có Ollama) —
+ * provider không khả dụng phải degrade về danh sách rỗng (200), KHÔNG được
+ * 500 làm sập trang AI Studio.
  */
 export const listModels: RequestHandler = asyncHandler(async (_req, res) => {
-  const models = await listOllamaModels();
+  const models = await listOllamaModels().catch((err: unknown) => {
+    logger.warn({ err }, 'Ollama list models unavailable — degrading to empty list');
+    return [] as OllamaModel[];
+  });
   const activeModel = getActiveModel();
   res.json({
     success: true,
@@ -36,9 +45,9 @@ export const listModels: RequestHandler = asyncHandler(async (_req, res) => {
  * Check Ollama connectivity.
  */
 export const getStatus: RequestHandler = asyncHandler(async (_req, res) => {
-  const running = await isOllamaRunning();
+  const running = await isOllamaRunning().catch(() => false);
   const activeModel = getActiveModel();
-  const modelValid = activeModel ? await validateModel(activeModel) : false;
+  const modelValid = activeModel ? await validateModel(activeModel).catch(() => false) : false;
   res.json({
     success: true,
     data: {
