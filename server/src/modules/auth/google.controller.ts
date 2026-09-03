@@ -6,6 +6,7 @@ import { CSRF_COOKIE, generateCsrfToken } from '../../middlewares/csrf';
 import { env } from '../../config/env';
 import * as googleService from './google.service';
 import { tokenExpiryMs } from './auth.service';
+import { logger } from '../../lib/logger';
 import { isDevGoogleEnabled, devRedirectToGoogle, devGoogleCallback } from './google.dev';
 
 const STATE_COOKIE = 'google_oauth_state';
@@ -125,6 +126,12 @@ export const googleCallback = asyncHandler(async (req: Request, res: Response) =
     if (err instanceof AppError && err.statusCode === StatusCodes.CONFLICT) {
       return redirectWithError(res, 'This email is already registered with a password. Sign in with that account instead.', origin);
     }
-    return redirectWithError(res, 'Google sign-in failed. Please try again.', origin);
+    // Surface the underlying cause (token exchange / profile errors carry
+    // Google's safe error description, e.g. redirect_uri_mismatch or
+    // invalid_client) so production failures are diagnosable from the URL.
+    // Unexpected non-AppError failures keep the generic message.
+    const detail = err instanceof AppError ? err.message : 'Google sign-in failed. Please try again.';
+    logger.error({ err }, 'Google OAuth callback failed');
+    return redirectWithError(res, detail, origin);
   }
 });
