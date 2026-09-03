@@ -1,0 +1,91 @@
+name: E2E — Playwright
+
+# E2E thực thi trên stack thật (db + redis + server + client). Nặng hơn unit
+# nên chạy manual dispatch + hàng đêm (sau chaos-nightly), KHÔNG chặn push/PR.
+# Môi trường KHÔNG cấu hình LLM (LLM_MODEL trống) → spec agent-chat assertion
+# cả 2 nhánh (có/không LLM) nên deterministic.
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC hàng đêm
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: Playwright (login → board → agent chat)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Start db + redis
+        run: docker compose up -d db redis
+
+      - name: Apply migrations
+        working-directory: server
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://taskflow:taskflow@localhost:5432/taskflow
+
+      - name: Seed demo data
+        working-directory: server
+        run: npm run prisma:seed
+        env:
+          DATABASE_URL: postgresql://taskflow:taskflow@localhost:5432/taskflow
+
+      - name: Boot full stack (server + client, background)
+        run: |
+          JWT_SECRET=e2e-test-secret \
+          JWT_REFRESH_SECRET=e2e-test-refresh \
+          DATABASE_URL=postgresql://taskflow:taskflow@localhost:5432/taskflow \
+          # Nhiều spec chia sẻ cùng IP của runner. Login rate-limit mặc định 10/60s
+          # sẽ 429 khi cả suite login liên tục → nâng cao cho e2e.
+          RATE_LIMIT_AUTH_LOGIN=500 \
+          RATE_LIMIT_MAX=1000 \
+          npm run dev > /tmp/taskflow-dev.log 2>&1 &
+          echo "dev stack starting..."
+
+      - name: Wait for server + client healthy
+        run: |
+          for i in $(seq 1 90); do
+            s=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4000/api/health || echo 000)
+            c=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173 || echo 000)
+            if [ "$s" = "200" ] && [ "$c" = "200" ]; then
+              echo "stack healthy (server=$s client=$c, attempt $i)"; exit 0
+            fi
+            sleep 2
+          done
+          echo "stack did not become healthy in 180s"
+          tail -80 /tmp/taskflow-dev.log
+          exit 1
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: npm run test:e2e -w client
+        env:
+          E2E_BASE_URL: http://localhost:5173
+
+      - name: Upload artifacts (traces/screenshots/dev log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e
+          path: |
+            test-results/
+            /tmp/taskflow-dev.log
+          retention-days: 7

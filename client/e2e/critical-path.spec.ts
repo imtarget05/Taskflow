@@ -4,6 +4,8 @@ import { expect, test } from '@playwright/test';
  * Luồng nghiệm thu: login → dashboard → tạo board → tạo task.
  * Dùng tài khoản demo (xem AGENTS.md): alice@taskflow.dev / password123.
  * Có thể override qua env E2E_EMAIL / E2E_PASSWORD.
+ * Lưu ý: cần server boot với RATE_LIMIT_AUTH_LOGIN đủ lớn (xem .github/workflows/e2e.yml)
+ * vì nhiều spec chia sẻ cùng IP → login hàng loạt có thể bị 429.
  */
 const EMAIL = process.env.E2E_EMAIL ?? 'alice@taskflow.dev';
 const PASSWORD = process.env.E2E_PASSWORD ?? 'password123';
@@ -18,7 +20,9 @@ async function login(page: import('@playwright/test').Page) {
 
 test('login lands on the dashboard', async ({ page }) => {
   await login(page);
-  await expect(page.getByText(/Welcome back/i)).toBeVisible();
+  // Dashboard hiển thị tiêu đề "Bảng điều khiển" (không phải "Welcome back" —
+  // đó là tiêu đề trang /login). Assert đúng nội dung dashboard.
+  await expect(page.getByRole('heading', { name: 'Bảng điều khiển' })).toBeVisible();
 });
 
 test('create a board project and add a task on it', async ({ page }) => {
