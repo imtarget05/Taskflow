@@ -32,14 +32,24 @@ vi.mock('@/store/agent', () => ({
   }),
 }));
 
+vi.mock('@/store/auth', () => ({
+  useAuth: () => ({ user: { id: 'u1', name: 'Test User', email: 'test@test.dev' } }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/lib/api', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: {} }),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+  },
+}));
+
 function renderChatBox() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <AuthProvider>
-          <ChatBox />
-        </AuthProvider>
+        <ChatBox />
       </ToastProvider>
     </QueryClientProvider>,
   );
