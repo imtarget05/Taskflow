@@ -1,4 +1,4 @@
-import type { Transition, Variants } from 'framer-motion';
+import type { Transition, Variants } from 'motion-dom';
 
 /**
  * Shared Framer Motion presets for TaskFlow micro-interactions. Every preset

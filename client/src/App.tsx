@@ -15,6 +15,20 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const RecommendationsPage = lazy(() => import('./pages/RecommendationsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
+// Supply Chain pages
+const ScDashboardPage = lazy(() => import('./pages/supply-chain/ScDashboardPage'));
+const OrdersPage = lazy(() => import('./pages/supply-chain/OrdersPage'));
+const SuppliersPage = lazy(() => import('./pages/supply-chain/SuppliersPage'));
+const InventoryPage = lazy(() => import('./pages/supply-chain/InventoryPage'));
+const ScNlpPage = lazy(() => import('./pages/supply-chain/ScNlpPage'));
+
+// Integrations + AI pages
+const IntegrationsPage = lazy(() => import('./pages/integrations/IntegrationsPage'));
+const ModelsPage = lazy(() => import('./pages/ai/ModelsPage'));
+const PromptsPage = lazy(() => import('./pages/ai/PromptsPage'));
+const ExperimentsPage = lazy(() => import('./pages/ai/ExperimentsPage'));
+const EvaluationPage = lazy(() => import('./pages/ai/EvaluationPage'));
+
 function pageFallback() {
   return (
     <div className="flex h-full flex-col gap-3 p-6">
@@ -138,6 +152,46 @@ export default function App() {
                 <RecommendationsPage />
               </Suspense>
             }
+          />
+          <Route
+            path="/supply-chain"
+            element={<Suspense fallback={pageFallback()}><ScDashboardPage /></Suspense>}
+          />
+          <Route
+            path="/supply-chain/orders"
+            element={<Suspense fallback={pageFallback()}><OrdersPage /></Suspense>}
+          />
+          <Route
+            path="/supply-chain/suppliers"
+            element={<Suspense fallback={pageFallback()}><SuppliersPage /></Suspense>}
+          />
+          <Route
+            path="/supply-chain/inventory"
+            element={<Suspense fallback={pageFallback()}><InventoryPage /></Suspense>}
+          />
+          <Route
+            path="/supply-chain/nlp"
+            element={<Suspense fallback={pageFallback()}><ScNlpPage /></Suspense>}
+          />
+          <Route
+            path="/integrations"
+            element={<Suspense fallback={pageFallback()}><IntegrationsPage /></Suspense>}
+          />
+          <Route
+            path="/ai/models"
+            element={<Suspense fallback={pageFallback()}><ModelsPage /></Suspense>}
+          />
+          <Route
+            path="/ai/prompts"
+            element={<Suspense fallback={pageFallback()}><PromptsPage /></Suspense>}
+          />
+          <Route
+            path="/ai/experiments"
+            element={<Suspense fallback={pageFallback()}><ExperimentsPage /></Suspense>}
+          />
+          <Route
+            path="/ai/evaluation"
+            element={<Suspense fallback={pageFallback()}><EvaluationPage /></Suspense>}
           />
           <Route
             path="/settings"

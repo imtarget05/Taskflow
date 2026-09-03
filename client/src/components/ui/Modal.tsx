@@ -2,12 +2,13 @@ import { useCallback, useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import Button from './Button';
 
-type Size = 'sm' | 'md' | 'lg';
+type Size = 'sm' | 'md' | 'lg' | '3xl';
 
 const SIZES: Record<Size, string> = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  '3xl': 'max-w-4xl',
 };
 
 interface ModalProps {

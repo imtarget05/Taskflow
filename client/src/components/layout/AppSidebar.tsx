@@ -5,6 +5,9 @@ import {
   LayoutDashboard,
   Settings,
   Sparkles,
+  Truck,
+  BrainCircuit,
+  Cable,
   X,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui';
@@ -91,6 +94,27 @@ export default function AppSidebar({
               <ActiveIndicator />
               <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
               {!collapsed && <span>Đề xuất</span>}
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/supply-chain" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Supply Chain' : undefined}>
+              <ActiveIndicator />
+              <Truck className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {!collapsed && <span>Supply Chain</span>}
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/ai/models" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'AI Studio' : undefined}>
+              <ActiveIndicator />
+              <BrainCircuit className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {!collapsed && <span>AI Studio</span>}
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/integrations" onClick={onCloseMobile} className={itemClass} title={collapsed ? 'Tích hợp' : undefined}>
+              <ActiveIndicator />
+              <Cable className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {!collapsed && <span>Tích hợp</span>}
             </NavLink>
           </li>
         </ul>

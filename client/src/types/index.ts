@@ -164,3 +164,5 @@ export interface RecommendationStats {
   dismissed: number;
   acceptRate: number;
 }
+
+export * from './supplychain';
