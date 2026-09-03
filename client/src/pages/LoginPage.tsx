@@ -39,17 +39,6 @@ export default function LoginPage() {
     }
   }, [searchParams, toast, navigate]);
 
-  function fillDemo(account: 'alice' | 'bob') {
-    if (account === 'alice') {
-      setEmail('alice@taskflow.dev');
-      setPassword('password123');
-    } else {
-      setEmail('bob@taskflow.dev');
-      setPassword('password123');
-    }
-    setError('');
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -113,15 +102,6 @@ export default function LoginPage() {
       </div>
 
       <GoogleSignIn />
-
-      <div className="mt-5 rounded-[12px] bg-surfaceContainerHigh p-3">
-        <p className="text-xs font-medium text-ink">Thử tài khoản demo:</p>
-        <div className="mt-2 flex gap-2">
-          <button type="button" onClick={() => fillDemo('alice')} className="flex-1 rounded-full bg-primaryContainer px-3 py-2 text-xs font-medium text-onPrimaryContainer hover:opacity-90">Alice / password123</button>
-          <button type="button" onClick={() => fillDemo('bob')} className="flex-1 rounded-full bg-secondaryContainer px-3 py-2 text-xs font-medium text-onSecondaryContainer hover:opacity-90">Bob / password123</button>
-        </div>
-        <p className="mt-1.5 text-[11px] text-ink-muted">Bấm để điền nhanh, rồi nhấn Đăng nhập</p>
-      </div>
 
       <p className="mt-5 text-center type-caption text-ink-secondary">
         No account?{' '}
