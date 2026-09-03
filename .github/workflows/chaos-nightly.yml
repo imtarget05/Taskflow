@@ -1,0 +1,81 @@
+name: Chaos Nightly
+
+# Chaos engineering định kỳ: kill Redis / pause DB rồi xác nhận TaskFlow
+# fallback đúng (không 5xx, RAG inline, app không crash). Dùng script
+# scripts/chaos-fallback.sh — chạy trên stack docker-compose thật.
+on:
+  schedule:
+    - cron: '30 1 * * *' # 01:30 UTC hằng đêm (sau eval-nightly 00:00)
+  workflow_dispatch:
+
+jobs:
+  chaos:
+    name: Chaos — Redis/DB kill, verify fallback
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      # Chỉ db + redis — server chạy bằng tsx bên dưới, không cần stack prod compose.
+      - name: Start db + redis (docker compose)
+        run: docker compose up -d db redis
+
+      - name: Apply migrations
+        working-directory: server
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://taskflow:taskflow@localhost:5432/taskflow
+
+      - name: Start server (background)
+        run: |
+          cd server
+          DATABASE_URL=postgresql://taskflow:taskflow@localhost:5432/taskflow \
+          JWT_SECRET=chaos-test-secret \
+          JWT_REFRESH_SECRET=chaos-test-refresh \
+          PORT=4000 \
+          nohup npx tsx src/index.ts > /tmp/taskflow-server.log 2>&1 &
+          echo $! > /tmp/taskflow-server.pid
+
+      - name: Wait for /api/health
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4000/api/health || echo 000)
+            if [ "$code" = "200" ]; then echo "server up (attempt $i)"; exit 0; fi
+            sleep 2
+          done
+          echo "server did not come up in 120s"; tail -50 /tmp/taskflow-server.log; exit 1
+
+      - name: Run chaos fallback script
+        run: ./scripts/chaos-fallback.sh http://localhost:4000
+
+      - name: Assert server still alive after chaos
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4000/api/health || echo 000)
+          echo "health after chaos: $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Server unhealthy sau chaos — crash/restart ngoài dự kiến"
+            tail -100 /tmp/taskflow-server.log
+            exit 1
+          fi
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskflow-server-chaos-log
+          path: /tmp/taskflow-server.log
+          retention-days: 7
