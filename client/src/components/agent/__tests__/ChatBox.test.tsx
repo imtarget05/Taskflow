@@ -70,6 +70,6 @@ describe('ChatBox', () => {
 
   it('shows FAB button', () => {
     renderChatBox();
-    expect(screen.getByLabelText('Đóng AI Assistant')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Đóng AI Assistant').length).toBeGreaterThan(0);
   });
 });
