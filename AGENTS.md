@@ -57,5 +57,10 @@ The channel session has cwd=None — an unqualified `npm`/`git` fails with "not 
 - **Status tokens**: `--success` / `--warning` / `--danger` / `--info` + `-soft` variants
 - **Component library**: `client/src/components/ui/` (Button, Card, Input, Badge, Modal, etc.)
 
+## Hotfix production (2026-09-04)
+- Root cause UI không load dữ liệu trên production: client dùng `VITE_API_URL=/api` (same-origin) nhưng Cloudflare Pages thiếu proxy → mọi request `/api/*` bị SPA fallback (`_redirects: /* /index.html 200`) trả HTML thay vì JSON → loading vô hạn.
+- Fix: Pages Function proxy `client/functions/api/[[path]].ts` forward `/api/*` → Render backend (đọc env binding `BACKEND_URL`, mặc định Render prod URL; strip hop-by-hop headers, pass-through Set-Cookie/cookie, forward body). Pages Functions ưu tiên cao hơn `_redirects` nên SPA fallback không nuốt `/api`.
+- Test: `client/functions/api/[[path]].test.ts` (8 case, pass trong vitest client suite).
+
 ## Delivery
 Project progress reports go to Telegram channel -1004347872274 (Taskflow).
