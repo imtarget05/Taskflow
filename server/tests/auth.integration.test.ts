@@ -20,6 +20,12 @@ function refreshCookieOnly(setCookie: unknown): string {
   return refresh ?? '';
 }
 
+/** The bare refresh token value (no `refresh_token=` prefix, no attributes),
+ * derived from the cookie-capture helper above. */
+function refreshTokenValue(setCookie: unknown): string {
+  return refreshCookieOnly(setCookie).replace(/^refresh_token=/, '');
+}
+
 describe('Auth API integration', () => {
   let app: ReturnType<typeof createApp>;
 
@@ -126,6 +132,65 @@ describe('Auth API integration', () => {
         .set('Cookie', 'refresh_token=invalid-token');
 
       expect(res.status).toBe(401);
+    });
+
+    // A rotated refresh token must never be usable a second time. Presenting an
+    // already-consumed token is treated as a stolen-token replay: EVERY refresh
+    // token for that user is revoked. This is the most security-relevant branch
+    // in auth.service.refresh(), so it is driven end-to-end here through a real
+    // rotation rather than by calling the service directly.
+    it('revokes every refresh token for the user when a rotated token is replayed', async () => {
+      // Session A: register -> original refresh token R1.
+      const reg = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'reuse@taskflow.dev', password: 'password123', name: 'Reuse User' });
+      expect(reg.status).toBe(201);
+      const userId = reg.body.user.id as string;
+      const csrf = reg.body.csrfToken as string;
+      const r1 = refreshTokenValue(reg.headers['set-cookie']);
+      expect(r1).not.toBe('');
+
+      // A second, independent session, so "all sessions revoked" is provable
+      // rather than just "the replayed token stopped working".
+      const second = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'reuse@taskflow.dev', password: 'password123' });
+      expect(second.status).toBe(200);
+      const otherSessionToken = refreshTokenValue(second.headers['set-cookie']);
+      expect(await prisma.refreshToken.count({ where: { userId } })).toBe(2);
+
+      // Legitimate rotation: R1 is consumed and replaced by R2.
+      const rotate = await request(app)
+        .post('/api/auth/refresh')
+        .set('Cookie', `refresh_token=${r1}; csrf_token=${csrf}`)
+        .set('x-csrf-token', csrf);
+      expect(rotate.status).toBe(200);
+      const r2 = refreshTokenValue(rotate.headers['set-cookie']);
+      expect(r2).not.toBe(r1);
+      expect(await prisma.refreshToken.count({ where: { userId } })).toBe(3);
+
+      // Replay R1 -> reuse detected -> 401, and every session is revoked.
+      const replay = await request(app)
+        .post('/api/auth/refresh')
+        .set('Cookie', `refresh_token=${r1}; csrf_token=${csrf}`)
+        .set('x-csrf-token', csrf);
+      expect(replay.status).toBe(401);
+      expect(replay.body.success).toBe(false);
+      expect(replay.body.message).toMatch(/reuse detected/i);
+
+      // Nothing survives: the replayed token, the freshly rotated token (R2) and
+      // the unrelated second session's token are all revoked.
+      expect(await prisma.refreshToken.count({ where: { userId } })).toBe(0);
+
+      // The revocation is enforced by the API, not just absent from the table:
+      // neither the rotated token nor the other session can refresh any more.
+      for (const revoked of [r2, otherSessionToken]) {
+        const after = await request(app)
+          .post('/api/auth/refresh')
+          .set('Cookie', `refresh_token=${revoked}; csrf_token=${csrf}`)
+          .set('x-csrf-token', csrf);
+        expect(after.status).toBe(401);
+      }
     });
   });
 
