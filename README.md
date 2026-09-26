@@ -325,24 +325,49 @@ cd TaskFlow
 # 2. Install dependencies
 npm ci
 
-# 3. Start PostgreSQL with pgvector
-docker compose up -d db
+# 3. Generate the Prisma client (required: the TypeScript build imports the
+#    generated types, and Jest needs them too)
+npm run -w server prisma:generate
 
-# 4. Configure environment
+# 4. Start PostgreSQL with pgvector + Redis
+docker compose up -d db redis
+
+# 5. Configure environment
 cp server/.env.example server/.env
 # Edit server/.env with your DATABASE_URL, JWT_SECRET, etc.
 
-# 5. Run migrations + seed
-npm run prisma:deploy
-npm run prisma:seed
+# 6. Run migrations + seed
+npm run -w server prisma:deploy
+npm run -w server prisma:seed
 
-# 6. Start development servers
+# 7. Start development servers
 npm run dev
 ```
 
 The API runs on `http://localhost:4000` and the client on `http://localhost:5173`.
 
 **Demo accounts**: `alice@taskflow.dev` / `bob@taskflow.dev` (password: `password123`)
+
+### Build & verify
+
+`npm run build` and `npm run typecheck` in the `server` workspace run `prisma generate` first, so a fresh clone builds without any manual codegen step:
+
+```bash
+npm ci
+npm run build       # server (tsc) + client (tsc -b && vite build)
+npm run typecheck   # tsc --noEmit on both workspaces
+```
+
+To run the full test suite you also need the database and Redis:
+
+```bash
+docker compose up -d db redis
+export DATABASE_URL=postgresql://taskflow:taskflow@localhost:5432/taskflow?schema=public
+export REDIS_URL=redis://localhost:6379
+npm run -w server prisma:deploy
+npm run -w server test
+npm run -w client test
+```
 
 ## Configuration
 
