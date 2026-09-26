@@ -3,7 +3,7 @@
 <div align="center">
 
 [![CI/CD](https://github.com/imtarget05/TaskFlow/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/imtarget05/TaskFlow/actions/workflows/ci-cd.yml)
-[![Tests](https://img.shields.io/badge/tests-762%2F762%20passing-brightgreen)](https://github.com/imtarget05/TaskFlow)
+[![Tests](https://img.shields.io/badge/tests-831%2F831%20passing-brightgreen)](https://github.com/imtarget05/TaskFlow)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-blue)](https://github.com/imtarget05/TaskFlow)
 [![License](https://img.shields.io/badge/license-MIT-yellow)](https://github.com/imtarget05/TaskFlow)
 [![Production](https://img.shields.io/badge/production-live-success)](https://taskflow-server-n9a7.onrender.com)
@@ -246,9 +246,10 @@ Evaluation runs persist to `EvaluationRun` for historical A/B comparison. Prompt
 
 | Category | Count | Framework | Notes |
 |----------|-------|-----------|-------|
-| **Server tests** | 733 | Jest + ts-jest | 70 suites, all module layers |
-| **Client tests** | 29 | Vitest + Testing Library | 9 suites, component + page |
-| **Total** | **762** | — | 79 suites, all green |
+| **Server unit tests** | 705 | Jest + ts-jest | 70 suites, no database needed |
+| **Server integration tests** | 85 | Jest + ts-jest | 7 suites, need live PostgreSQL |
+| **Client tests** | 41 | Vitest + Testing Library | 11 test files, component + page |
+| **Total** | **831** | — | 77 server suites + 11 client files, all green |
 | **Typecheck** | 0 errors | TypeScript | Server + client |
 | **Eval dataset** | Vietnamese cases | Deterministic stub LLM | Ragas-like metrics |
 | **Load tests** | 3 scenarios | k6 | agent-chat, health-check, rag-search |
@@ -256,10 +257,13 @@ Evaluation runs persist to `EvaluationRun` for historical A/B comparison. Prompt
 Run tests locally:
 
 ```bash
-npm run test          # server + client
+npm run test          # server (unit + integration, needs PostgreSQL) + client
 npm run typecheck     # TypeScript check
 npm run lint          # ESLint
 ```
+
+`npm test` needs a live PostgreSQL server — see
+[Test dependencies](#test-dependencies) for the split and setup.
 
 ## Project Structure
 
@@ -358,15 +362,48 @@ npm run build       # server (tsc) + client (tsc -b && vite build)
 npm run typecheck   # tsc --noEmit on both workspaces
 ```
 
-To run the full test suite you also need the database and Redis:
+#### Test dependencies
+
+The server test suite is split in two, because the two halves have genuinely
+different requirements:
+
+| Script | Suites | Needs a database? |
+|--------|--------|--------------------|
+| `npm run -w server test:unit` | 70 | No |
+| `npm run -w server test:integration` | 7 | **Yes — live PostgreSQL** |
+| `npm run -w server test` | 77 (both) | **Yes — live PostgreSQL** |
+| `npm run -w server test:coverage` | 70 (unit only) | No |
+
+The 7 integration suites drive the real Prisma client against a real
+PostgreSQL server and run real `deleteMany` against 9 tables, so **PostgreSQL is
+a hard requirement for `npm test`**. `test:integration` runs a pre-flight
+connectivity check first and exits non-zero with remediation instructions if the
+database is unreachable, so a missing database is reported as a missing
+database rather than as a wall of Prisma `P1001` errors mixed into test
+failures.
+
+Redis is **not** required by the test suite — rate limiting uses the in-memory
+`express-rate-limit` store under `NODE_ENV=test`. Redis is only needed to run
+the dev server (queues and caching).
+
+```bash
+# Full suite (server + client) — requires PostgreSQL
+docker compose up -d db
+export DATABASE_URL=postgresql://taskflow:taskflow@localhost:5432/taskflow?schema=public
+npm run -w server prisma:deploy
+npm run -w client test
+npm test
+
+# Unit suites only — no database required
+npm run -w server test:unit
+```
+
+To run the dev server as well, start Redis and point the app at it:
 
 ```bash
 docker compose up -d db redis
-export DATABASE_URL=postgresql://taskflow:taskflow@localhost:5432/taskflow?schema=public
 export REDIS_URL=redis://localhost:6379
-npm run -w server prisma:deploy
-npm run -w server test
-npm run -w client test
+npm run dev
 ```
 
 ## Configuration
