@@ -23,7 +23,11 @@ const uploadLimiter = rateLimit({
 
 const router = Router();
 
-router.get('/status', agentController.status);
+// The status payload discloses the LLM provider, five model identifiers and
+// whether the LLM is configured at all. That is reconnaissance for an
+// unauthenticated caller, so this route requires a session like every other
+// route in this router.
+router.get('/status', authenticate, agentController.status);
 router.post('/chat', authenticate, chatLimiter, agentController.chat);
 router.post('/chat/stream', authenticate, chatLimiter, asyncHandler(agentController.chatStream));
 router.post('/upload', authenticate, uploadLimiter, agentController.upload.single('file'), agentController.uploadFile);
