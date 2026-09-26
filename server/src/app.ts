@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 import { StatusCodes } from 'http-status-codes';
 import { env } from './config/env';
+import { HTTP_LOG_REDACT_PATHS, LOG_CENSOR } from './lib/logger';
 import { csrfProtection } from './middlewares/csrf';
 import { authenticate } from './middlewares/auth';
 import { errorHandler, notFoundHandler } from './utils/errors';
@@ -81,7 +82,11 @@ export function createApp(): Express {
   });
   app.use(cookieParser());
   app.use(csrfProtection);
-  app.use(pinoHttp({ redact: ['req.headers.authorization', 'req.headers.cookie'] }));
+  // Redact credentials in BOTH directions. `res.headers['set-cookie']` is the
+  // one that bit us: the auth cookies carry access/refresh JWTs, so leaving it
+  // out wrote a live token pair into every "request completed" line — and those
+  // logs get copied into audit/test evidence files.
+  app.use(pinoHttp({ redact: { paths: [...HTTP_LOG_REDACT_PATHS], censor: LOG_CENSOR } }));
 
   // Public docs + health (no auth) — OpenAPI must be inspectable
   app.use('/api/docs', docsRoutes);

@@ -82,11 +82,33 @@ const allowedOrigins = (() => {
   return raw.split(',').map((o) => o.trim()).filter(Boolean);
 })();
 
+/**
+ * Secret values that only ever belong to development/test. Signing production
+ * tokens with any of them means anyone who reads this public repo can forge a
+ * valid token:
+ *  - `dev_*` are the Zod schema defaults declared above;
+ *  - `test_*` are the fallbacks used further down (and injected by
+ *    tests/setup.ts) — those are the ones that ended up in an exported log.
+ */
+const INSECURE_JWT_SECRETS = new Set([
+  'dev_secret_access_token',
+  'dev_secret_refresh_token',
+  'test_secret_access',
+  'test_secret_refresh',
+]);
+
 if (process.env.NODE_ENV === 'production') {
-  if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET ||
-      process.env.JWT_SECRET === 'dev_secret_access_token' ||
-      process.env.JWT_REFRESH_SECRET === 'dev_secret_refresh_token') {
-    throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be explicitly configured in production');
+  const accessSecret = process.env.JWT_SECRET;
+  const refreshSecret = process.env.JWT_REFRESH_SECRET;
+  if (
+    !accessSecret ||
+    !refreshSecret ||
+    INSECURE_JWT_SECRETS.has(accessSecret) ||
+    INSECURE_JWT_SECRETS.has(refreshSecret)
+  ) {
+    throw new Error(
+      'JWT_SECRET and JWT_REFRESH_SECRET must be explicitly configured with non-default values in production'
+    );
   }
 }
 
